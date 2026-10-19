@@ -26,7 +26,7 @@ namespace EmbervilleGhost;
 [BepInPlugin("spike.embervilleghost", "EmbervilleGhost", Version)]
 public class Plugin : BaseUnityPlugin, ITransportListener
 {
-    internal const string Version = "0.1.0";
+    internal const string Version = "0.1.1";
     internal const string ModName = "Sabba's Emberville Multiplayer Mod";
     internal static string Title => $"{ModName} v{Version}";
 

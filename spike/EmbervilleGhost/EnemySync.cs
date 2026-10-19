@@ -81,10 +81,22 @@ internal static class EnemySync
         return false;
     }
 
-    /// <summary>Does this copy run the creature's AI? (Not connected: always.)</summary>
+    static readonly Dictionary<Enemy, bool> localOnly = new Dictionary<Enemy, bool>();
+
+    /// <summary>
+    /// Story NPCs that are built as Enemy (NPC_Adeos_Vitromotus in the Adeos cutscene) belong to cutscenes / dialogue,
+    /// which run on each copy by themselves: never synced, every copy runs its own (freezing them stalled the cutscene).
+    /// </summary>
+    public static bool LocalOnly(Enemy e)
+    {
+        if (!localOnly.TryGetValue(e, out bool l)) localOnly[e] = l = e.name.StartsWith("NPC_");
+        return l;
+    }
+
+    /// <summary>Does this copy run the creature's AI? (Not connected, or a story NPC: always.)</summary>
     public static bool Runs(Enemy e)
     {
-        if (!Connected) return true;
+        if (!Connected || LocalOnly(e)) return true;
         uint id = IdOf(e);
         return id != 0 && RunnerOf(id) == Plugin.MyId;
     }
@@ -107,7 +119,7 @@ internal static class EnemySync
 
         foreach (var e in EnemiesManager.AllEnemies)
         {
-            if (!e || !e.isActiveAndEnabled || e.IsDead) continue;
+            if (!e || !e.isActiveAndEnabled || e.IsDead || LocalOnly(e)) continue;
             uint id = IdOf(e);
             if (id == 0) continue;
             int current = RunnerOf(id);
@@ -162,7 +174,7 @@ internal static class EnemySync
     {
         runtimeIds.Clear(); runtimeById.Clear(); isRuntime.Clear(); announce.Clear();
         animators.Clear(); woken.Clear(); runnerOf.Clear(); remote.Clear();
-        frozen.Clear(); frozenSince.Clear(); parts.Clear();
+        frozen.Clear(); frozenSince.Clear(); parts.Clear(); localOnly.Clear();
         prefabs = null;
     }
 
@@ -329,6 +341,7 @@ internal static class EnemySync
         foreach (var e in EnemiesManager.AllEnemies)
         {
             if (!e || !e.isActiveAndEnabled) continue;
+            if (LocalOnly(e)) { Unfreeze(e); continue; }   // story NPC: ours to run, never synced
             uint id = IdOf(e);
             if (id == 0) { hideNow.Add(e); continue; }   // spawned by our own spawners/waves: only the area owner's spawns count
 
@@ -601,7 +614,7 @@ internal static class EnemySync
     static bool BeforeDamage(Enemy __instance, DamageData damageData, out Before __state)
     {
         __state = new Before { Health = __instance.CurrentHealth, Dead = __instance.IsDead };
-        if (!Connected || applyingHost || Runs(__instance)) return true;
+        if (!Connected || applyingHost || LocalOnly(__instance) || Runs(__instance)) return true;
         if (__instance.IsDead) return false;
 
         uint id = IdOf(__instance);
@@ -624,7 +637,7 @@ internal static class EnemySync
     [HarmonyPatch(typeof(Enemy), nameof(Enemy.ApplyDamage)), HarmonyPostfix]
     static void AfterDamage(Enemy __instance, DamageData damageData, Before __state)
     {
-        if (!Connected || __state.Dead) return;
+        if (!Connected || __state.Dead || LocalOnly(__instance)) return;
         bool ours = !applyingHost && Runs(__instance);
         if (__instance.IsDead) ShareKillXp(__instance, ours ? HitterId(damageData) : replayHitter);
         if (!ours || !Plugin.AnyoneElseHere) return;

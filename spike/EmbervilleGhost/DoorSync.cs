@@ -80,12 +80,27 @@ internal static class DoorSync
     [HarmonyPatch(typeof(GateDoor), nameof(GateDoor.OnInteract)), HarmonyFinalizer]
     static void DoorUseEnd() => localUse--;
 
+    /// <summary>Doors our player unlocked with a key: the game opens them 0.5 s later (DelayedOpen), outside OnInteract.</summary>
+    static readonly HashSet<GateDoor> unlockedByUs = new HashSet<GateDoor>();
+
+    [HarmonyPatch(typeof(GateDoor), nameof(GateDoor.DelayedOpen)), HarmonyPrefix]
+    static void BeforeDelayedOpen(GateDoor __instance)
+    {
+        if (localUse > 0) unlockedByUs.Add(__instance);
+    }
+
     [HarmonyPatch(typeof(GateDoor), nameof(GateDoor.Open)), HarmonyPrefix]
     static bool BeforeOpen(GateDoor __instance)
     {
-        if (!Allowed()) return false;
-        SendDoor(__instance, DoorOp.Open, DoorState.Opened);
-        return true;
+        bool ours = unlockedByUs.Remove(__instance);   // our key, opening now: still our own use
+        if (ours) localUse++;
+        try
+        {
+            if (!Allowed()) return false;
+            SendDoor(__instance, DoorOp.Open, DoorState.Opened);
+            return true;
+        }
+        finally { if (ours) localUse--; }
     }
 
     [HarmonyPatch(typeof(GateDoor), nameof(GateDoor.Close)), HarmonyPrefix]

@@ -45,7 +45,7 @@ internal static class Chat
         if (kb == null) return;
         if (!IsOpen)
         {
-            if (!UnityEngine.Application.isFocused || ImGuiUnity.IsOpen) return;
+            if (!UnityEngine.Application.isFocused || ImGuiUnity.IsOpen || !CanOpen()) return;
             if (kb.enterKey.wasPressedThisFrame || kb.numpadEnterKey.wasPressedThisFrame) Open();
             return;
         }
@@ -66,6 +66,16 @@ internal static class Chat
         // Backspace: once on press, then repeating while held.
         if (kb.backspaceKey.wasPressedThisFrame) { Backspace(); repeatAt = Time.unscaledTime + 0.4f; }
         else if (kb.backspaceKey.isPressed && Time.unscaledTime >= repeatAt) { Backspace(); repeatAt = Time.unscaledTime + 0.04f; }
+    }
+
+    /// <summary>
+    /// Enter only opens chat while actually playing: in dialogue, cutscenes and menus Enter belongs to the game
+    /// (it advances dialogue; a chat box there swallowed it and switched the game's input off).
+    /// </summary>
+    static bool CanOpen()
+    {
+        if (!Singleton<GameManager>.HasMain || Singleton<GameManager>.main.gameState != GameState.Playing) return false;
+        return !UIPanels.HasOpenedPanel;
     }
 
     static float repeatAt;

@@ -33,8 +33,25 @@ internal static class PropSync
 
     static bool Puppet => EnemySync.PuppetMode;
 
+    static readonly Dictionary<DamageableObject, bool> localOnly = new Dictionary<DamageableObject, bool>();
+
+    /// <summary>
+    /// Breakables that are part of a cutscene or an NPC (Adeos' "spank" DamageableObject under "== Adeos Cutscene" /
+    /// NPC_Adeos_Vitromotus): the cutscene on each copy needs its own player's hit to go on, so they stay local.
+    /// </summary>
+    static bool LocalOnly(DamageableObject d)
+    {
+        if (localOnly.TryGetValue(d, out bool l)) return l;
+        l = false;
+        for (var t = d.transform; t; t = t.parent)
+            if (t.name.StartsWith("NPC_") || t.name.Contains("Cutscene")) { l = true; break; }
+        localOnly[d] = l;
+        return l;
+    }
+
     public static void Clear()
     {
+        localOnly.Clear();
         broken.Clear();
         brokenScene = "";
         applyingHost = false;
@@ -114,7 +131,7 @@ internal static class PropSync
     static bool BeforeDamage(DamageableObject __instance, DamageData damageData, out Before __state)
     {
         __state = new Before { Health = __instance.health };
-        if (!Puppet || applyingHost) return true;
+        if (!Puppet || applyingHost || LocalOnly(__instance)) return true;
         if (__instance.health <= 0f || __instance.ignorePlayer || !__instance.receiveDamage) return false;
 
         var me = LocalPlayer.Get();
@@ -134,7 +151,7 @@ internal static class PropSync
     [HarmonyPatch(typeof(DamageableObject), nameof(DamageableObject.ApplyDamage)), HarmonyPostfix]
     static void AfterDamage(DamageableObject __instance, DamageData damageData, Before __state)
     {
-        if (Plugin == null || !Plugin.Connected || __state.Health <= 0f || __instance.health == __state.Health) return;
+        if (Plugin == null || !Plugin.Connected || __state.Health <= 0f || __instance.health == __state.Health || LocalOnly(__instance)) return;
         uint id = SceneIds.Of(__instance);
         if (__instance.health <= 0f) MarkBroken(id);
         if (Puppet || !Plugin.AnyoneElseHere) return;
