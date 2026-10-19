@@ -114,7 +114,7 @@ internal static class ImGuiUnity
     static void FeedInput(ImGuiIOPtr io, Keyboard kb)
     {
         var mouse = Mouse.current;
-        if (!IsOpen || mouse == null)
+        if (!(IsOpen || JoinWindow.Visible || HostWindow.Visible) || mouse == null)   // those windows are clickable without the menu
         {
             // HUD only: no hover, no clicks.
             io.AddMousePosEvent(-float.MaxValue, -float.MaxValue);

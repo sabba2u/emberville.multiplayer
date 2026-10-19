@@ -17,6 +17,7 @@ internal class RemotePlayer
     public int Health, MaxHealth;
     public PlayerStatus Status;
     public bool HaveState;
+    public Vector3 LastPosition;  // newest position heard (for "teleport to them" when their stand-in isn't showing)
     public byte[] Look;          // LookSync bytes; the host keeps them for players who join later
     public string CharacterName; // from their save, sent with the look
     string failedAt;

@@ -22,6 +22,14 @@ dotnet build spike/EmbervilleGhost -c Release -p:GamePath="<path to Emberville D
 The build references the game's own DLLs from `<GamePath>/Emberville_Data/Managed` (not included here) and copies the
 plugin into `<GamePath>/BepInEx/plugins/EmbervilleGhost`. Default `GamePath` is in `EmbervilleGhost.csproj`.
 
+## Release zip (for players)
+```
+pwsh spike/EmbervilleGhost/package.ps1 [-GamePath "<path to Emberville Demo>"]
+```
+Builds Release and writes `spike/dist/EmbervilleMultiplayer-v<version>.zip` (version = `Plugin.Version`): BepInEx 5
+(taken from the game folder), the mod in `BepInEx/plugins/EmbervilleMultiplayer`, a player README (install, host,
+join, uninstall, credits). Console window off, log file on. Players unzip it into the game folder.
+
 ## Testing on one PC
 Launch `Emberville.exe` twice. Copy #2 keeps its own options file (window size); characters are shared, so don't load
 the same character in both. Windows arrange themselves side by side at 1280x720.

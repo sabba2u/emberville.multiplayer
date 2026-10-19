@@ -23,9 +23,13 @@ using UnityEngine.InputSystem;
 
 namespace EmbervilleGhost;
 
-[BepInPlugin("spike.embervilleghost", "EmbervilleGhost", "0.0.1")]
+[BepInPlugin("spike.embervilleghost", "EmbervilleGhost", Version)]
 public class Plugin : BaseUnityPlugin, ITransportListener
 {
+    internal const string Version = "0.1.0";
+    internal const string ModName = "Sabba's Emberville Multiplayer Mod";
+    internal static string Title => $"{ModName} v{Version}";
+
     internal static ManualLogSource Log;
 
     const float SendInterval = 0.05f;
@@ -82,13 +86,22 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         PropSync.Plugin = this;
         ChestSync.Plugin = this;
         Chat.Plugin = this;
+        Chat.Lift = Config.Bind("Chat", "HeightAboveBottom", 0.25f, "Chat's bottom edge, as a fraction of the window height from the bottom (clears the game's health bar and hotbar)");
         PlayerHits.Plugin = this;
         GatherSync.Plugin = this;
-        EnemySync.SharedXp = Config.Bind("Gameplay", "SharedXp", true, "Everyone in the area gets the XP of a kill, not just the killer");
+        GuestWorld.Plugin = this;
+        DoorSync.Plugin = this;
+        FxSync.Plugin = this;
+        JoinWindow.Plugin = this;
+        MenuBanner.Plugin = this;
+        CoopDeath.Plugin = this;
+        Session.Plugin = this;
+        HostWindow.Plugin = this;
+        Session.Bind(Config);
         ImGuiUnity.OnRender += Hud.Draw;
         try { ImGuiUnity.Init(Config, System.IO.Path.GetDirectoryName(Info.Location)); }
         catch (Exception e) { Log.LogError($"ImGui init failed, no menu/HUD: {e}"); }
-        NetLog.Info("EmbervilleGhost loaded. F8 host, F9 join, F10 disconnect, Insert = menu.", toast: true);
+        NetLog.Info($"{Title} loaded. F8 host, F9 join, F10 disconnect, Insert = menu.", toast: true);
     }
 
     void LateUpdate()
@@ -114,11 +127,12 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         var kb = Keyboard.current;
         if (kb != null && Application.isFocused)
         {
-            if (kb.f8Key.wasPressedThisFrame) Host();
+            if (kb.f8Key.wasPressedThisFrame) HostWindow.Show();   // pick the session rules, then HOST NOW
             if (kb.f9Key.wasPressedThisFrame) Join();
             if (kb.f10Key.wasPressedThisFrame) Stop();
         }
 
+        CoopDeath.Tick();   // before the game's frame logic: last frame's death reset (if any) is over
         if (transport != null && transport.IsRunning) NetTick();
         Chat.Tick();
 
@@ -138,7 +152,7 @@ public class Plugin : BaseUnityPlugin, ITransportListener
 
     void NetTick()
     {
-        if (LocalPlayer.Scene != lastScene) { lastScene = LocalPlayer.Scene; SceneIds.Clear(); }   // ids belong to a scene
+        if (LocalPlayer.Scene != lastScene) { lastScene = LocalPlayer.Scene; SceneIds.Clear(); EnemySync.SceneChanged(); FxSync.Clear(); }   // ids belong to a scene
 
         Perf.Begin("1 receive"); transport.Poll(); Perf.End("1 receive");
 
@@ -158,6 +172,7 @@ public class Plugin : BaseUnityPlugin, ITransportListener
 
         if (IsHost) UpdateOwners();
         NoticeOwnerChange();
+        GuestWorld.Tick();
 
         Perf.Begin("2 world");
         if (MyId >= 0)
@@ -187,10 +202,12 @@ public class Plugin : BaseUnityPlugin, ITransportListener
             bool there = p.SamePlace(LocalPlayer.Scene, LocalPlayer.Area);
             if (!there) { snapshotSentFor.Remove(p.Id); continue; }
             if (!snapshotSentFor.Add(p.Id)) continue;
+            EnemySync.SendSnapshot(p.Id);
             DropSync.SendSnapshot(p.Id);
             PropSync.SendSnapshot(p.Id);
             ChestSync.SendSnapshot(p.Id);
             GatherSync.SendSnapshot(p.Id);
+            DoorSync.SendSnapshot(p.Id);
         }
     }
 
@@ -221,6 +238,7 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         transport = lan;
         lan.StartClient(AddressSetting.Value, PortSetting.Value);
         Status = $"connecting to {AddressSetting.Value}:{PortSetting.Value}...";
+        JoinWindow.Show();
         NetLog.Info($"Connecting to {AddressSetting.Value}:{PortSetting.Value}...", toast: true);
     }
 
@@ -257,6 +275,7 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         PropSync.Clear();
         ChestSync.Clear();
         GatherSync.Clear();
+        GuestWorld.Clear();
         SceneIds.Clear();
     }
 
@@ -296,8 +315,24 @@ public class Plugin : BaseUnityPlugin, ITransportListener
     internal static string PlaceOf(string scene, string area) => scene + "/" + area;
     internal string Place => PlaceOf(LocalPlayer.Scene, LocalPlayer.Area);
 
-    /// <summary>Who runs the area we're in (us when alone or not connected).</summary>
-    internal int OwnerHere => Connected && areaOwners.TryGetValue(Place, out var o) ? o : MyId;
+    /// <summary>
+    /// Who runs the area we're in (us when alone or not connected). Just after we walk in, the host's AreaOwners list
+    /// may not have arrived yet: then whoever is already here runs it (they were here first), never us by default.
+    /// </summary>
+    internal int OwnerHere
+    {
+        get
+        {
+            if (!Connected) return MyId;
+            if (areaOwners.TryGetValue(Place, out var o) && (o == MyId || PlayerHere(o))) return o;
+            int first = int.MaxValue;
+            string scene = LocalPlayer.Scene, area = LocalPlayer.Area;
+            foreach (var p in players.Values) if (p.SamePlace(scene, area) && p.Id < first) first = p.Id;
+            return first == int.MaxValue ? MyId : first;
+        }
+    }
+
+    bool PlayerHere(int id) => players.TryGetValue(id, out var p) && p.SamePlace(LocalPlayer.Scene, LocalPlayer.Area);
     /// <summary>We decide what happens in our area (not connected counts as yes).</summary>
     internal bool IOwnHere => !Connected || OwnerHere == MyId;
     /// <summary>Who runs that player's area, -1 if unknown.</summary>
@@ -528,7 +563,8 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         w.Put((byte)MsgType.Welcome);
         w.Put(id);
         peer.Send(w, DeliveryMethod.ReliableOrdered);
-        ownersSig = "";   // re-send who runs which area, now including them
+        Session.SendTo(id);   // the host's rules (shared XP, instanced loot)
+        ownersSig = "";       // re-send who runs which area, now including them
 
         // The looks of everyone already here (host + other clients); later changes arrive as they happen.
         if (myLook != null) peer.Send(LookMessage(0, myLook), DeliveryMethod.ReliableOrdered);
@@ -541,6 +577,7 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         MyId = reader.GetInt();
         Status = $"connected as P{MyId + 1}";
         NetLog.Success($"You are P{MyId + 1}");
+        GuestWorld.Request();   // the host brings the world; we bring our character
     }
 
     void ITransportListener.OnDisconnected(Conn peer, string reason)
@@ -607,7 +644,15 @@ public class Plugin : BaseUnityPlugin, ITransportListener
                     break;
                 case MsgType.PlayerDied:
                     if (IsHost) Relay(reader, peer, DeliveryMethod.ReliableOrdered);
-                    { int id = reader.GetInt(); Chat.Died(IsHost ? from : id, reader.GetString()); }
+                    {
+                        int id = IsHost ? from : reader.GetInt();
+                        if (IsHost) reader.GetInt();
+                        string cause = reader.GetString();
+                        bool gore = reader.GetBool();
+                        Chat.Died(id, cause);
+                        if (players.TryGetValue(id, out var dead) && dead.Avatar != null && dead.Avatar.Visible)
+                            dead.Avatar.PlayDeath(LocalPlayer.Get(), gore);   // their death animation + scorch / gore mark here too
+                    }
                     break;
 
                 // Envelopes: client -> host -> another client / everyone in a place.
@@ -662,7 +707,7 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         switch (type)
         {
             // requests -> the area's owner
-            case MsgType.EnemyHit: if (owner) EnemySync.OnHit(reader, from); break;
+            case MsgType.EnemyHit: EnemySync.OnHit(reader, from); break;   // creatures: whoever runs that one decides (EnemySync checks)
             case MsgType.PropHit: if (owner) PropSync.OnHit(reader, from); break;
             case MsgType.DropRequest: if (owner) DropSync.OnDropRequest(reader); break;
             case MsgType.DropTake: if (owner) DropSync.OnTake(reader, from); break;
@@ -670,17 +715,28 @@ public class Plugin : BaseUnityPlugin, ITransportListener
             case MsgType.ChestClose: if (owner) ChestSync.OnClose(reader, from); break;
             case MsgType.GatherHit: if (owner) GatherSync.OnHit(reader, from); break;
             // results -> puppets
-            case MsgType.EnemyState: if (!owner) EnemySync.OnState(reader); break;
-            case MsgType.EnemyDamaged: if (!owner) EnemySync.OnDamaged(reader); break;
+            case MsgType.EnemyState: EnemySync.OnState(reader); break;
+            case MsgType.EnemyDamaged: EnemySync.OnDamaged(reader); break;
+            case MsgType.EnemySpawn: if (!owner) EnemySync.OnSpawn(reader); break;
+            case MsgType.EnemyRunner: if (!owner) EnemySync.OnRunner(reader); break;
             case MsgType.PropDamaged: if (!owner) PropSync.OnDamaged(reader); break;
             case MsgType.PropBroken: if (!owner) PropSync.OnBroken(reader); break;
-            case MsgType.DropSpawn: if (!owner) DropSync.OnSpawn(reader); break;
+            case MsgType.DropSpawn: if (from != MyId) DropSync.OnSpawn(reader); break;   // only the area owner sends these; never filter on our maybe-stale idea of who that is
             case MsgType.DropRemoved: if (!owner) DropSync.OnRemoved(reader); break;
+            case MsgType.DropTakenBy: DropSync.OnTakenBy(reader); break;
+            case MsgType.SessionSettings: if (!IsHost) Session.OnSettings(reader); break;
             case MsgType.ChestState: if (!owner) ChestSync.OnState(reader); break;
             case MsgType.GatherDamaged: if (!owner) GatherSync.OnDamaged(reader); break;
             case MsgType.GatherState: if (!owner) GatherSync.OnState(reader); break;
+            // from whoever used it (doors / levers: the user's copy runs it, everyone in the area mirrors it)
+            case MsgType.DoorChange: DoorSync.OnDoor(reader); break;
+            case MsgType.SwitchChange: DoorSync.OnSwitch(reader); break;
+            case MsgType.DoorSnapshot: if (!owner) DoorSync.OnSnapshot(reader); break;
+            case MsgType.ProjectileFx: FxSync.OnProjectileFx(reader); break;
             // to one player
             case MsgType.PlayerHit: PlayerHits.OnPlayerHit(reader); break;
+            case MsgType.WorldRequest: if (IsHost) GuestWorld.OnRequest(from); break;
+            case MsgType.WorldFiles: if (!IsHost) GuestWorld.OnWorld(reader); break;
             // replies -> the one who asked
             case MsgType.DropTakeOk: DropSync.OnTakeOk(reader); break;
             case MsgType.DropDenied: DropSync.OnDenied(reader); break;
@@ -718,6 +774,7 @@ public class Plugin : BaseUnityPlugin, ITransportListener
             NetLog.Info($"{p.Name} is now in {scene} / {area}" + (same ? " (same as you)" : ""), toast: true);
         }
         p.Snapshots.Add(senderTime, pos, 0f, Time.unscaledTimeAsDouble);
+        p.LastPosition = pos;
         p.Scene = scene;
         p.Area = area;
         p.HaveState = true;
@@ -736,22 +793,28 @@ internal enum MsgType : byte
     FromPlayer = 7,    // host -> client envelope: sender player id, message
     AreaOwners = 8,    // host -> all clients, reliable, when it changes: count, [place "scene/area", owner player id] (longest present runs it)
     Chat = 9,          // player -> host -> everyone else, reliable: player id, text (Enter opens the chat box)
-    PlayerDied = 10,   // player -> host -> everyone else, reliable: player id, what killed them ("" = unknown)
+    PlayerDied = 10,   // player -> host -> everyone else, reliable: player id, what killed them ("" = unknown), gore death
+    WorldRequest = 11, // client -> host on joining: send me your world
+    WorldFiles = 12,   // host -> that client: has world, gzip [name, .evw, .eve, .evm, map file name, generated map] (GuestWorld)
 
     // World messages: "owner" = the player running that area (EmbervilleGhost's authority), "puppets" = everyone else there.
-    EnemyState = 30,   // owner -> puppets, unreliable ~10 Hz, one per creature: id (path hash), time, position, flip, dead, health, animators
+    EnemyState = 30,   // owner -> puppets, unreliable ~10 Hz, one per creature: id (path hash), time, position, flip, dead, health, tint rgb, animators
+    EnemySpawn = 31,   // owner -> puppets (or one arriving player), reliable: runtime id (top bit set), prefab name, position, flip (a creature spawned while playing)
+    EnemyRunner = 32,  // area owner -> everyone in the area (or one arriving player): creature id, player id that runs it now (the nearest; its AI chases them)
     EnemyHit = 33,     // puppet -> owner, reliable: id, amount, result, hit type, knockback, no-stagger (hit detection where the hitter is)
     EnemyDamaged = 34, // owner -> puppets, reliable: id, amount, result, hit type, knockback, no-stagger, health before, hitter player id (-1 none)
     PropHit = 40,      // puppet -> owner, reliable: breakable id (path hash), amount, hit type, knockback
     PropDamaged = 41,  // owner -> puppets, reliable: id, amount, hit type, knockback, health before, hitter player id
     PropBroken = 42,   // owner -> one arriving player: count, ids already broken in this scene
-    PlayerHit = 45,    // owner -> victim: creature id, its position, amount, crit chance, effect chance, hit type, knockback, no-stagger, Attack name (unresolved; the victim's copy resolves it)
+    PlayerHit = 45,    // attacker's copy -> victim: creature id (0 = none), attacking player id (PvP, -1 = creature), attacker position, amount, crit chance, effect chance, hit type, knockback, no-stagger, Attack name (unresolved; the victim's copy resolves it)
     DropSpawn = 50,    // owner -> puppets (or one arriving player), reliable: drop id, from, to, item key, amount, random values JSON
     DropRequest = 51,  // puppet -> owner, reliable: item key, amount, values, position, radius (our overflow / dropped item; the owner drops it)
     DropTake = 52,     // puppet -> owner, reliable: drop id (may I pick it up?)
     DropTakeOk = 53,   // owner -> requester: it's yours (the owner already removed it)
     DropDenied = 54,   // owner -> requester: someone was faster
     DropRemoved = 55,  // owner -> puppets: drop id is gone (picked up)
+    DropTakenBy = 56,  // owner -> everyone in the area (or an arriving player): instanced drop id, player who took their copy
+    SessionSettings = 13, // host -> clients (on joining and on change): shared XP, instanced loot
     ChestOpen = 60,    // puppet -> owner, reliable: chest id (path hash). May I open it?
     ChestContents = 61,// owner -> requester: chest id, items (key, amount, values, slot). It's locked to you; these are the real contents
     ChestDenied = 62,  // owner -> requester: chest id, player id who has it open
@@ -760,4 +823,8 @@ internal enum MsgType : byte
     GatherHit = 70,    // puppet -> owner, reliable: rock/tree id (path hash). One swing of our gather animation
     GatherDamaged = 71,// owner -> puppets, reliable: id, health before, gather type, who swung (replayed: shake, break, tree fall; XP only for the swinger)
     GatherState = 72,  // owner -> one arriving player: count, [id, health, gather type] of rocks/trees already hit here
+    DoorChange = 80,   // whoever used it / the owner's events -> everyone in the area: door id, op (open/close/change/force), state, side it swings to
+    SwitchChange = 81, // whoever used it / the owner's scripts -> everyone in the area: lever/switch id, state (On/Off/Disabled)
+    DoorSnapshot = 82, // owner -> one arriving player: [door id, state]..., [switch id, state]... (applied without animation or events)
+    ProjectileFx = 90, // shooter's copy (owner for creatures, the player for theirs) -> everyone in the area, reliable unordered: prefab name, position, direction, range (harmless copy)
 }

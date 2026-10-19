@@ -49,6 +49,12 @@ internal static class SaveIsolation
 
     static bool Prefix(string fileName, ref string __result)
     {
+        // The host's world we joined (GuestWorld): its own folder per copy, never next to (or in the list of) our own worlds.
+        if (fileName != null && fileName.StartsWith(GuestWorld.Prefix))
+        {
+            __result = Path.Combine(Application.persistentDataPath, $"EmbervilleGhost_Guest{CopyNumber}", fileName);
+            return false;
+        }
         if (optionsFolder == null || fileName != OptionsFile) return true;
         __result = Path.Combine(optionsFolder, fileName);
         return false;

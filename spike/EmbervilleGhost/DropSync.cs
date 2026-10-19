@@ -42,10 +42,44 @@ internal static class DropSync
     static bool Puppet => EnemySync.PuppetMode;
     public static int Count => drops.Count;
 
+    // Instanced loot (Session.InstancedLoot): weapons / armour / gear lie there once for every player. Everyone keeps a
+    // record of each one (what, where, who already took their copy), so whoever runs the area (now or after a handover)
+    // knows, and players arriving later still find theirs.
+    class Instanced
+    {
+        public string Key, Name, Values, Place;
+        public int Amount;
+        public Vector2 At;
+        public readonly HashSet<int> TakenBy = new HashSet<int>();
+    }
+    static readonly Dictionary<int, Instanced> instanced = new Dictionary<int, Instanced>();
+
     public static void Clear()
     {
-        drops.Clear(); idOf.Clear(); placeOf.Clear(); pending.Clear();
+        drops.Clear(); idOf.Clear(); placeOf.Clear(); pending.Clear(); instanced.Clear();
         nextId = 1; allowLocal = granted = false; lastPlace = "";
+    }
+
+    static Instanced Remember(int id, string key, string name, int amount, string values, Vector2 at, string place)
+    {
+        if (!instanced.TryGetValue(id, out var rec))
+            instanced[id] = rec = new Instanced { Key = key, Name = name, Amount = amount, Values = values, At = at, Place = place };
+        return rec;
+    }
+
+    /// <summary>Owner: tell everyone in the area that this player has taken their copy (so the record survives a handover).</summary>
+    static void SendTaken(int id, int player)
+    {
+        if (instanced.TryGetValue(id, out var rec)) rec.TakenBy.Add(player);
+        var w = new NetDataWriter();
+        w.Put((byte)MsgType.DropTakenBy); w.Put(id); w.Put(player);
+        Plugin.SendToPlace(w, DeliveryMethod.ReliableOrdered);
+    }
+
+    public static void OnTakenBy(NetDataReader r)
+    {
+        int id = r.GetInt(), player = r.GetInt();
+        if (instanced.TryGetValue(id, out var rec)) rec.TakenBy.Add(player);
     }
 
     static void Track(int id, ItemDropObject d, string place)
@@ -82,6 +116,9 @@ internal static class DropSync
             if (drops.TryGetValue(id, out var d) && d) d.gameObject.SetActive(false);
             Forget(id);
         }
+        var goneInst = new List<int>();
+        foreach (var pair in instanced) if (pair.Value.Place == left) goneInst.Add(pair.Key);
+        foreach (int id in goneInst) instanced.Remove(id);
     }
 
     static bool SomeoneIn(string place)
@@ -101,33 +138,61 @@ internal static class DropSync
 
     static (string key, int amount, string values) GetItem(NetDataReader r) => (r.GetString(), r.GetInt(), r.GetString());
 
-    /// <summary>Build the item like the save loader does (Addressables, then its random values). Calls back on the main thread.</summary>
-    static void MakeItem(string key, int amount, string values, System.Action<ItemObject> done)
+    /// <summary>
+    /// Build the item like the save loader does (Addressables by its address key, then its random values); if the key
+    /// is empty or doesn't load, find the item among the loaded item assets by name. Calls back on the main thread.
+    /// </summary>
+    static void MakeItem(string key, int amount, string values, System.Action<ItemObject> done) => MakeItem(key, "", amount, values, done);
+
+    static void MakeItem(string key, string name, int amount, string values, System.Action<ItemObject> done)
     {
-        if (string.IsNullOrEmpty(key)) return;
-        var handle = Addressables.LoadAssetAsync<ItemData>(key);
-        handle.Completed += h =>
+        void Build(ItemData data)
         {
-            if (h.Status != AsyncOperationStatus.Succeeded || !h.Result) { NetLog.Warn($"Unknown item '{key}'"); return; }
+            if (!data) { NetLog.Warn($"Unknown item '{key}' / '{name}': not shown"); return; }
             var rv = JsonUtility.FromJson<ItemRandomValues>(values) ?? new ItemRandomValues();
-            rv.SetData(h.Result);
-            done(new ItemObject(h.Result, amount) { randomValues = rv });
-        };
+            rv.SetData(data);
+            done(new ItemObject(data, amount) { randomValues = rv });
+        }
+        if (string.IsNullOrEmpty(key)) { Build(ItemByName(name)); return; }
+        Addressables.LoadAssetAsync<ItemData>(key).Completed += h =>
+            Build(h.Status == AsyncOperationStatus.Succeeded && h.Result ? h.Result : ItemByName(name));
     }
 
-    static NetDataWriter SpawnMessage(int id, ItemObject item, int amount, Vector2 from, Vector2 to)
+    static Dictionary<string, ItemData> itemsByName;
+
+    static ItemData ItemByName(string name)
+    {
+        if (string.IsNullOrEmpty(name)) return null;
+        for (int attempt = 0; attempt < 2; attempt++)
+        {
+            if (itemsByName == null || attempt == 1)
+            {
+                itemsByName = new Dictionary<string, ItemData>();
+                foreach (var d in Resources.FindObjectsOfTypeAll<ItemData>()) if (d && !itemsByName.ContainsKey(d.name)) itemsByName[d.name] = d;
+            }
+            if (itemsByName.TryGetValue(name, out var found) && found) return found;
+        }
+        return null;
+    }
+
+    static NetDataWriter SpawnMessage(int id, ItemObject item, int amount, Vector2 from, Vector2 to, bool inst) =>
+        SpawnMessage(id, item.data.addressKey ?? "", item.data.name, amount, JsonUtility.ToJson(item.randomValues), from, to, inst);
+
+    static NetDataWriter SpawnMessage(int id, string key, string name, int amount, string values, Vector2 from, Vector2 to, bool inst)
     {
         var w = new NetDataWriter();
         w.Put((byte)MsgType.DropSpawn);
         w.Put(id);
         w.Put(from.x); w.Put(from.y); w.Put(to.x); w.Put(to.y);
-        PutItem(w, item, amount);
+        w.Put(key); w.Put(amount); w.Put(values);
+        w.Put(inst);
+        w.Put(name ?? "");   // fallback if the address key is empty / doesn't load
         return w;
     }
 
     // ---- owner ----
 
-    /// <summary>Owner: a player just arrived in our area; send them the drops lying here.</summary>
+    /// <summary>Owner: a player just arrived in our area; send them the drops lying here (and the instanced copies still theirs).</summary>
     public static void SendSnapshot(int playerId)
     {
         string here = Plugin.Place;
@@ -135,9 +200,22 @@ internal static class DropSync
         foreach (var pair in drops)
         {
             var d = pair.Value;
-            if (!d || !d.isActiveAndEnabled || d.itemObj == null || placeOf[pair.Key] != here) continue;
+            if (!d || !d.isActiveAndEnabled || d.itemObj == null || placeOf[pair.Key] != here || instanced.ContainsKey(pair.Key)) continue;
             Vector2 at = d.transform.position;
-            Plugin.SendTo(playerId, SpawnMessage(pair.Key, d.itemObj, d.itemObj.amount, at, at));
+            Plugin.SendTo(playerId, SpawnMessage(pair.Key, d.itemObj, d.itemObj.amount, at, at, false));
+            n++;
+        }
+        foreach (var pair in instanced)
+        {
+            var rec = pair.Value;
+            if (rec.Place != here || rec.TakenBy.Contains(playerId)) continue;
+            Plugin.SendTo(playerId, SpawnMessage(pair.Key, rec.Key, rec.Name, rec.Amount, rec.Values, rec.At, rec.At, true));
+            foreach (int who in rec.TakenBy)   // so they know too, should they run the area later
+            {
+                var w = new NetDataWriter();
+                w.Put((byte)MsgType.DropTakenBy); w.Put(pair.Key); w.Put(who);
+                Plugin.SendTo(playerId, w);
+            }
             n++;
         }
         if (n > 0) NetLog.Info($"Sent {n} drops to {Plugin.NameOf(playerId)}");
@@ -157,6 +235,15 @@ internal static class DropSync
     {
         int id = r.GetInt();
         var w = new NetDataWriter();
+        if (instanced.TryGetValue(id, out var rec))
+        {
+            // Instanced: everyone gets their own copy, once. It stays for the others (and for us).
+            bool yes = !rec.TakenBy.Contains(fromId);
+            w.Put((byte)(yes ? MsgType.DropTakeOk : MsgType.DropDenied)); w.Put(id);
+            Plugin.SendTo(fromId, w);
+            if (yes) SendTaken(id, fromId);
+            return;
+        }
         if (drops.TryGetValue(id, out var d) && d && d.isActiveAndEnabled && d.isReady)
         {
             Forget(id);
@@ -182,11 +269,15 @@ internal static class DropSync
         var from = new Vector2(r.GetFloat(), r.GetFloat());
         var to = new Vector2(r.GetFloat(), r.GetFloat());
         var (key, amount, values) = GetItem(r);
-        if (drops.ContainsKey(id)) return;
+        bool inst = r.GetBool();
+        string name = r.GetString();
         string place = Plugin.Place;
-        MakeItem(key, amount, values, item =>
+        if (inst) Remember(id, key, name, amount, values, to, place);
+        if (drops.TryGetValue(id, out var have) && have && have.isActiveAndEnabled) return;
+        MakeItem(key, name, amount, values, item =>
         {
-            if (drops.ContainsKey(id) || Plugin.Place != place) return;
+            if (drops.TryGetValue(id, out var already) && already && already.isActiveAndEnabled) return;
+            if (Plugin.Place != place) { NetLog.Info($"Drop {name} skipped: we left {place}"); return; }
             var handler = Singleton<ItemDropHandler>.main;
             var d = PoolManager.Get(handler.itemDropObjectPrefab).GetComponent<ItemDropObject>();
             item.amount = amount;
@@ -211,8 +302,9 @@ internal static class DropSync
 
     public static void OnDenied(NetDataReader r)
     {
-        RemoveLocal(r.GetInt());
-        NetLog.Info("Someone else picked that up first");
+        int id = r.GetInt();
+        RemoveLocal(id);
+        NetLog.Info(instanced.ContainsKey(id) ? "You already took your copy of that" : "Someone else picked that up first");
     }
 
     public static void OnRemoved(NetDataReader r) => RemoveLocal(r.GetInt());
@@ -272,7 +364,9 @@ internal static class DropSync
         if (Plugin == null || !Plugin.Connected || Puppet || allowLocal || !drop || drop.itemObj == null || idOf.ContainsKey(drop)) return;
         int id = ((Plugin.MyId + 1) << 20) | (nextId++ & 0xFFFFF);   // unique across owners
         Track(id, drop, Plugin.Place);
-        if (Plugin.AnyoneElseHere) Plugin.SendToPlace(SpawnMessage(id, drop.itemObj, drop.itemObj.amount, from, to), DeliveryMethod.ReliableOrdered);
+        bool inst = Session.IsInstanced(drop.itemObj);   // weapons / armour / gear with instanced loot on: one per player
+        if (inst) Remember(id, drop.itemObj.data.addressKey ?? "", drop.itemObj.data.name, drop.itemObj.amount, JsonUtility.ToJson(drop.itemObj.randomValues), to, Plugin.Place);
+        if (Plugin.AnyoneElseHere) Plugin.SendToPlace(SpawnMessage(id, drop.itemObj, drop.itemObj.amount, from, to, inst), DeliveryMethod.ReliableOrdered);
     }
 
     /// <summary>
@@ -283,6 +377,13 @@ internal static class DropSync
     static bool BeforePickup(ItemDropObject __instance)
     {
         if (Plugin == null || !idOf.TryGetValue(__instance, out int id)) return true;
+        if (!Puppet && instanced.ContainsKey(id))
+        {
+            // Our copy of an instanced drop: gone for us only, the others still have theirs.
+            Forget(id);
+            SendTaken(id, Plugin.MyId);
+            return true;
+        }
         if (!Puppet)
         {
             Forget(id);

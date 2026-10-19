@@ -27,8 +27,8 @@ internal class StandInTarget : MonoBehaviour, IDamageable
 ///  - the victim's copy rebuilds it (attacker = its puppet of that creature, same Attack asset, same crit/effect
 ///    chances) and runs the game's own Resolve against the real player: their own armour, masteries, block, parry,
 ///    effects and knockback apply; a counter-attack becomes a normal hit request to the owner (EnemySync).
-/// Only creature attacks are forwarded: traps and hazards run on every copy and hit each real player there already.
-/// Our own player's attacks never hurt a stand-in (no PvP yet; see todo: both players opt in).
+/// Only creature attacks are forwarded (traps and hazards run on every copy and hit each real player there already),
+/// plus, with the host's PvP rule on, our own player's attacks (melee, projectiles: only the attacker's real one hurts).
 /// </summary>
 [HarmonyPatch]
 internal static class PlayerHits
@@ -44,12 +44,19 @@ internal static class PlayerHits
         attackDamage = default;
         if (!(damageData.Target is StandInTarget target)) return true;
         __result = default;   // no counter-damage here; the victim's copy rolls that
-        if (Plugin == null || !Plugin.Connected || !(damageData.Aggressor is Enemy enemy)) return false;
+        if (Plugin == null || !Plugin.Connected) return false;
+
+        // A creature's attack, or (PvP on) our own player's attack: our weapon, masteries and buffs are already in the amount.
+        var enemy = damageData.Aggressor as Enemy;
+        var me = LocalPlayer.Get();
+        bool pvp = Session.Pvp && me && ReferenceEquals(damageData.Aggressor, me);
+        if (!enemy && !pvp) return false;
 
         var w = new NetDataWriter();
         w.Put((byte)MsgType.PlayerHit);
-        w.Put(SceneIds.Of(enemy));
-        var at = enemy.transform.position;
+        w.Put(enemy ? EnemySync.NetId(enemy) : 0u);
+        w.Put(pvp ? Plugin.MyId : -1);
+        var at = enemy ? enemy.transform.position : me.transform.position;
         w.Put(at.x); w.Put(at.y);
         w.Put(damageData.Amount);
         w.Put(damageData.BaseCriticalChance);
@@ -62,10 +69,11 @@ internal static class PlayerHits
         return false;
     }
 
-    /// <summary>Victim: a creature hit our stand-in on the owner's screen; take it on our real player.</summary>
+    /// <summary>Victim: a creature (or, PvP, a player) hit our stand-in on their screen; take it on our real player.</summary>
     public static void OnPlayerHit(NetDataReader r)
     {
         uint enemyId = r.GetUInt();
+        int attacker = r.GetInt();   // a player (PvP), or -1 for a creature
         var from = new Vector3(r.GetFloat(), r.GetFloat(), 0f);
         int amount = r.GetInt();
         float crit = r.GetFloat(), effects = r.GetFloat();
@@ -76,8 +84,11 @@ internal static class PlayerHits
 
         var me = LocalPlayer.Get();
         if (!me || me.IsDead) return;
-        var enemy = SceneIds.Find<Enemy>(enemyId);
-        IDamageable aggressor = enemy && enemy.isActiveAndEnabled ? enemy : RemoteHitter.At(from);
+        if (attacker >= 0 && !Session.Pvp) return;   // PvP was switched off meanwhile
+        var enemy = EnemySync.FindById(enemyId);
+        IDamageable aggressor = attacker >= 0 ? (RemoteHitter.For(Plugin, attacker) ?? RemoteHitter.At(from))
+            : enemy && enemy.isActiveAndEnabled ? enemy : RemoteHitter.At(from);
+        if (attacker >= 0) Chat.LastHitBy(Plugin.NameOf(attacker));   // "killed by sabba"
 
         var d = new DamageData(aggressor, me, amount, hitType, knock, noStagger: noStagger)
         {
@@ -86,7 +97,7 @@ internal static class PlayerHits
             BaseEffectsChance = effects,
         };
         var counter = CombatSystem.Resolve(d);   // our defence, block, parry, crit, effects, knockback
-        if (counter.Result == DamageResult.Success && enemy && enemy.isActiveAndEnabled)
+        if (attacker < 0 && counter.Result == DamageResult.Success && enemy && enemy.isActiveAndEnabled)
             enemy.ApplyDamage(counter);           // a counter-attack: EnemySync turns it into a hit request to the owner
     }
 

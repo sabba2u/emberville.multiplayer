@@ -151,6 +151,42 @@ internal class RemoteAvatar
         LookSync.Apply(Root, materials, look);
     }
 
+    /// <summary>
+    /// Their character died: play what PlayerDead plays on their screen. Damage, then Dead / DeadGore 0.375 s later
+    /// (the animator sync would get there too, this makes it exact), and the gore splatter (0.4 s) or scorch mark
+    /// (1.4 s) under them, from the same prefabs our own character uses (PlayerMaster.goreMarkSpawner /
+    /// scorchMarkSpawner), as our own copy at their feet (the game's spawner pools under its player, so it would follow
+    /// us). Hiding their art comes with the look sync, like on their screen.
+    /// </summary>
+    public async void PlayDeath(PlayerMaster template, bool gore)
+    {
+        if (!Root) return;
+        SetTrigger("Damage");
+        await Cysharp.Threading.Tasks.UniTask.Delay(375);
+        if (!Root) return;
+        SetTrigger(gore ? "DeadGore" : "Dead");
+        if (gore && template && template.sfxComponent) template.sfxComponent.PlaySfx("GoreDeath");
+        await Cysharp.Threading.Tasks.UniTask.Delay(gore ? 400 : 1400);
+        if (!Root || !template) return;
+        var spawner = gore ? template.goreMarkSpawner : template.scorchMarkSpawner;
+        if (!spawner || !spawner.objectPrefab) return;
+        var mark = UnityEngine.Object.Instantiate(spawner.objectPrefab, Root.transform.position, spawner.keepRotation ? spawner.transform.rotation : Quaternion.identity);
+        if (spawner.replaceAnim) { var a = mark.GetComponentInChildren<Animator>(); if (a) a.runtimeAnimatorController = spawner.replaceAnim; }
+        mark.SetActive(true);
+        UnityEngine.Object.Destroy(mark, 60f);
+    }
+
+    void SetTrigger(string name)
+    {
+        int hash = Animator.StringToHash(name);
+        foreach (var a in animators)
+        {
+            if (!a || !a.isActiveAndEnabled || !a.runtimeAnimatorController) continue;
+            foreach (var p in a.parameters)
+                if (p.nameHash == hash && p.type == AnimatorControllerParameterType.Trigger) { a.SetTrigger(hash); break; }
+        }
+    }
+
     public void Destroy()
     {
         if (animators != null) foreach (var a in animators) PuppetStateBehaviours.Puppets.Remove(a);

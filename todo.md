@@ -207,7 +207,76 @@ replay it with drops blocked (drops come from the owner via DropSync). Life-skil
 (`PlayerData.AddXP` blocked inside `FinishObject` otherwise). Arrival snapshot `GatherState` (health + type, applied quietly).
 Bug that triggered it: client mined a rock, the host still had a full rock.
 
-**Idea: PvP as an option.** Off by default; each player switches it on in the Insert menu, and a hit only counts
+**Built (untested), joining = the host's world (`GuestWorld.cs`): "you bring your character, the host brings the world".**
+Saves separate them: `player_slotN.evp` = character; a world = `<prefix>.evw` (WorldData: `MapSeed`, chests, recipes,
+story flags, last scene/area/spot), `.eve` (estate: farm, buildings, soil, chopped trees), `.evm` (explored map).
+The map is generated from `MapSeed` (`WorldMap.CreateAndRenderDungeon` -> `DungeonSettings.CreateDungeon`) and cached as
+`<settings>S<seed>.dmap(.json)`. **Seed is not 100% deterministic by code reading:** `GenerationContext` defaults to
+`RandomNeighborSelection` (Unity's global Random), `ConnectChunksStep`, `DungeonEntranceGeneration`,
+`ChunkModel.GetRandomAvailableBarrier`, `SelectFromDistanceRange` also use `UnityEngine.Random`, never reseeded
+(`SeedTest.cs`, Insert > "Map seed test", generates twice as the game does and twice with Unity Random seeded, compares
+with each other and the cached file, writes them to `EmbervilleGhost_SeedTest/`). So we send the generated map file too.
+Flow: client's Welcome -> `WorldRequest`; host runs `GameData.CallSaveListeners()` in memory (no disk write), copies
+WorldData with `lastActiveScene/lastGameArea/lastSpawnPosition` = where the host stands, sends gzip(.evw, .eve, .evm,
+.dmap) as `WorldFiles`; client saves them under prefix `ghostguest_world` (SaveIsolation redirects it into
+`EmbervilleGhost_Guest<copy>/`, not in the world list); at the main menu, when a character is picked and the world screen
+comes up, `MainMenuManager.LoadWorldSave(guest prefix)` -> spawns next to the host. Character still saves to its own file;
+guest world saves stay in the guest folder; only the host's world file is real.
+Todo: join while in-game (now: toast "go back to the main menu"), quest/story progress that lives in WorldData is the
+host's (by design), dungeons' own random seed (owner must send it).
+
+**Built (untested), creatures spawned while playing (EnemySync):** placed creatures keep path ids; anything with
+"(Clone)" in its path (pooled `PoolManager.Get(prefab)`: dungeon spawns, `SpawnEnemyGroupAction`, `SpawnPrefabGroup`;
+`EnemyWaveHandler` waves via `Instantiate`) gets an owner id (top bit + owner player id + counter) and `EnemySpawn(id,
+prefab name, pos, flip)`; puppets find the prefab among loaded assets (`Resources.FindObjectsOfTypeAll<Enemy>`, not scene
+objects) and spawn it through the game's pool; puppets' own spawns are hidden at once; arrival snapshot includes them.
+Creatures switched off on a puppet but alive at the owner (a cutscene / event group that only ran there, e.g. the
+Acolyte Sorcerer under "== Cutscene HummingSphere") are woken, taken out of their inactive group first.
+
+**Built (untested), doors / gates / levers / switches (`DoorSync.cs`):** a locked door uses the interacting player's own
+keys (`GateDoor.TryToUnlock`), so whoever uses a door/lever runs it locally and broadcasts the result (`DoorChange`,
+`SwitchChange`); changes that happen by themselves (event-opened gates like the one after killing the sorcerer, auto
+close, scripts) only come from the area owner (blocked on puppets); receivers mirror through the same methods
+(`Open/Close/ChangeState/ForceState`, `TurnOn/TurnOff/TurnDisabled`), echoes suppressed; arrival `DoorSnapshot` quiet.
+Not yet: `DungeonBarrier`, cutscenes (play only for whoever triggers them; `CutsceneCrystal`, HummingSphere...).
+
+**Built (untested), creatures fight whoever is nearest (#4) = per-creature runner:** the AI only ever chases the local
+player of the copy it runs on (`FindGameObjectWithTag("Player")`, EnemyGroup sight, PlayerMaster-typed graph nodes), so
+instead of teaching the AI about stand-ins, the area owner gives each creature to the nearest player (every 0.5 s,
+2-unit margin against flip-flopping; `EnemyRunner` message, also in the arrival snapshot). That copy runs its AI
+(which then chases its own player), streams it, and answers hit requests; everyone else freezes and mirrors it. A runner
+who leaves -> back to the area owner. Drops still come from the area owner (it replays the death). Area-level things
+(breakables, drops, chests, rocks) still use the area owner. Seen first: the sorcerer never attacked the client.
+
+**Built (untested), creature projectiles everywhere (#5, part 1, `FxSync.cs`):** `Projectile.OnEnable` on the shooter's
+copy -> `ProjectileFx(prefab, pos, dir, range)`; others spawn the same prefab from the game's pool with
+`preventDamage` (flies, stops, hit effect, no damage; flag restored if the game reuses it). Not yet: attack objects
+(slashes, ground blasts: `IAttackObject`, `Explosion`).
+
+**Built (untested), "Join host" window (`JoinWindow.cs`, opens on F9):** connection, host's world (downloading /
+ready with name, size, seed, whether the generated map came / host not in a world), character picker (current one
+preselected in a game), "Connect now" = `GuestWorld.Load` (works from the main menu AND in a game: saves the current
+game first, sets prefixes, `LoadData`, `startFromSavedData`, `CallScene(lastActiveScene)`), Cancel = disconnect.
+
+**Built (untested), off-screen teammate arrows (Hud.DrawEdgeArrow):** teammate in our scene + area but off screen ->
+arrow on the screen edge in their direction (centre -> their projected position, clamped 46 px inside the edges), in
+their tag colour, with "name  34m"; gone when they're on screen; hidden in menus like the other tags. Also: Insert menu
+"Teleport to" per teammate (same scene; `GameManager.TeleportPlayerFade`, switches GameArea if needed), main-menu
+"MULTIPLAYER: join from here (F9)" banner (`MenuBanner.cs`).
+
+**Built (untested), host window + session rules (`Session.cs`):** F8 opens "Host a game": port, Shared XP (default on),
+Instanced loot (default off: Weapon/Armor/Gear categories, not key items, drop once per player, each takes their own
+copy once, late arrivals still get theirs; materials/consumables/placeables stay first come first served; records
+with who-took-it are kept by everyone via `DropTakenBy` so handovers keep them), PvP (default off), HOST NOW. The
+host's rules go to everyone (`SessionSettings` on join + on change in the Insert menu; clients see them greyed out).
+**PvP:** with it on, our own attacks that land on a stand-in's hurtbox (in `CombatSystem.Resolve`) go to that player
+as `PlayerHit` with attacker id; the victim's copy resolves it (their armour, block, parry; knockback away from the
+attacker's stand-in); deaths say "killed by <player>"; status line shows "PvP ON". No counter-attacks between players.
+Also fixed: creatures handed to a player stood idle (`StateMachine.ChangeState` ignores the current state, so
+`RestartBehavior` did nothing: now `RestartGraph` directly); dying while connected no longer resets the shared world
+(`CoopDeath.cs`: blocks `EnemiesManager.ResetAll` + every `ResetToLastState` for that frame).
+
+**Idea (done above): PvP as an option.** Off by default; each player switches it on in the Insert menu, and a hit only counts
 between two players who BOTH have it on (show it on the label, e.g. a red sword). Needs: player-vs-player hits (today a
 stand-in has no colliders, so our attacks pass through it: give stand-ins a hurtbox / check `Physics2D.OverlapCollider`
 against stand-ins in `PlayerMaster.PerformAttackHit`), a `PlayerHit` message to the victim's copy, which applies it with
@@ -235,6 +304,19 @@ replaces `input` with (mouse world point - player position) normalized/scaled do
 `mainCam.ScreenToWorldPoint`, as the game's own `GetLookDirection` already does). **Pick the button carefully:** left =
 primary attack, right = secondary attack, and the game already aims with the mouse (mouseLook); maybe a held key +
 mouse, or middle (but middle is our ping/path in Duckov). Generic enough to reuse in any top-down game.
+
+**NEXT VERSION (after 0.1): join through Steam / friends list.** Decided 2026-10-19: get the LAN/IP build solid first.
+Today: IP only (LAN, or internet by IP with the host forwarding UDP 9060). Plan:
+- The demo ships no Steam (no `steam_api64.dll`, even after the 0.20.16.232 update), so the mod brings Steamworks.NET
+  (MIT) + `steam_api64.dll` in the plugin folder and calls `SteamAPI.Init` itself (+ `RunCallbacks` every frame).
+- Use the demo's own app ID **5355880** (launched from Steam, Steam provides it): overlay, invites and friends list
+  "Join Game" show as "Emberville Demo". No Spacewar 480. If Early Access (Oct 27) ships its own Steam, use the game's.
+- Port from Duckov: `SteamTransport.cs` (SteamNetworkingSockets P2P relay, no port forwarding) + `SteamLobby.cs`
+  (friends-only lobby, rich presence `connect` = `+connect_lobby <id>`, `ActivateGameOverlayInviteDialog`,
+  `GameLobbyJoinRequested_t` / `GameRichPresenceJoinRequested_t`, `+connect_lobby` on the command line). Drops in
+  next to LAN behind `ITransport`.
+- UI: F8 host window gets "Host via Steam" + "Invite friends"; accepting an invite opens the Join window.
+- Friends need the demo + the mod, both launched from Steam. Test with the 2 Steam accounts on 2 PCs.
 
 **Step 5 - Play together**
 - [ ] Steam lobby + invites (copy `SteamTransport` / `SteamLobby`).

@@ -14,6 +14,7 @@ namespace EmbervilleGhost;
 /// (Who runs this area, "Cohh is the host here", is drawn top-right by Hud: the game uses the bottom corners.) While the box is open the game's own input is off, so typing doesn't
 /// walk, attack or open menus. Sent to everyone (the host relays).
 /// </summary>
+[HarmonyLib.HarmonyPatch]   // its death patches (PlayerMaster.Die / ApplyDamage) only run with this on the class
 internal static class Chat
 {
     public static Plugin Plugin;
@@ -29,6 +30,9 @@ internal static class Chat
     static List<(UnityEngine.InputSystem.InputActionMap map, bool on)> savedMaps;
 
     public static bool IsOpen { get; private set; }
+
+    /// <summary>How far above the bottom of the window the chat sits, as a fraction of the window height.</summary>
+    public static BepInEx.Configuration.ConfigEntry<float> Lift;
 
     /// <summary>
     /// Every frame, before ImGui builds its frame. The text box reads the keyboard itself (Unity's text input for
@@ -52,6 +56,13 @@ internal static class Chat
             if (Time.unscaledTime - openedAt > 0.1f) { Send(typing); Close(); }   // not the Enter that opened it
             return;
         }
+        // Ctrl+V: paste (an address from the host's Copy button, ...).
+        if (kb.vKey.wasPressedThisFrame && kb.ctrlKey.isPressed)
+        {
+            string paste = NetInfo.Clipboard.Replace("\r", " ").Replace("\n", " ");
+            typing = (typing + paste).Length > 200 ? (typing + paste).Substring(0, 200) : typing + paste;
+            return;
+        }
         // Backspace: once on press, then repeating while held.
         if (kb.backspaceKey.wasPressedThisFrame) { Backspace(); repeatAt = Time.unscaledTime + 0.4f; }
         else if (kb.backspaceKey.isPressed && Time.unscaledTime >= repeatAt) { Backspace(); repeatAt = Time.unscaledTime + 0.04f; }
@@ -63,6 +74,7 @@ internal static class Chat
     static void OnTextInput(char c)
     {
         if (!IsOpen || c < 32 || c == 127 || typing.Length >= 200) return;
+        if (c == 'v' && Keyboard.current != null && Keyboard.current.ctrlKey.isPressed) return;   // Ctrl+V is paste (Tick)
         typing += c;
     }
 
@@ -121,17 +133,22 @@ internal static class Chat
 
     static string lastHitBy = "";
 
+    /// <summary>PvP: the next "killed by" names this player (their stand-in isn't a game object with a name).</summary>
+    public static void LastHitBy(string who) => pvpHitBy = who;
+    static string pvpHitBy;
+
     /// <summary>Remember what hit our player last, for "Cohh was killed by a Spiderling".</summary>
     [HarmonyLib.HarmonyPatch(typeof(PlayerMaster), nameof(PlayerMaster.ApplyDamage)), HarmonyLib.HarmonyPrefix]
     static void RememberHitter(DamageData damageData)
     {
-        if (damageData.Aggressor is UnityEngine.MonoBehaviour mb && mb) lastHitBy = CleanName(mb.name);
+        if (pvpHitBy != null) { lastHitBy = pvpHitBy; pvpHitBy = null; }
+        else if (damageData.Aggressor is UnityEngine.MonoBehaviour mb && mb) lastHitBy = CleanName(mb.name);
         else if (damageData.Aggressor != null) lastHitBy = "";
     }
 
     /// <summary>Our player died: tell everyone (chat line + toast).</summary>
     [HarmonyLib.HarmonyPatch(typeof(PlayerMaster), nameof(PlayerMaster.Die)), HarmonyLib.HarmonyPostfix]
-    static void AfterDie()
+    static void AfterDie(PlayerMaster __instance)
     {
         if (Plugin == null) return;
         Died(Plugin.MyId, lastHitBy);
@@ -140,6 +157,7 @@ internal static class Chat
         w.Put((byte)MsgType.PlayerDied);
         w.Put(Plugin.MyId);
         w.Put(lastHitBy);
+        w.Put(__instance.goreDeath);   // which death they play: Dead + scorch mark, or DeadGore + gore splatter
         if (Plugin.IsHost) Plugin.SendToAllClients(w, DeliveryMethod.ReliableOrdered);
         else Plugin.SendTo(0, w);
     }
@@ -183,7 +201,9 @@ internal static class Chat
         const ImGuiWindowFlags flags = ImGuiWindowFlags.NoDecoration | ImGuiWindowFlags.NoSavedSettings |
             ImGuiWindowFlags.NoFocusOnAppearing | ImGuiWindowFlags.NoNav | ImGuiWindowFlags.AlwaysAutoResize;
 
-        ImGui.SetNextWindowPos(new Vector2(vp.WorkPos.x + 12, vp.WorkPos.y + vp.WorkSize.y - 12), ImGuiCond.Always, new Vector2(0f, 1f));
+        // Above the game's own HUD (health bar + hotbar in the bottom-left), which scales with the window.
+        float lift = vp.WorkSize.y * (Lift?.Value ?? 0.25f);
+        ImGui.SetNextWindowPos(new Vector2(vp.WorkPos.x + 12, vp.WorkPos.y + vp.WorkSize.y - lift), ImGuiCond.Always, new Vector2(0f, 1f));
         ImGui.SetNextWindowSizeConstraints(new Vector2(380, 0), new Vector2(520, vp.WorkSize.y * 0.5f));
         ImGui.SetNextWindowBgAlpha(IsOpen ? 0.7f : 0.0f);
         if (ImGui.Begin("##chat", flags | ImGuiWindowFlags.NoInputs))
