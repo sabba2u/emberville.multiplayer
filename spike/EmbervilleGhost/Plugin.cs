@@ -26,7 +26,7 @@ namespace EmbervilleGhost;
 [BepInPlugin("spike.embervilleghost", "EmbervilleGhost", Version)]
 public class Plugin : BaseUnityPlugin, ITransportListener
 {
-    internal const string Version = "0.1.1";
+    internal const string Version = "0.1.2";
     internal const string ModName = "Sabba's Emberville Multiplayer Mod";
     internal static string Title => $"{ModName} v{Version}";
 
@@ -82,6 +82,8 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         Application.runInBackground = true;
         Hud.Plugin = this;
         EnemySync.Plugin = this;
+        AttackFx.Plugin = this;
+        BossSync.Plugin = this;
         DropSync.Plugin = this;
         PropSync.Plugin = this;
         ChestSync.Plugin = this;
@@ -152,7 +154,7 @@ public class Plugin : BaseUnityPlugin, ITransportListener
 
     void NetTick()
     {
-        if (LocalPlayer.Scene != lastScene) { lastScene = LocalPlayer.Scene; SceneIds.Clear(); EnemySync.SceneChanged(); FxSync.Clear(); }   // ids belong to a scene
+        if (LocalPlayer.Scene != lastScene) { lastScene = LocalPlayer.Scene; SceneIds.Clear(); EnemySync.SceneChanged(); FxSync.Clear(); AttackFx.Clear(); BossSync.Clear(); }   // ids belong to a scene
 
         Perf.Begin("1 receive"); transport.Poll(); Perf.End("1 receive");
 
@@ -708,6 +710,7 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         {
             // requests -> the area's owner
             case MsgType.EnemyHit: EnemySync.OnHit(reader, from); break;   // creatures: whoever runs that one decides (EnemySync checks)
+            case MsgType.EnemyHitRefused: EnemySync.OnHitRefused(reader); break;
             case MsgType.PropHit: if (owner) PropSync.OnHit(reader, from); break;
             case MsgType.DropRequest: if (owner) DropSync.OnDropRequest(reader); break;
             case MsgType.DropTake: if (owner) DropSync.OnTake(reader, from); break;
@@ -717,7 +720,7 @@ public class Plugin : BaseUnityPlugin, ITransportListener
             // results -> puppets
             case MsgType.EnemyState: EnemySync.OnState(reader); break;
             case MsgType.EnemyDamaged: EnemySync.OnDamaged(reader); break;
-            case MsgType.EnemySpawn: if (!owner) EnemySync.OnSpawn(reader); break;
+            case MsgType.EnemySpawn: EnemySync.OnSpawn(reader); break;   // the area owner's spawns, or a creature someone claimed (a hatchling of their boss's egg)
             case MsgType.EnemyRunner: if (!owner) EnemySync.OnRunner(reader); break;
             case MsgType.PropDamaged: if (!owner) PropSync.OnDamaged(reader); break;
             case MsgType.PropBroken: if (!owner) PropSync.OnBroken(reader); break;
@@ -733,6 +736,12 @@ public class Plugin : BaseUnityPlugin, ITransportListener
             case MsgType.SwitchChange: DoorSync.OnSwitch(reader); break;
             case MsgType.DoorSnapshot: if (!owner) DoorSync.OnSnapshot(reader); break;
             case MsgType.ProjectileFx: FxSync.OnProjectileFx(reader); break;
+            case MsgType.AttackFx: AttackFx.OnAttackFx(reader); break;
+            case MsgType.EggSpawn: BossSync.OnEggSpawn(reader, from); break;   // eggs: whoever's boss laid it owns it
+            case MsgType.EggHit: BossSync.OnEggHit(reader, from); break;
+            case MsgType.EggDamaged: BossSync.OnEggDamaged(reader); break;
+            case MsgType.EggDestroy: BossSync.OnEggDestroy(reader); break;
+            case MsgType.PlayerTrapped: BossSync.OnPlayerTrapped(reader, from); break;
             // to one player
             case MsgType.PlayerHit: PlayerHits.OnPlayerHit(reader); break;
             case MsgType.WorldRequest: if (IsHost) GuestWorld.OnRequest(from); break;
@@ -801,8 +810,9 @@ internal enum MsgType : byte
     EnemyState = 30,   // owner -> puppets, unreliable ~10 Hz, one per creature: id (path hash), time, position, flip, dead, health, tint rgb, animators
     EnemySpawn = 31,   // owner -> puppets (or one arriving player), reliable: runtime id (top bit set), prefab name, position, flip (a creature spawned while playing)
     EnemyRunner = 32,  // area owner -> everyone in the area (or one arriving player): creature id, player id that runs it now (the nearest; its AI chases them)
-    EnemyHit = 33,     // puppet -> owner, reliable: id, amount, result, hit type, knockback, no-stagger (hit detection where the hitter is)
-    EnemyDamaged = 34, // owner -> puppets, reliable: id, amount, result, hit type, knockback, no-stagger, health before, hitter player id (-1 none)
+    EnemyHit = 33,     // puppet -> runner, reliable: id, amount, result, hit type, knockback, no-stagger, attacker player id, hops (passed on if it changed hands)
+    EnemyHitRefused = 35, // runner -> hitter, reliable: id (it's immune there, past the grace; show "Immune")
+    EnemyDamaged = 34, //owner -> puppets, reliable: id, amount, result, hit type, knockback, no-stagger, health before, hitter player id (-1 none)
     PropHit = 40,      // puppet -> owner, reliable: breakable id (path hash), amount, hit type, knockback
     PropDamaged = 41,  // owner -> puppets, reliable: id, amount, hit type, knockback, health before, hitter player id
     PropBroken = 42,   // owner -> one arriving player: count, ids already broken in this scene
@@ -827,4 +837,10 @@ internal enum MsgType : byte
     SwitchChange = 81, // whoever used it / the owner's scripts -> everyone in the area: lever/switch id, state (On/Off/Disabled)
     DoorSnapshot = 82, // owner -> one arriving player: [door id, state]..., [switch id, state]... (applied without animation or events)
     ProjectileFx = 90, // shooter's copy (owner for creatures, the player for theirs) -> everyone in the area, reliable unordered: prefab name, position, direction, range (harmless copy)
+    AttackFx = 91,     // creature's runner -> area, reliable unordered: id, kind (hit/buildup/cancel), ends buildup, count x (prefab, x, y, angle, scale x, trigger) (harmless copies)
+    EggSpawn = 100,    // boss runner -> area, reliable: egg id (owner << 24 | n), x, y
+    EggHit = 101,      // player -> egg owner, reliable: id, amount, hit type, knockback
+    EggDamaged = 102,  // egg owner -> area, reliable: id, amount, hit type, knockback, health before, hitter
+    EggDestroy = 103,  // egg owner -> area, reliable: id, index (0 = broken, >0 = hatch that many spiders)
+    PlayerTrapped = 104, // trapped player -> area, reliable: on, x, y (the boss's runner reacts like for its own player)
 }

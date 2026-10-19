@@ -44,6 +44,7 @@
     <Reference Include="Newtonsoft.Json"><HintPath>$(Managed)\Newtonsoft.Json.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UniTask"><HintPath>$(Managed)\UniTask.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="Unity.Behavior"><HintPath>$(Managed)\Unity.Behavior.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="SerializableGUID"><HintPath>$(Managed)\SerializableGUID.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="Unity.InputSystem"><HintPath>$(Managed)\Unity.InputSystem.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="Assembly-CSharp"><HintPath>$(Managed)\Assembly-CSharp.dll</HintPath><Private>false</Private></Reference>
     <!-- Dear ImGui via ImGui.NET + cimgui.dll; drawn by Unity in ImGuiUnity.cs. -->

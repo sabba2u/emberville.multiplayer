@@ -323,6 +323,15 @@ Today: IP only (LAN, or internet by IP with the host forwarding UDP 9060). Plan:
 - [ ] Teammate health/status, pings + paths, minimap that tracks everyone, off-screen teammate arrows (details in
       Duckov roadmap #12), chat.
 - [ ] Disconnects / rejoin, more than 2 players, join codes, maybe a Colyseus room server.
+- [ ] **Team buffs** (asked during online play with Rory, 2026-10-19: "was I affected by his Swift Foot buff?" No.)
+      The game is single-player at heart: no allies/party anywhere in its code, so buffs like Swift Foot (toggled
+      movement buff) only ever touch the caster, and the mod doesn't sync buffs/status effects at all yet (a remote
+      player only looks faster because their position is copied). Idea: when a player turns on a buff, tell the area;
+      teammates within range get the same buff on their own copy (the game's own effect code, so their speed/stats
+      really change), removed when it's toggled off or they walk out of range. Host window option ("Share buffs with
+      nearby teammates", range). First: find how a toggle skill applies its buff (EffectsHandler / skill data) and
+      which buffs make sense to share (movement, defence auras yes; self-only things like dash i-frames no). Also show
+      the buff's visual on the caster's stand-in.
 
 ---
 

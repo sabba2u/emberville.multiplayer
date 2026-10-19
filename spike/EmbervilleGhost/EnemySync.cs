@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using HarmonyLib;
 using LiteNetLib;
 using LiteNetLib.Utils;
+using Unity.Behavior;
 using UnityEngine;
 
 namespace EmbervilleGhost;
@@ -53,7 +54,22 @@ internal static class EnemySync
         public AnimSync.Frame[] Anim;
         public bool[] Nodes, Sprites;   // its child objects on/off, its sprites visible (the "!", shields, auras...)
         public float LastHeard;
+        public float DeadSince;   // when its runner first said it's dead
+        public bool Immune;       // its runner's copy can't take damage right now (boss phases: the AI sets it)
+        public float ImmuneSince;
     }
+
+    // Immunity: only the runner's AI switches it (SetEnemyInvulnerableAction -> CanTakeDamage), and the others see the
+    // creature a little in the past. A hit that arrives this soon after it went immune still counts ("favour the
+    // shooter": the hitter saw it hittable); later ones are refused and the hitter is told ("Immune").
+    const float ImmuneGrace = 0.4f;
+    // A puppet whose runner says it has been immune this long refuses our hits on the spot (no round trip needed).
+    const float ImmuneLocalAfter = 0.6f;
+    static readonly Dictionary<Enemy, float> immuneSince = new Dictionary<Enemy, float>();   // runner: when ours went immune
+
+    // The runner's death (EnemyDamaged, reliable) can arrive after its "dead" state (unreliable, overtakes on loss):
+    // give the replay this long before we kill it ourselves.
+    const float DeathReplayWait = 1f;
     static readonly Dictionary<uint, Remote> remote = new Dictionary<uint, Remote>();
     static readonly Dictionary<Enemy, RigidbodyType2D> frozen = new Dictionary<Enemy, RigidbodyType2D>();   // AI off here
     static readonly Dictionary<Enemy, float> frozenSince = new Dictionary<Enemy, float>();
@@ -145,6 +161,15 @@ internal static class EnemySync
 
     static void SetRunner(uint id, int player)
     {
+        var e = Find(id);
+        if (e && remote.TryGetValue(id, out var s))
+        {
+            // Handed to us: start from the old runner's health (a replay we missed would leave ours too high, and
+            // then a kill there takes extra hits here).
+            if (player == Plugin.MyId && !s.Dead && s.Health > 0f && s.Health < e.currentHealth) e.currentHealth = s.Health;
+        }
+        // Still someone else's: the new runner's stream starts now, don't count its silence from our first freeze.
+        if (e && frozenSince.ContainsKey(e)) frozenSince[e] = Time.unscaledTime;
         runnerOf[id] = player;
         remote.Remove(id);   // fresh stream from the new runner
     }
@@ -173,6 +198,7 @@ internal static class EnemySync
     public static void SceneChanged()
     {
         runtimeIds.Clear(); runtimeById.Clear(); isRuntime.Clear(); announce.Clear();
+        expected.Clear(); claimed.Clear(); stageVars.Clear(); stages.Clear();
         animators.Clear(); woken.Clear(); runnerOf.Clear(); remote.Clear();
         frozen.Clear(); frozenSince.Clear(); parts.Clear(); localOnly.Clear();
         prefabs = null;
@@ -189,11 +215,37 @@ internal static class EnemySync
     {
         if (!IsRuntime(e)) return SceneIds.Of(e);
         if (runtimeIds.TryGetValue(e, out uint id)) return id;
-        if (PuppetMode) return 0;
+        bool claim = false;
+        if (PuppetMode)
+        {
+            if (!TakeExpected(e)) return 0;
+            claim = true;   // spawned by something we run (a boss's egg): ours, though we don't own the area
+        }
         id = RuntimeBit | ((uint)(Plugin.MyId & 0x7FF) << 20) | (++nextRuntime & 0xFFFFF);
         Map(e, id);
         announce.Add(e);
+        if (claim) { claimed.Add(id); runnerOf[id] = Plugin.MyId; }
         return id;
+    }
+
+    // Creatures that something we run is about to spawn (a hatching egg of a boss we run): prefab name -> how many, until when.
+    static readonly Dictionary<string, (int count, float until)> expected = new Dictionary<string, (int, float)>();
+    static readonly HashSet<uint> claimed = new HashSet<uint>();   // runtime ids we gave out without owning the area
+
+    /// <summary>Something we run (not a spawner/wave, those are the area owner's) is spawning one of these: it's ours.</summary>
+    public static void ExpectSpawn(string prefabName)
+    {
+        if (string.IsNullOrEmpty(prefabName)) return;
+        expected.TryGetValue(prefabName, out var x);
+        expected[prefabName] = (Time.unscaledTime < x.until ? x.count + 1 : 1, Time.unscaledTime + 5f);
+    }
+
+    static bool TakeExpected(Enemy e)
+    {
+        string name = PrefabName(e.gameObject.name);
+        if (!expected.TryGetValue(name, out var x) || x.count <= 0 || Time.unscaledTime > x.until) return false;
+        expected[name] = (x.count - 1, x.until);
+        return true;
     }
 
     static void Map(Enemy e, uint id)
@@ -218,6 +270,7 @@ internal static class EnemySync
         var p = e.transform.position;
         w.Put(p.x); w.Put(p.y); w.Put(p.z);
         w.Put(e.IsFlipped);
+        w.Put(claimed.Contains(id) ? Plugin.MyId : -1);   // who runs it, when it's ours without owning the area
         return w;
     }
 
@@ -275,6 +328,8 @@ internal static class EnemySync
         string name = r.GetString();
         var pos = new Vector3(r.GetFloat(), r.GetFloat(), r.GetFloat());
         bool flip = r.GetBool();
+        int runner = r.GetInt();
+        if (runner >= 0) runnerOf[id] = runner;
         if (runtimeById.TryGetValue(id, out var have) && have && have.isActiveAndEnabled) return;
         var prefab = FindPrefab(name);
         if (!prefab) { NetLog.Warn($"Can't show spawned creature '{name}': no such prefab here"); return; }
@@ -305,8 +360,9 @@ internal static class EnemySync
     public static void Clear()
     {
         foreach (var e in new List<Enemy>(frozen.Keys)) Unfreeze(e);
-        animators.Clear(); remote.Clear(); runnerOf.Clear(); frozenSince.Clear(); woken.Clear(); parts.Clear();
+        animators.Clear(); remote.Clear(); runnerOf.Clear(); frozenSince.Clear(); woken.Clear(); parts.Clear(); immuneSince.Clear();
         runtimeIds.Clear(); runtimeById.Clear(); isRuntime.Clear(); announce.Clear();
+        expected.Clear(); claimed.Clear(); stageVars.Clear(); stages.Clear();
         hitFrom = -1; applyingHost = false;
     }
 
@@ -324,15 +380,13 @@ internal static class EnemySync
 
         // Spawned since last time (area owner): tell the others what to spawn, before its first state.
         if (!PuppetMode)
-        {
             foreach (var e in EnemiesManager.AllEnemies)
                 if (e && e.isActiveAndEnabled && IsRuntime(e)) IdOf(e);
-            if (send)
-            {
-                foreach (var e in announce)
-                    if (e && e.isActiveAndEnabled) Plugin.SendToPlace(SpawnMessage(e, runtimeIds[e]), DeliveryMethod.ReliableOrdered);
-                announce.Clear();
-            }
+        if (send)   // the area owner's spawns, and (anyone) creatures we claimed (ExpectSpawn)
+        {
+            foreach (var e in announce)
+                if (e && e.isActiveAndEnabled) Plugin.SendToPlace(SpawnMessage(e, runtimeIds[e]), DeliveryMethod.ReliableOrdered);
+            announce.Clear();
         }
 
         double now = Time.unscaledTimeAsDouble;
@@ -348,6 +402,8 @@ internal static class EnemySync
             if (RunnerOf(id) == Plugin.MyId)
             {
                 Unfreeze(e);
+                if (e.CanTakeDamage) immuneSince.Remove(e);
+                else if (!immuneSince.ContainsKey(e)) immuneSince[e] = Time.unscaledTime;
                 if (send) SendState(w, e, id);
                 continue;
             }
@@ -359,8 +415,15 @@ internal static class EnemySync
                 if (Time.unscaledTime - frozenSince[e] > MissingHideSeconds && !e.IsDead) hideNow.Add(e);
                 continue;
             }
-            if (s.Dead && !e.IsDead) { hideNow.Add(e); continue; }   // died out of our sight
+            if (s.Dead && !e.IsDead)
+            {
+                // Died where its runner is, and the replay of that hit hasn't reached us (yet): give it a moment,
+                // then let it die here the game's way (animation, sounds, corpse) instead of vanishing.
+                if (Time.unscaledTime - s.DeadSince > DeathReplayWait) KillHere(e);
+                continue;
+            }
             if (e.IsDead) continue;   // our own death replay plays out (animation, corpse, fade)
+            if (e.CanTakeDamage == s.Immune) e.CanTakeDamage = !s.Immune;
             if (!s.Snapshots.Sample(now, out var pos, out _, out _)) continue;
             e.transform.position = pos;
             e.IsFlipped = s.Flip;
@@ -386,6 +449,9 @@ internal static class EnemySync
         w.Put(e.IsFlipped);
         w.Put(e.IsDead);
         w.Put(e.CurrentHealth);
+        w.Put(!e.CanTakeDamage);
+        var stage = StageOf(e);
+        w.Put(stage != null ? (byte)stage.Value : NoStage);
         // Tint: the AI recolours creatures (behaviour graph "Tint Enemy" -> SetSpriteColor), and the AI only runs here.
         var tint = e.fadableRenderers != null && e.fadableRenderers.Length > 0 && e.fadableRenderers[0] ? e.fadableRenderers[0].color : Color.white;
         w.Put(tint.r); w.Put(tint.g); w.Put(tint.b);
@@ -458,6 +524,8 @@ internal static class EnemySync
         bool flip = r.GetBool();
         bool dead = r.GetBool();
         float health = r.GetFloat();
+        bool immune = r.GetBool();
+        byte stage = r.GetByte();
         var tint = new Color(r.GetFloat(), r.GetFloat(), r.GetFloat(), 1f);
         var nodes = GetBits(r);
         var sprites = GetBits(r);
@@ -465,6 +533,10 @@ internal static class EnemySync
         if (RunnerOf(id) == Plugin.MyId) return;   // stale: we run it now
 
         if (!remote.TryGetValue(id, out var s)) remote[id] = s = new Remote();
+        if (dead && !s.Dead) s.DeadSince = Time.unscaledTime;
+        if (immune && !s.Immune) s.ImmuneSince = Time.unscaledTime;
+        s.Immune = immune;
+        if (stage != NoStage && Find(id) is Enemy staged) stages[staged] = stage;
         s.Snapshots.Add(t, pos, 0f, Time.unscaledTimeAsDouble);
         s.Flip = flip; s.Dead = dead; s.Health = health; s.Anim = anim; s.Tint = tint;
         s.Nodes = nodes; s.Sprites = sprites;
@@ -496,6 +568,17 @@ internal static class EnemySync
         }
     }
 
+    /// <summary>Puppet: its runner says it's dead, so it dies here too, through its die state like a lethal hit (no XP, no loot: those came from there).</summary>
+    static void KillHere(Enemy e)
+    {
+        e.currentHealth = 0f;
+        e.dieState.IsGore = false;
+        applyingHost = true;
+        try { e.ChangeState(e.dieState); }
+        finally { applyingHost = false; }
+        NetLog.Info($"{e.name} died where its runner is; its death played here late");
+    }
+
     /// <summary>AI and physics off: someone else runs this one.</summary>
     static void Freeze(Enemy e)
     {
@@ -523,6 +606,22 @@ internal static class EnemySync
         // with only the graph switched off: then RestartBehavior does nothing and it would stand idle forever.
         if (e.currentState == e.runBehaviorState) e.RestartGraph();
         else e.RestartBehavior();
+        // A boss handed to us carries on in the phase it was in there (its AI would start over at stage 1).
+        if (stages.TryGetValue(e, out byte stage) && StageOf(e) is BlackboardVariable<BossStage> v) v.Value = (BossStage)stage;
+    }
+
+    // ---- boss phase (the "Stage" variable of a boss's AI: Spider Matriarch, Heartwood) ----
+
+    const byte NoStage = 255;
+    static readonly Dictionary<Enemy, BlackboardVariable<BossStage>> stageVars = new Dictionary<Enemy, BlackboardVariable<BossStage>>();
+    static readonly Dictionary<Enemy, byte> stages = new Dictionary<Enemy, byte>();   // puppet: the runner's last phase
+
+    static BlackboardVariable<BossStage> StageOf(Enemy e)
+    {
+        if (stageVars.TryGetValue(e, out var v)) return v;
+        if (!e.behaviorGraphAgent || !e.behaviorGraphAgent.GetVariable("Stage", out v)) return null;   // not a boss (or not started yet)
+        stageVars[e] = v;
+        return v;
     }
 
     // ---- hits ----
@@ -536,11 +635,85 @@ internal static class EnemySync
         var hitType = (DamageHitType)r.GetByte();
         var knock = (KnockBack)r.GetByte();
         bool noStagger = r.GetBool();
+        int attacker = r.GetInt();
+        byte hops = r.GetByte();
         var e = Find(id);
-        if (!e || !e.isActiveAndEnabled || e.IsDead || RunnerOf(id) != Plugin.MyId) return;
+        if (!e || !e.isActiveAndEnabled || e.IsDead) return;
 
-        var d = new DamageData(RemoteHitter.For(Plugin, fromId), e, amount, hitType, knock, result: result, noStagger: noStagger);
-        ApplyFor(fromId, () => e.ApplyDamage(d));
+        int runner = RunnerOf(id);
+        if (runner != Plugin.MyId)
+        {
+            // It was handed on before this hit got here (it changes hands as players move): pass the hit along
+            // instead of losing it. A couple of hops at most, in case two of us still disagree.
+            if (hops >= 2) return;
+            Plugin.SendTo(runner, HitMessage(id, amount, result, hitType, knock, noStagger, attacker, (byte)(hops + 1)));
+            return;
+        }
+
+        // Immune here: within the grace it still counts (they saw it hittable), after that the hitter hears why not.
+        bool graced = false;
+        if (!e.CanTakeDamage)
+        {
+            if (!immuneSince.TryGetValue(e, out float since) || Time.unscaledTime - since > ImmuneGrace)
+            {
+                NetLog.Info($"{Plugin.NameOf(attacker)}'s hit on {e.name} refused: immune");
+                if (attacker == Plugin.MyId) ShowImmune(e);
+                else
+                {
+                    var w = new NetDataWriter();
+                    w.Put((byte)MsgType.EnemyHitRefused);
+                    w.Put(id);
+                    Plugin.SendTo(attacker, w);
+                }
+                return;
+            }
+            graced = true;
+            e.CanTakeDamage = true;
+        }
+        try
+        {
+            if (attacker == Plugin.MyId)
+            {
+                // Our own hit, come back to us because we run it now: apply it as our player's.
+                var me = LocalPlayer.Get();
+                if (me) e.ApplyDamage(new DamageData(me, e, amount, hitType, knock, result: result, noStagger: noStagger));
+                return;
+            }
+            var d = new DamageData(RemoteHitter.For(Plugin, attacker), e, amount, hitType, knock, result: result, noStagger: noStagger);
+            ApplyFor(attacker, () => e.ApplyDamage(d));
+        }
+        finally
+        {
+            if (graced && e) e.CanTakeDamage = false;
+        }
+    }
+
+    /// <summary>Hitter: the creature's runner refused our hit because it's immune there.</summary>
+    public static void OnHitRefused(NetDataReader r)
+    {
+        var e = Find(r.GetUInt());
+        if (!e || !e.isActiveAndEnabled) return;
+        NetLog.Info($"Our hit on {e.name} didn't count: it was immune");
+        ShowImmune(e);
+    }
+
+    /// <summary>The game's own floating damage text, saying why a hit did nothing.</summary>
+    static void ShowImmune(Enemy e) =>
+        Bus<UIDamageEvent>.Invoke(new UIDamageEvent(0f, "Immune", e.CenterOfMass.position, DamageResult.Block));
+
+    static NetDataWriter HitMessage(uint id, int amount, DamageResult result, DamageHitType hitType, KnockBack knock, bool noStagger, int attacker, byte hops)
+    {
+        var w = new NetDataWriter();
+        w.Put((byte)MsgType.EnemyHit);
+        w.Put(id);
+        w.Put(amount);
+        w.Put((byte)result);
+        w.Put((byte)hitType);
+        w.Put((byte)knock);
+        w.Put(noStagger);
+        w.Put(attacker);   // in the message, not the sender: a passed-on hit comes from whoever passed it
+        w.Put(hops);
+        return w;
     }
 
     /// <summary>The runner's result of a hit; replay it through the game's code.</summary>
@@ -619,18 +792,15 @@ internal static class EnemySync
 
         uint id = IdOf(__instance);
         var me = LocalPlayer.Get();
-        if (id != 0 && me && ReferenceEquals(damageData.Aggressor, me))
+        if (id != 0 && me && ReferenceEquals(damageData.Aggressor, me)
+            && remote.TryGetValue(id, out var s) && s.Immune && Time.unscaledTime - s.ImmuneSince > ImmuneLocalAfter)
         {
-            var w = new NetDataWriter();
-            w.Put((byte)MsgType.EnemyHit);
-            w.Put(id);
-            w.Put(damageData.Amount);
-            w.Put((byte)damageData.Result);
-            w.Put((byte)damageData.HitType);
-            w.Put((byte)damageData.KnockBackForce);
-            w.Put(damageData.NoStagger);
-            Plugin.SendTo(RunnerOf(id), w);
+            ShowImmune(__instance);   // immune there for a while already: no point asking
+            return false;
         }
+        if (id != 0 && me && ReferenceEquals(damageData.Aggressor, me))
+            Plugin.SendTo(RunnerOf(id), HitMessage(id, damageData.Amount, damageData.Result, damageData.HitType,
+                damageData.KnockBackForce, damageData.NoStagger, Plugin.MyId, 0));
         return false;
     }
 

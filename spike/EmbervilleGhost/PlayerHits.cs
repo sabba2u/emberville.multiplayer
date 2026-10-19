@@ -35,6 +35,8 @@ internal static class PlayerHits
 {
     public static Plugin Plugin;
 
+    static bool replaying;   // resolving a creature's hit its runner sent us (OnPlayerHit): the aggressor is our copy of it
+
     static Dictionary<string, Attack> attacksByName;
 
     [HarmonyPatch(typeof(CombatSystem), nameof(CombatSystem.Resolve), new[] { typeof(DamageData), typeof(DamageData) }, new[] { ArgumentType.Normal, ArgumentType.Out })]
@@ -42,6 +44,13 @@ internal static class PlayerHits
     static bool BeforeResolve(DamageData damageData, out DamageData attackDamage, ref DamageData __result)
     {
         attackDamage = default;
+        // A creature someone else runs (its copy here: a mirrored attack object, AttackFx): its real hits come from
+        // its runner as PlayerHit, so here it hurts nobody.
+        if (!replaying && damageData.Aggressor is Enemy puppet && Plugin != null && Plugin.Connected && !EnemySync.Runs(puppet))
+        {
+            __result = default;
+            return false;
+        }
         if (!(damageData.Target is StandInTarget target)) return true;
         __result = default;   // no counter-damage here; the victim's copy rolls that
         if (Plugin == null || !Plugin.Connected) return false;
@@ -96,7 +105,10 @@ internal static class PlayerHits
             BaseCriticalChance = crit,
             BaseEffectsChance = effects,
         };
-        var counter = CombatSystem.Resolve(d);   // our defence, block, parry, crit, effects, knockback
+        DamageData counter;
+        replaying = true;
+        try { counter = CombatSystem.Resolve(d); }   // our defence, block, parry, crit, effects, knockback
+        finally { replaying = false; }
         if (attacker < 0 && counter.Result == DamageResult.Success && enemy && enemy.isActiveAndEnabled)
             enemy.ApplyDamage(counter);           // a counter-attack: EnemySync turns it into a hit request to the owner
     }
