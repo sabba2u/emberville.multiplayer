@@ -1,0 +1,68 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- SPIKE: BepInEx 5 plugin that adds a second player to Emberville over LiteNetLib. Patterns carried over from DuckovGhost. -->
+
+  <PropertyGroup>
+    <TargetFramework>net472</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>EmbervilleGhost</AssemblyName>
+    <RootNamespace>EmbervilleGhost</RootNamespace>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Nullable>disable</Nullable>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <NoWarn>CS1591;CS8981;CS0618</NoWarn>
+    <GamePath Condition="'$(GamePath)' == ''">K:\__games\steamapps\common\Emberville Demo</GamePath>
+    <Managed>$(GamePath)\Emberville_Data\Managed</Managed>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+    <PackageReference Include="LiteNetLib" Version="1.3.1" />
+    <!-- Lets us read the game's internal/private fields (PlayerMaster.animator, isFliped...) without reflection. -->
+    <PackageReference Include="Krafs.Publicizer" Version="2.2.1" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Publicize Include="Assembly-CSharp" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="BepInEx"><HintPath>$(GamePath)\BepInEx\core\BepInEx.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="0Harmony"><HintPath>$(GamePath)\BepInEx\core\0Harmony.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="netstandard"><HintPath>$(Managed)\netstandard.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine"><HintPath>$(Managed)\UnityEngine.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.CoreModule"><HintPath>$(Managed)\UnityEngine.CoreModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.IMGUIModule"><HintPath>$(Managed)\UnityEngine.IMGUIModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.AnimationModule"><HintPath>$(Managed)\UnityEngine.AnimationModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.Physics2DModule"><HintPath>$(Managed)\UnityEngine.Physics2DModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.AudioModule"><HintPath>$(Managed)\UnityEngine.AudioModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.JSONSerializeModule"><HintPath>$(Managed)\UnityEngine.JSONSerializeModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Unity.Addressables"><HintPath>$(Managed)\Unity.Addressables.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Unity.ResourceManager"><HintPath>$(Managed)\Unity.ResourceManager.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UniTask"><HintPath>$(Managed)\UniTask.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Unity.Behavior"><HintPath>$(Managed)\Unity.Behavior.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Unity.InputSystem"><HintPath>$(Managed)\Unity.InputSystem.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Assembly-CSharp"><HintPath>$(Managed)\Assembly-CSharp.dll</HintPath><Private>false</Private></Reference>
+    <!-- Dear ImGui via ImGui.NET + cimgui.dll; drawn by Unity in ImGuiUnity.cs. -->
+    <Reference Include="ImGui.NET"><HintPath>..\libs\OverlayDearImGui\ImGui.NET.dll</HintPath><Private>true</Private></Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="Assets\Fonts\**\*" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\libs\OverlayDearImGui\System.Runtime.CompilerServices.Unsafe.dll" Link="System.Runtime.CompilerServices.Unsafe.dll" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\libs\OverlayDearImGui\cimgui.dll" Link="cimgui.dll" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!-- Copy the plugin and everything it needs into the game's BepInEx/plugins folder after each build. -->
+  <Target Name="DeployToGame" AfterTargets="Build">
+    <ItemGroup>
+      <DeployFiles Include="$(OutDir)*.dll" Exclude="$(OutDir)UnityEngine*.dll;$(OutDir)Unity.*.dll;$(OutDir)netstandard.dll;$(OutDir)Assembly-CSharp.dll" />
+      <DeployAssets Include="$(OutDir)Assets\**\*" />
+    </ItemGroup>
+    <!-- SkipUnchangedFiles: native cimgui.dll stays locked while the game runs; managed DLLs can be replaced. -->
+    <Copy SourceFiles="@(DeployFiles)" DestinationFolder="$(GamePath)\BepInEx\plugins\EmbervilleGhost" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(DeployAssets)" DestinationFolder="$(GamePath)\BepInEx\plugins\EmbervilleGhost\Assets\%(RecursiveDir)" SkipUnchangedFiles="true" />
+  </Target>
+
+</Project>

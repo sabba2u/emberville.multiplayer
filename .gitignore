@@ -1,0 +1,23 @@
+# Whitelist: only our Emberville mod, the libs it builds against, and the notes.
+# Never commit reference/ (decompiled game code), game DLLs, or the Duckov practice mod.
+/*
+!/.gitignore
+!/README.md
+!/todo.md
+
+!/spike/
+/spike/*
+!/spike/EmbervilleGhost/
+!/spike/libs/
+
+/spike/libs/*
+!/spike/libs/OverlayDearImGui/
+/spike/libs/OverlayDearImGui/*
+!/spike/libs/OverlayDearImGui/ImGui.NET.dll
+!/spike/libs/OverlayDearImGui/cimgui.dll
+!/spike/libs/OverlayDearImGui/System.Runtime.CompilerServices.Unsafe.dll
+
+bin/
+obj/
+*.user
+.vs/
