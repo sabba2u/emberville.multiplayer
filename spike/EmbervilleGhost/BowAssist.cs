@@ -20,10 +20,29 @@ internal static class BowAssist
 
     public static void Bind(ConfigFile config)
     {
-        on = config.Bind("Combat", "BowLockOn", true, "Arrows from your bow / crossbow curve onto the closest creature near where you aim");
+        // a new key (it was "BowLockOn", on): lock-on now starts off for everyone, until /bowlock or the Insert menu
+        on = config.Bind("Combat", "BowLock", false, "Arrows from your bow / crossbow curve onto the closest creature near where you aim (/bowlock, or the Insert menu)");
         angle = config.Bind("Combat", "BowLockAngle", 20f, "How far off your aim a creature can be and still be locked on to (degrees either side; /bowlock 15)");
         range = config.Bind("Combat", "BowLockRange", 14f, "How far away a creature can be and still be locked on to");
         trueAim = config.Bind("Combat", "BowTrueAim", true, "Arrows leave in exactly the direction you aim (the game may snap a bow's arrow to up / right / down / left)");
+    }
+
+    /// <summary>The Insert menu: lock-on on / off, its cone and range; true aim.</summary>
+    public static void DrawMenu()
+    {
+        ImGuiNET.ImGui.Separator();
+        bool v = on.Value;
+        if (ImGuiNET.ImGui.Checkbox("Bow lock-on: arrows curve onto the creature nearest your aim", ref v)) on.Value = v;
+        if (on.Value)
+        {
+            float a = angle.Value, r = range.Value;
+            ImGuiNET.ImGui.SetNextItemWidth(160);
+            if (ImGuiNET.ImGui.SliderFloat("Cone (degrees either side)##bowlock", ref a, 2f, 90f, "%.0f")) angle.Value = a;
+            ImGuiNET.ImGui.SetNextItemWidth(160);
+            if (ImGuiNET.ImGui.SliderFloat("Range##bowlock", ref r, 4f, 25f, "%.0f")) range.Value = r;
+        }
+        bool t = trueAim.Value;
+        if (ImGuiNET.ImGui.Checkbox("Bows aim true (any direction, not just up / right / down / left)", ref t)) trueAim.Value = t;
     }
 
     /// <summary>/bowlock 15: the lock-on cone, degrees either side of the aim.</summary>

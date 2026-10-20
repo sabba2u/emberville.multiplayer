@@ -142,10 +142,11 @@ internal static class ArenaTraps
     static float WallEdge(Vector3 cellWorld, Side side, float solidEdge)
     {
         if (!walls) return solidEdge;
-        var cell = walls.WorldToCell(cellWorld);
+        var local = walls.transform.InverseTransformPoint(cellWorld);   // (the arena's tilemaps sit at the origin, 1x1 cells)
+        var cell = new Vector3Int(Mathf.FloorToInt(local.x), Mathf.FloorToInt(local.y), 0);
         var sprite = walls.GetSprite(cell);
         if (!sprite) return solidEdge;
-        var c = walls.GetCellCenterWorld(cell);
+        var c = Dungeon.CellCenter(walls, cell);
         var sb = sprite.bounds;   // around the sprite's pivot, which sits on the cell's centre
         return side switch
         {

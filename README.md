@@ -38,19 +38,27 @@ Work in progress. Player downloads are on the [Releases](../../releases) page (*
 
 ## The descent and the boss arena (v0.1.6+)
 - **The descent:** the full game's dungeon generator ships in the demo (its rooms, biomes and caves) without the scene
-  it plays in; the mod builds the levels itself. Two glowing pads stand outside the starting area's door, with
-  **Rory** (an archer; walk up and talk to him). The ember pad opens the setup: seed (a number or a word: same seed,
+  it plays in; the mod builds the levels itself. Up the path from the starting area's door, the **water well** is the
+  way down and the **lamp** across the steps is the boss arena, with **Rory** (an archer; talk to him) between them.
+  The well opens the setup: seed (a number or a word: same seed,
   same floors), how many floors (or endless), how much stronger each floor's creatures get (health and damage, 100-400%
-  a floor, compounding; presets up to 200% / 300%), and the most creatures on a floor. Each floor has chests (loot from
+  a floor, compounding; presets up to 200% / 300%), the most creatures on a floor, and the layout: **Sprawl** (from the
+  game's own layouts to a maze of branches and loops), spreading out more as you go down, and big open boss floors.
+  The game's loading screen shows while a floor is built; the floor's side doors are sealed (only the stairs and the
+  home pad move you); decorative chests become real ones. Each floor has chests (loot from
   the game's own items, better deeper down), the stairs down at the far end, a mini-boss guarding them every 5th floor,
   and a blue pad (or the Leave button at the top) back to where you came in. Co-op: everyone gets the same floors;
   the others can follow you down from the Insert menu.
-- **Boss arena** (the purple pad): a walled floor with six pillars, spike traps and arrow shooters, and a panel to make
+- **Boss arena** (the lamp): a walled floor with six pillars, spike traps and arrow shooters, and a panel to make
   mini-bosses from the game's creatures (name, colour, size, health, damage). **Boss rush**: 30 bosses one after
   another, tougher each wave; the spikes join at wave 5, the arrows at wave 10. Loot left on the floor goes when you leave.
+- **Move while attacking** (`/moveattack` or the Insert menu, off to start): melee and magic at full speed, bows and
+  crossbows slower while aiming (60%, `/moveattack 70` sets it).
+- **Better loot shows a green arrow:** a weapon on the ground that hits harder than yours, or armour / gear with
+  better stats than what you're wearing in that slot, gets a bobbing green up arrow (Insert menu to turn off).
 - **Bows aim true and lock on:** arrows from a bow / crossbow leave in exactly the direction you aim (the game snaps
   them to up / right / down / left), and curve onto a creature within 20° of your aim (`/bowlock 15` sets the cone,
-  `/bowlock` turns lock-on off; `[Combat]` in the config: angle, range, true aim).
+  `/bowlock` or the Insert menu turns lock-on on, it starts off; `[Combat]` in the config: angle, range, true aim).
 - **Tools:** `/uidump` (or the Insert menu) writes the game's on-screen UI and its sprites to `BepInEx/UIDumps`;
   diagnostics: a session log on the host (`BepInEx/SessionLogs`) and a mismatch checker between players.
 
@@ -117,7 +125,8 @@ Pets start **off**: `/pet on` (or the Insert menu checkbox) turns them on. Then 
 | `/devpanel` | open the developer panel (no numpad needed) |
 | `/arena` | teleport to this scene's test arena |
 | `/dungeon` | into a generated dungeon (the world map's), or back out |
-| `/bowlock`, `/bowlock 15` | bow / crossbow lock-on on / off (on to start with); the cone, degrees either side of your aim |
+| `/bowlock`, `/bowlock 15` | bow / crossbow lock-on on / off (off to start with; also in the Insert menu); the cone, degrees either side of your aim |
+| `/moveattack`, `/moveattack 70` | move while attacking on / off (off to start with; also in the Insert menu); the bow aiming speed in % |
 | `/nodeath` | testing: take no damage |
 | `/onehitkill` | testing: your hits do 500 damage |
 | `/uidump` | write the game's on-screen UI and sprites to `BepInEx/UIDumps` |

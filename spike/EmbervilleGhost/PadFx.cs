@@ -14,10 +14,16 @@ internal static class PadFx
     static Sprite dot;
     static Material unlit;
 
-    public static void Add(GameObject pad, Sprite ring, Color color, int sortingLayer)
+    public static void Add(GameObject pad, Sprite ring, Color color, int sortingLayer, bool groundArt = true)
     {
         try
         {
+            if (!groundArt)
+            {
+                Motes(pad, color, sortingLayer);
+                Glow(pad, color);
+                return;
+            }
             // inner ring, turning the other way
             var inner = new GameObject("InnerRing");
             inner.transform.SetParent(pad.transform, false);

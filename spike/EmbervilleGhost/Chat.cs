@@ -116,6 +116,7 @@ internal static class Chat
     static bool Command(string cmd)
     {
         if (cmd.StartsWith("trade")) { Trade.InviteByName(cmd.Substring(5)); return true; }
+        if (cmd == "moveattack" || cmd.StartsWith("moveattack ")) { MoveAttack.Command(cmd.Length > 10 ? cmd.Substring(11) : ""); return true; }
         if (cmd.StartsWith("bowlock ") && float.TryParse(cmd.Substring(8).Trim().TrimEnd('°'), out float deg)) { BowAssist.SetAngle(deg); return true; }
         if (cmd == "pet" || cmd.StartsWith("pet ")) { Pet.Command(cmd.Length > 3 ? cmd.Substring(4) : ""); return true; }
         if (cmd == "resources" || cmd.StartsWith("resources ") || cmd == "mats" || cmd.StartsWith("mats "))
@@ -148,7 +149,7 @@ internal static class Chat
             case "help":
             case "?":
                 System("/sleep: ready to skip to morning (everyone must)   /estate: unlock building on your estate (host)");
-                System("/devmode: the game's developer tools on/off   /devpanel: open the developer panel   /arena: to this scene's test arena   /dungeon: into a generated dungeon (or out)   /nodeath: take no damage   /onehitkill: 500 damage a hit (testing)   /bowlock: arrows home in (on by default; /bowlock 15 = 15° cone)");
+                System("/devmode: the game's developer tools on/off   /devpanel: open the developer panel   /arena: to this scene's test arena   /dungeon: into a generated dungeon (or out)   /nodeath: take no damage   /onehitkill: 500 damage a hit (testing)   /bowlock: arrows home in (off to start; /bowlock 15 = 15° cone)   /moveattack: move while attacking (off to start)");
                 System("/resources (or /resources 250): 100 of every material, and enough for the town's repairs   /repair: fix the nearest broken building");
                 System("/trade P2 (or a name): trade items with someone   /pet on (pets start off), /pet: befriend / call / send home, /pet list, /pet glowbat, /pet name ..., /pet color red");
                 System($"/online (or {OnlinePlayers.KeyName}): who's connected, mute; the host also kicks and bans   X at a chest (Better Chests mod): put in what it already has");

@@ -97,12 +97,15 @@ internal static class DungeonLoot
             picked.Add(c);
         }
 
+        // the rooms' decorative chests (art only, nothing to open): replaced by real ones where they stood
+        var spotsAt = Decorative(root).ToList();
+        spotsAt.AddRange(picked.Take(Mathf.Max(0, want - spotsAt.Count)).Select(c => new Vector3((c.x + 0.5f) * cs.x, (c.y + 0.5f) * cs.y, 0f)));
         int n = 0;
-        foreach (var c in picked)
+        foreach (var at in spotsAt)
         {
             var go = Object.Instantiate(prefab.gameObject, root.transform);
             go.name = $"EG_Chest_{n}";
-            go.transform.position = new Vector3((c.x + 0.5f) * cs.x, (c.y + 0.5f) * cs.y, 0f);
+            go.transform.position = at;
             go.SetActive(true);   // under the switched-off root: Start waits until we arrive
             var chest = go.GetComponent<Chest>();
             chest.chestID = $"EG_DG_{genSeed}_{where.Region}_x{n}";
@@ -114,7 +117,27 @@ internal static class DungeonLoot
             planned[chest] = (unchecked(genSeed * 31 + n * 977 + 7), floor);   // rolled when the chest is set up (the catalogue may still be loading now)
             n++;
         }
-        NetLog.Info($"Dungeon loot: {n} chests (+{i} from the rooms)", toast: false);
+        NetLog.Info($"Dungeon loot: {n} chests ({decorCount} were decorative ones, now real; +{i} of the rooms' own)", toast: false);
+    }
+
+    static int decorCount;
+
+    /// <summary>
+    /// Chest-looking props in the rooms with no Chest on them (or around them): where each stood (they're removed).
+    /// </summary>
+    static List<Vector3> Decorative(GameObject root)
+    {
+        var found = new List<Vector3>();
+        foreach (var t in root.GetComponentsInChildren<Transform>(true))
+        {
+            if (!t || t.name.IndexOf("chest", System.StringComparison.OrdinalIgnoreCase) < 0 || t.name.StartsWith("EG_")) continue;
+            if (t.GetComponentInChildren<Chest>(true) || t.GetComponentInParent<Chest>(true)) continue;   // a real one (or part of one)
+            if (t.parent && t.parent.name.IndexOf("chest", System.StringComparison.OrdinalIgnoreCase) >= 0 && !t.parent.GetComponentInParent<Chest>(true)) continue;   // its parent counts already
+            found.Add(t.position);
+            Object.Destroy(t.gameObject);
+        }
+        decorCount = found.Count;
+        return found;
     }
 
     static Chest ChestPrefab()

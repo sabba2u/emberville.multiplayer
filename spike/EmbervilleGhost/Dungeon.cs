@@ -50,6 +50,9 @@ internal static class Dungeon
     // cache: the last generated layout (a whole world takes a few seconds)
     static (string settings, int seed) renderKey;
     static DungeonRender render;
+    static int renderSprawl;
+    /// <summary>The current place's room size (tiles), for the floor's shape report.</summary>
+    internal static Vector2Int chunkSize = new Vector2Int(10, 10);
 
     // the latest invite from someone else
     static (int from, string scene, Where where)? invite;
@@ -154,29 +157,39 @@ internal static class Dungeon
 
     static async UniTaskVoid Go(Where where, string arriveAt, bool announce)
     {
+        if (busy) return;   // one at a time: a doorway touched again (or a second door) while building would build two
         busy = true;
         status = "Generating...";
         var oldRoot = root;
         DungeonLoot.Preload();
+        Loading.Begin(where.Floor > 0 ? $"Descending to floor {where.Floor}" : "Entering the dungeon");
         try
         {
             var settings = Find(where.Settings);
             NetLog.Info($"Generating the dungeon {settings.name}, seed {where.Seed}, region {where.Region}...", toast: true);
             int genSeed = Delve.SeedOf(where);
-            if (render == null || renderKey != (settings.name, genSeed))
+            int sprawlNow = where.Floor > 0 ? Delve.SprawlLevel(where.Floor) : 0;
+            if (render == null || renderKey != (settings.name, genSeed) || renderSprawl != sprawlNow)
             {
                 var rng = new SeededSystemRandomProvider(genSeed);
                 var ctx = new GenerationContext(rng);
                 if (settings != MainSettings()) ctx.NeighborSelection = new UniformNeighborSelection();
-                var model = await settings.CreateDungeon(ctx, Plugin.destroyCancellationToken);
+                // a descent floor: more side rooms / features than the game's own numbers (put back right after)
+                var undo = Sprawl.Apply(settings, where.Floor > 0 ? Delve.SprawlLevel(where.Floor) : 0);
+                DungeonModel model;
+                Loading.Stage("Shaping the floor", 0.05f, 0.4f, creep: true);   // (one long step: the bar creeps meanwhile)
+                try { model = await settings.CreateDungeon(ctx, Plugin.destroyCancellationToken); }
+                finally { undo(); }
                 if (model == null) throw new Exception("the generator gave up (no layout)");
                 render = model.GetRender(ctx.RNG);
                 renderKey = (settings.name, genSeed);
+                renderSprawl = sprawlNow;
             }
             if (where.Region < 0) where = where with { Region = (int)((uint)genSeed % (uint)render.Regions.Count) };
             if (where.Region >= render.Regions.Count)
                 throw new Exception($"there are only {render.Regions.Count} regions");
             status = "Building...";
+            Loading.Stage("Placing the rooms", 0.4f, 0.75f);
             var biome = render.Regions[where.Region].OverrideBiomeSettings ?? render.BiomeSettings ?? settings.BiomeSettings;
             var built = await Build(render, where, biome);
 
@@ -188,9 +201,13 @@ internal static class Dungeon
             else if (built.entry) { at = built.entry.DestPosition; dir = built.entry.SpawnDirection; }
             if (where.Floor > 0) at = Delve.SetUpFloor(where, at);   // the descent: arrival, stairs down, the way home
             DungeonLoot.Place(root, where, genSeed, at);   // chests
+            Loading.Stage("Lighting the torches", 1f, 1f);
+            await UniTask.Delay(250, ignoreTimeScale: true);
 
             current = where;
-            await Singleton<GameManager>.main.TeleportPlayerFade(at, dir, area, area.CameraConfiner);
+            // the loading screen goes once the teleport's fade has covered it (no glimpse of where you were)
+            await Singleton<GameManager>.main.TeleportPlayerFade(at, dir, area, area.CameraConfiner, null, null, false, Loading.End);
+            Loading.End();
             if (oldRoot && oldRoot != root) Cleanup(oldRoot);
             SpawnCreatures(biome, where);
             if (where.Floor > 0) Delve.AfterSpawn(where, biome);   // a floor boss every few floors
@@ -201,6 +218,7 @@ internal static class Dungeon
         }
         catch (Exception e)
         {
+            Loading.End();
             status = "Failed: " + e.Message;
             NetLog.Warn($"Dungeon: couldn't build it: {e.Message}", toast: true);
             UnityEngine.Debug.LogException(e);
@@ -211,6 +229,84 @@ internal static class Dungeon
         finally { busy = false; }
     }
 
+    // ---- the game's loading screen while a place is built ----
+
+    /// <summary>
+    /// The game's own loading screen (the bar and spinner between scenes: SceneLoader.loadingProgress), faded in while a
+    /// floor is generated and built, the bar moving through the stages; the stage's name drawn under it. The player
+    /// stands still meanwhile.
+    /// </summary>
+    internal static class Loading
+    {
+        static LoadingProgress bar;
+        static float from, to, creepUntil;
+        static bool creeping;
+        public static string Title = "", StageName = "";
+        public static bool On { get; private set; }
+        static readonly object holdKey = new object();
+
+        public static void Begin(string title)
+        {
+            Title = title; StageName = ""; On = true;
+            bar = Singleton<SceneLoader>.HasMain ? Singleton<SceneLoader>.main.loadingProgress : null;
+            var gm = Singleton<GameManager>.HasMain ? Singleton<GameManager>.main : null;
+            if (gm && gm.player) gm.player.AddStaticStack(holdKey);
+            // as SceneLoader does: fade out, show the panel, fade back in onto it
+            Bus<FadeEvent>.Invoke(new FadeEvent(FadeType.FadeOut, 0.35f, delegate
+            {
+                if (On && bar) bar.Show(true);
+                Bus<FadeEvent>.Invoke(new FadeEvent(FadeType.FadeIn, 0.35f, null));
+            }));
+            Creep().Forget();
+        }
+
+        public static void Stage(string name, float start, float end, bool creep = false)
+        {
+            StageName = name; from = start; to = end;
+            Set(start);
+            creeping = creep;
+            creepUntil = end;
+        }
+
+        /// <summary>How far through the current stage (0..1).</summary>
+        public static void Fraction(float f) => Set(Mathf.Lerp(from, to, Mathf.Clamp01(f)));
+
+        static float shown;
+        static void Set(float v) { shown = Mathf.Max(shown, v); if (bar) bar.UpdateProgress(shown); }
+
+        /// <summary>A long step with no progress of its own: the bar inches on (never past the stage's end).</summary>
+        static async UniTaskVoid Creep()
+        {
+            shown = 0f;
+            while (On)
+            {
+                if (creeping && shown < creepUntil - 0.01f) Set(shown + (creepUntil - shown) * 0.02f);
+                await UniTask.Yield();
+            }
+        }
+
+        public static void End()
+        {
+            if (!On) return;
+            On = false; creeping = false;
+            if (bar) bar.Show(false);
+            var gm = Singleton<GameManager>.HasMain ? Singleton<GameManager>.main : null;
+            if (gm && gm.player) gm.player.RemoveStaticStack(holdKey);
+        }
+
+        /// <summary>From Hud.Draw: what it's doing, under the game's bar.</summary>
+        public static void Draw()
+        {
+            if (!On) return;
+            var vp = ImGuiNET.ImGui.GetMainViewport();
+            var dl = ImGuiNET.ImGui.GetForegroundDrawList();
+            string line = string.IsNullOrEmpty(StageName) ? Title : $"{Title}: {StageName}...";
+            var size = ImGuiNET.ImGui.CalcTextSize(line);
+            float x = vp.WorkPos.x + vp.WorkSize.x / 2f - size.x / 2f, y = vp.WorkPos.y + vp.WorkSize.y * 0.62f;
+            dl.AddText(new ImGuiNET.Vector2(x, y), ImGuiNET.ImGui.ColorConvertFloat4ToU32(new ImGuiNET.Vector4(1f, 0.8f, 0.5f, 1f)), line);
+        }
+    }
+
     // ---- building a region ----
 
     struct Built { public Teleporter entry; public Vector3 fallback; public int rooms; }
@@ -219,6 +315,7 @@ internal static class Dungeon
     {
         var region = render.Regions[where.Region];
         var chunkSize = biome.ChunkSize;
+        Dungeon.chunkSize = chunkSize;
 
         root = new GameObject($"EG_Dungeon_{where.Settings}_{where.Seed}_{where.Region}");
         root.SetActive(false);
@@ -280,7 +377,7 @@ internal static class Dungeon
             foreach (var point in chunk.Points)
                 if (point.DungeonConnections != null && point.DungeonConnections.Count > 0 && region.Connections.TryGetValue(chunk.Position, out var c2))
                     point.DungeonConnections[0].ToConnectTo = c2.Index;
-            if (++n % 4 == 0) await UniTask.Yield();
+            if (++n % 4 == 0) { Loading.Fraction(n / (float)Mathf.Max(1, region.Chunks.Count)); await UniTask.Yield(); }
         }
         result.rooms = n;
 
@@ -334,6 +431,7 @@ internal static class Dungeon
         area.Setup();
         area.gameObject.SetActive(false);   // GameManager turns it on when we arrive (CurrentArea)
         root.SetActive(true);
+        Loading.Stage("Mapping the paths", 0.75f, 0.95f, creep: true);
         await BuildNavMesh(walkable, blocked);
         root.SetActive(false);
 
@@ -361,7 +459,7 @@ internal static class Dungeon
         Vector3 cell = Vector3.one;
         foreach (var t in sources)
         {
-            var grid = t.Tilemap.layoutGrid;
+            var grid = t.Tilemap.GetComponentInParent<Grid>(true);   // (layoutGrid is null while the floor is switched off)
             if (grid) cell = grid.cellSize;
             HashSet<Vector3Int> into = t.Layer switch
             {
@@ -378,7 +476,7 @@ internal static class Dungeon
             foreach (var c in tm.cellBounds.allPositionsWithin)
             {
                 if (!tm.HasTile(c)) continue;
-                var w = tm.GetCellCenterWorld(c);
+                var w = CellCenter(tm, c);
                 into.Add(new Vector3Int(Mathf.FloorToInt(w.x / cell.x), Mathf.FloorToInt(w.y / cell.y), 0));
             }
             // the room's collision layer is ours now (some rooms ship one, disabled in the game's renderer too)
@@ -395,7 +493,7 @@ internal static class Dungeon
         if (waterSolid) walls.UnionWith(water);
         floorCells = new HashSet<Vector3Int>(ground);
         floorCells.ExceptWith(walls);
-        if (ground.Count > 0 && floorCells.Count < ground.Count * 0.2f)
+        if (ground.Count > 0 && floorCells.Count < Mathf.Max(30, ground.Count * 0.03f))   // corridors are mostly wall (86% here): only a floor of almost nothing is wrong
         {
             // still almost no floor: the walls layer must be covering it too (not just the walls) - keep the floor walkable
             NetLog.Warn($"Dungeon: walls cover {ground.Count - floorCells.Count} of {ground.Count} floor tiles; only the edges are solid now", toast: false);
@@ -455,6 +553,18 @@ internal static class Dungeon
         composite.geometryType = CompositeCollider2D.GeometryType.Polygons;
         col.usedByComposite = true;
 
+    }
+
+    /// <summary>
+    /// A tile's centre in the world, worked out from the transforms. Tilemap.GetCellCenterWorld can't be used while the
+    /// floor is being built (switched off): it then puts every tile of a tilemap on the same spot.
+    /// </summary>
+    internal static Vector3 CellCenter(Tilemap tm, Vector3Int c)
+    {
+        var grid = tm.GetComponentInParent<Grid>(true);
+        var cs = grid ? grid.cellSize : Vector3.one;
+        var a = tm.tileAnchor;
+        return tm.transform.TransformPoint(new Vector3((c.x + a.x) * cs.x, (c.y + a.y) * cs.y, 0f));
     }
 
     static Tilemap MakeTilemap(GameObject grid, string name, HashSet<Vector3Int> cells, int navArea)
@@ -579,6 +689,31 @@ internal static class Dungeon
         parents.Push(c);
         int seed = unchecked(c.Seed * 31 + fromChunk.x * 7393 + fromChunk.y * 1931);
         Go(new Where(settings.name, seed, 0), entranceId, true).Forget();
+    }
+
+    /// <summary>
+    /// The descent's floors are one place each: their doorways (to other regions, side caves, the full game's world)
+    /// are sealed, and only the pads move you. Stopped before the game starts its teleport (it would freeze you in
+    /// its loading state with the exit animation playing). In other generated dungeons, a doorway touched while one is
+    /// being built is ignored the same way.
+    /// </summary>
+    [HarmonyPatch(typeof(Teleporter), nameof(Teleporter.Teleport))]
+    static class SealedDoors
+    {
+        static float toldAt = -10f;
+
+        static bool Prefix(Teleporter __instance, ref UniTask __result)
+        {
+            if (!Active || !root || !__instance.transform.IsChildOf(root.transform)) return true;
+            if (current.Value.Floor <= 0 && !busy) return true;
+            __result = UniTask.CompletedTask;
+            if (Time.unscaledTime - toldAt > 4f)
+            {
+                toldAt = Time.unscaledTime;
+                NetLog.Info(busy ? "Wait, the next place is still being built..." : "This doorway is sealed. Find the stairs down (or the blue pad home)", toast: true);
+            }
+            return false;
+        }
     }
 
     [HarmonyPatch(typeof(TeleporterDungeonRegion), nameof(TeleporterDungeonRegion.Teleport))]

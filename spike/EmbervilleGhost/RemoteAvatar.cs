@@ -161,6 +161,7 @@ internal class RemoteAvatar
             foreach (var mb in copy.GetComponentsInChildren<MonoBehaviour>(true))
             {
                 if (!mb || IsUnityVisual(mb.GetType())) continue;
+                if (Required(mb)) continue;   // something else on it needs this one: that goes first (else Unity logs an error)
                 UnityEngine.Object.DestroyImmediate(mb);
                 any = true;
             }
@@ -173,6 +174,20 @@ internal class RemoteAvatar
         foreach (var l in copy.GetComponentsInChildren<AudioListener>(true)) UnityEngine.Object.DestroyImmediate(l);
         foreach (var c in copy.GetComponentsInChildren<Component>(true))
             if (c && c.GetType().Name == "NavMeshAgent") UnityEngine.Object.DestroyImmediate(c);   // we move it ourselves
+    }
+
+    /// <summary>Another component on the same object [RequireComponent]s this one's type (Wwise's listener needs its AkGameObj).</summary>
+    static bool Required(Component c)
+    {
+        var t = c.GetType();
+        foreach (var other in c.GetComponents<Component>())
+        {
+            if (!other || other == c) continue;
+            foreach (RequireComponent rc in other.GetType().GetCustomAttributes(typeof(RequireComponent), true))
+                if (rc.m_Type0 != null && rc.m_Type0.IsAssignableFrom(t) || rc.m_Type1 != null && rc.m_Type1.IsAssignableFrom(t) || rc.m_Type2 != null && rc.m_Type2.IsAssignableFrom(t))
+                    return true;
+        }
+        return false;
     }
 
     /// <summary>Keep Unity's rendering/animation scripts; everything else (game code, Wwise, input) goes.</summary>

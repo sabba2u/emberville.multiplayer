@@ -23,7 +23,8 @@ internal static class Delve
     static ConfigEntry<int> seed, deepest;
     static ConfigEntry<string> padScene;
     static ConfigEntry<float> padX, padY, healthGrowth, damageGrowth;
-    static ConfigEntry<int> floors, maxEnemies, bossEvery;
+    static ConfigEntry<int> floors, maxEnemies, bossEvery, sprawl;
+    static ConfigEntry<bool> sprawlGrows, bigFloors;
     const int FloorsPerBiome = 3;
 
     public static void Bind(ConfigFile config)
@@ -38,6 +39,9 @@ internal static class Delve
         damageGrowth = config.Bind("Descent", "DamageGrowth", 1.15f, "Creature damage multiplier per floor down, compounding (1.15 = each floor 115% of the one above)");
         floors = config.Bind("Descent", "Floors", 10, "How many floors the descent has (0 = it never ends)");
         maxEnemies = config.Bind("Descent", "MaxEnemies", 60, "The most creatures on one floor (0 = no limit)");
+        sprawl = config.Bind("Descent", "Sprawl", 1, "How much floors branch out: 0 = the game's own layouts, 1 branching, 2 sprawling, 3 a web, 4 a maze");
+        sprawlGrows = config.Bind("Descent", "SprawlGrowsDeeper", true, "Floors spread out more as you go down (+1 sprawl every 3 floors)");
+        bigFloors = config.Bind("Descent", "BigBossFloors", true, "Boss floors are a big open region of the world map's dungeon (slower to build)");
         bossEvery = config.Bind("Descent", "BossEvery", 5, "A mini-boss guards the stairs every this many floors (0 = none)");
         SceneManager.sceneLoaded += (_, _) => { pads.Clear(); scaled.Clear(); worldPadChecked = false; MiniBoss.Clear(); };
     }
@@ -49,6 +53,8 @@ internal static class Delve
     /// <summary>The most creatures on a floor (0 = no limit); generated dungeons outside the descent use it too.</summary>
     public static int MaxEnemies => maxEnemies.Value;
     public static int Floors => floors.Value;
+    /// <summary>A floor's sprawl: the setting, plus one every 3 floors down if it grows.</summary>
+    public static int SprawlLevel(int floor) => Mathf.Clamp(sprawl.Value + (sprawlGrows.Value && floor > 0 ? (floor - 1) / 3 : 0), 0, 6);
     public static double ExtraChance(int floor) => floor <= 1 ? 0 : Mathf.Min(0.6f, 0.08f * (floor - 1));
     public static int GroupsPerArea(int floor) => floor <= 0 ? 1 : 1 + (floor - 1) / 4;
 
@@ -59,6 +65,8 @@ internal static class Delve
         // the sub-dungeons (caves...): one region each, quick to make; the world map's own (every region at once) only if
         // there's nothing else
         var all = Dungeon.AllSettings();
+        // boss floors: a big open region of the world map's own dungeon
+        if (bigFloors.Value && IsBossFloor(floor) && Dungeon.MainSettings()) return new Dungeon.Where(Dungeon.MainSettings().name, baseSeed, -1, floor);
         var pool = all.Where(x => x != Dungeon.MainSettings()).ToList();
         if (pool.Count == 0) pool = all;
         int tier = (floor - 1) / FloorsPerBiome;
@@ -126,22 +134,26 @@ internal static class Delve
         {
             var r = theirRules.Value;
             floors.Value = r.floors; healthGrowth.Value = r.health; damageGrowth.Value = r.damage; maxEnemies.Value = r.max;
+            if (r.sprawl >= 0) { sprawl.Value = r.sprawl; sprawlGrows.Value = r.grows; bigFloors.Value = r.big; }
         }
     }
 
     // ---- the rules travel with the dungeon message (Dungeon.Announce / OnOpen) ----
 
-    static (int floors, float health, float damage, int max)? theirRules;
+    static (int floors, float health, float damage, int max, int sprawl, bool grows, bool big)? theirRules;
 
     public static void WriteRules(LiteNetLib.Utils.NetDataWriter w)
     {
         w.Put(floors.Value); w.Put(healthGrowth.Value); w.Put(damageGrowth.Value); w.Put(maxEnemies.Value);
+        w.Put(sprawl.Value); w.Put(sprawlGrows.Value); w.Put(bigFloors.Value);   // (the layout must match: same floors for everyone)
     }
 
     public static void ReadRules(LiteNetLib.Utils.NetDataReader r)
     {
         if (r.AvailableBytes < 16) { theirRules = null; return; }
-        theirRules = (r.GetInt(), r.GetFloat(), r.GetFloat(), r.GetInt());
+        int f = r.GetInt(); float h = r.GetFloat(), dmg = r.GetFloat(); int m = r.GetInt();
+        if (r.AvailableBytes >= 6) theirRules = (f, h, dmg, m, r.GetInt(), r.GetBool(), r.GetBool());
+        else theirRules = (f, h, dmg, m, -1, false, false);
     }
 
     public static void Left() { scaled.Clear(); }
@@ -215,9 +227,14 @@ internal static class Delve
         var arrive = Center(start);
         stairsAt = Center(stairs);
         var root = Dungeon.Root.transform;
-        MakePad(root, arrive, PadKind.Home, armed: false);
-        MakePad(root, Center(stairs), last ? PadKind.Finish : PadKind.Down, armed: true);   // the last floor: the way out instead
+        // the way home: a few steps from where you arrive (not under your feet), somewhere with room
+        var homeCell = dist.Where(p => p.Value >= 4 && p.Value <= 9 && Open(p.Key, main, room)).OrderBy(p => p.Value).Select(p => p.Key)
+            .DefaultIfEmpty(start).First();
+        MakePad(root, Center(homeCell), PadKind.Home, armed: homeCell != start);
+        // the stairs only wake once you've walked away from them (never straight down on arrival, however small the floor)
+        MakePad(root, Center(stairs), last ? PadKind.Finish : PadKind.Down, armed: dist[stairs] >= 8);   // the last floor: the way out instead
         NetLog.Info($"Floor {where.Floor}: stairs are {dist[stairs]} steps away ({cells.Count} floor cells, the main part {biggest.Count}, room {room})", toast: false);
+        NetLog.Info($"Floor {where.Floor} shape (sprawl {SprawlLevel(where.Floor)}): {Sprawl.Shape(main, Dungeon.chunkSize, dist[stairs])}", toast: false);
         return arrive;
     }
 
@@ -313,7 +330,7 @@ internal static class Delve
     static readonly List<Pad> pads = new List<Pad>();
     static Sprite ringSprite;
 
-    static void MakePad(Transform parent, Vector3 at, PadKind kind, bool armed)
+    static void MakePad(Transform parent, Vector3 at, PadKind kind, bool armed, bool ring = true)
     {
         var go = new GameObject($"EG_DelvePad_{kind}");
         if (parent) go.transform.SetParent(parent, true);
@@ -326,7 +343,8 @@ internal static class Delve
         var playerSprite = LocalPlayer.Get() ? LocalPlayer.Get().GetComponentInChildren<SpriteRenderer>() : null;
         if (playerSprite) { sr.sortingLayerID = playerSprite.sortingLayerID; sr.sortingOrder = -500; }
         art.transform.localScale = Vector3.one * Size;
-        PadFx.Add(go, Ring(), sr.color, sr.sortingLayerID);   // turning inner ring, rising motes, a glow on the ground
+        PadFx.Add(go, Ring(), sr.color, sr.sortingLayerID, ring);   // turning inner ring, rising motes, a glow on the ground
+        if (!ring) sr.enabled = false;   // on a landmark (the well, the lamp): its glow and sparkles, no ring
         var pad = go.AddComponent<Pad>();
         pad.Kind = kind;
         pad.Armed = armed;
@@ -375,6 +393,13 @@ internal static class Delve
         if (!LocalPlayer.Get() || !GameData.HasWorldData) return;
         worldPadChecked = true;
         if (padScene.Value == LocalPlayer.Scene) WorldPads(new Vector3(padX.Value, padY.Value, 0f), armed: true);
+        // the starting area always has the well, the lamp and Rory: if the setting's empty or the pads were put
+        // somewhere else (another spot, another scene), the default ones are there too
+        if (LocalPlayer.Scene == DefaultScene && !pads.Any(p => p && p.Kind == PadKind.Entrance && ((UnityEngine.Vector2)(p.transform.position - (DefaultPad + WellOffset))).sqrMagnitude < 1f))
+        {
+            WorldPads(DefaultPad, armed: true);
+            NetLog.Info("The descent's well, the arena's lamp and Rory: in place by the starting door", toast: false);
+        }
     }
 
     /// <summary>The "Leave" button at the top: hit-tested here from the mouse (like the party strip). While the mouse is on
@@ -415,10 +440,31 @@ internal static class Delve
     /// <summary>The descent's pad, the arena's next to it, and Rory keeping watch beside them.</summary>
     static void WorldPads(Vector3 at, bool armed)
     {
+        if (AtTheWell(at))
+        {
+            // outside the starting door: the well up the path is the way down, the lamp across the steps the arena,
+            // Rory by the well. Spots measured in the scene; no ring on the ground, the glow is on the well / lamp.
+            var well = at + WellOffset;
+            MakePad(null, well, PadKind.Entrance, armed, ring: false);
+            MakePad(null, at + LampOffset, PadKind.Arena, armed, ring: false);
+            Rory.Spawn(at + RoryOffset, at + RoryOffset + new Vector3(2f, -1f, 0f));   // facing right, down the path
+            return;
+        }
         MakePad(null, at, PadKind.Entrance, armed);
         MakePad(null, at + new Vector3(3.2f, 0f, 0f), PadKind.Arena, armed);
         Rory.Spawn(at + new Vector3(-2.6f, 0.4f, 0f), at);
     }
+
+    // the default spot (TutorialArea, outside the starting door) and its well / lamp. Positions from the scene itself
+    // (wellFront Variant at -49.37, 71.18; the lamp post, lampTree Variant_10, at -43.79, 71.91), as offsets from it.
+    static readonly Vector3 DefaultPad = new Vector3(-52.48f, 66.57f, 0f);
+    static readonly Vector3 WellAt = new Vector3(-49.37f, 71.18f, 0f), LampAt = new Vector3(-43.79f, 71.91f, 0f);
+    static readonly Vector3 WellOffset = WellAt + new Vector3(0.05f, -0.55f, 0f) - DefaultPad;   // the well's front: walk up to it
+    static readonly Vector3 LampOffset = LampAt + new Vector3(0.05f, -0.85f, 0f) - DefaultPad;   // in front of the lamp post
+    static readonly Vector3 RoryOffset = new Vector3(-46.0f, 68.9f, 0f) - DefaultPad;   // at the foot of the steps, in the middle
+
+    const string DefaultScene = "TutorialArea";
+    static bool AtTheWell(Vector3 at) => LocalPlayer.Scene == DefaultScene && ((UnityEngine.Vector2)(at - DefaultPad)).sqrMagnitude < 0.5f * 0.5f;
 
     // ---- stronger creatures ----
 
@@ -517,7 +563,9 @@ internal static class Delve
     public static bool SetupOpen { get; private set; }
     static bool startAfter;
     static string seedText = "";
-    static int floorsEdit, maxEdit;
+    static int floorsEdit, maxEdit, sprawlEdit;
+    static bool growsEdit, bigEdit;
+    static readonly string[] SprawlNames = { "the game's own layouts", "branching", "sprawling", "a web", "a maze" };
     static float healthEdit, damageEdit;
 
     static void OpenSetup(bool startAfter = true)
@@ -525,6 +573,7 @@ internal static class Delve
         Delve.startAfter = startAfter;
         seedText = seed.Value != 0 ? seed.Value.ToString() : new System.Random().Next(1, int.MaxValue).ToString();
         floorsEdit = floors.Value; maxEdit = maxEnemies.Value;
+        sprawlEdit = sprawl.Value; growsEdit = sprawlGrows.Value; bigEdit = bigFloors.Value;
         healthEdit = healthGrowth.Value * 100f; damageEdit = damageGrowth.Value * 100f;
         SetupOpen = true;
         GameInput.Block("delvesetup");
@@ -540,6 +589,7 @@ internal static class Delve
         if (newSeed != seed.Value) deepest.Value = 0;
         seed.Value = newSeed;
         floors.Value = Mathf.Max(0, floorsEdit);
+        sprawl.Value = Mathf.Clamp(sprawlEdit, 0, 4); sprawlGrows.Value = growsEdit; bigFloors.Value = bigEdit;
         maxEnemies.Value = Mathf.Max(0, maxEdit);
         healthGrowth.Value = Mathf.Max(100f, healthEdit) / 100f;
         damageGrowth.Value = Mathf.Max(100f, damageEdit) / 100f;
@@ -591,6 +641,14 @@ internal static class Delve
         int show = floorsEdit > 0 ? floorsEdit : 10;
         float hm = Mathf.Pow(healthEdit / 100f, show - 1), dm = Mathf.Pow(damageEdit / 100f, show - 1);
         ImGui.TextDisabled($"Floor 2: {healthEdit / 100f:0.##}x health, {damageEdit / 100f:0.##}x damage.   Floor {show}: {Big(hm)}x health, {Big(dm)}x damage");
+
+        ImGui.Separator();
+        ImGui.SetNextItemWidth(160);
+        ImGui.Text("Layout:");
+        ImGui.SetNextItemWidth(160);
+        ImGui.SliderInt("Sprawl##sprawl", ref sprawlEdit, 0, 4, SprawlNames[Mathf.Clamp(sprawlEdit, 0, 4)]);
+        ImGui.Checkbox("Spread out more as you go down (+1 every 3 floors)", ref growsEdit);
+        ImGui.Checkbox("Boss floors are a big open region (slower to build)", ref bigEdit);
 
         ImGui.Separator();
         ImGui.SetNextItemWidth(160);

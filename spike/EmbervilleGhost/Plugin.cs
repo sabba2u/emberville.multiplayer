@@ -27,7 +27,7 @@ namespace EmbervilleGhost;
 [BepInDependency("spike.emberville.betterchests", BepInDependency.DependencyFlags.SoftDependency)]   // loads first if installed
 public class Plugin : BaseUnityPlugin, ITransportListener
 {
-    internal const string Version = "0.1.7";
+    internal const string Version = "0.1.8";
     internal const string ModName = "Sabba's Emberville Multiplayer Mod";
     internal static string Title => $"{ModName} v{Version}";
 
@@ -139,6 +139,8 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         DesyncCheck.Bind(Config);
         Delve.Bind(Config);
         BowAssist.Bind(Config);
+        MoveAttack.Bind(Config);
+        LootArrows.Bind(Config);
         Pet.Plugin = this;
         TeamHud.Plugin = this;
         MapMates.Plugin = this;
@@ -191,6 +193,7 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         MiniBoss.Tick();   // our mini-bosses: health, colour, the boss bar, loot
         Arena.Tick();
         Rory.Tick();
+        LootArrows.Tick();   // green arrows over better weapons on the ground
         SteamLobby.Tick();
         CheckLeftWorld();
         DevMode.Tick();

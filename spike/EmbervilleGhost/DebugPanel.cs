@@ -81,6 +81,9 @@ internal static class DebugPanel
         }
         MouseWalk.DrawMenu();
         Magnet.DrawMenu();
+        LootArrows.DrawMenu();
+        BowAssist.DrawMenu();
+        MoveAttack.DrawMenu();
         Pet.DrawMenu();
 
         string perf = $"Player packet {plugin.StateBytes} bytes.  Mod ms/frame:";
