@@ -13,17 +13,31 @@ namespace EmbervilleGhost;
 /// </summary>
 internal static class BowAssist
 {
-    static ConfigEntry<bool> on;
-    const float LockRange = 14f, LockAngle = 60f, TurnSpeed = 7f;
+    static ConfigEntry<bool> on, trueAim;
+    static ConfigEntry<float> angle, range;
+    const float TurnSpeed = 9f;
     static readonly HashSet<Projectile> ours = new HashSet<Projectile>();
 
-    public static void Bind(ConfigFile config) =>
+    public static void Bind(ConfigFile config)
+    {
         on = config.Bind("Combat", "BowLockOn", true, "Arrows from your bow / crossbow curve onto the closest creature near where you aim");
+        angle = config.Bind("Combat", "BowLockAngle", 20f, "How far off your aim a creature can be and still be locked on to (degrees either side; /bowlock 15)");
+        range = config.Bind("Combat", "BowLockRange", 14f, "How far away a creature can be and still be locked on to");
+        trueAim = config.Bind("Combat", "BowTrueAim", true, "Arrows leave in exactly the direction you aim (the game may snap a bow's arrow to up / right / down / left)");
+    }
+
+    /// <summary>/bowlock 15: the lock-on cone, degrees either side of the aim.</summary>
+    public static void SetAngle(float degrees)
+    {
+        angle.Value = Mathf.Clamp(degrees, 2f, 90f);
+        on.Value = true;
+        NetLog.Info($"Bow lock-on: {angle.Value:0}° either side of your aim ({angle.Value * 2f:0}° wide), up to {range.Value:0} steps", toast: true);
+    }
 
     public static void Toggle()
     {
         on.Value = !on.Value;
-        NetLog.Info(on.Value ? "Bow lock-on: on (arrows curve onto the creature nearest your aim)" : "Bow lock-on: off", toast: true);
+        NetLog.Info(on.Value ? $"Bow lock-on: on ({angle.Value:0}° either side of your aim; /bowlock 15 to change)" : "Bow lock-on: off", toast: true);
     }
 
     static bool HoldingBow(PlayerMaster me) =>
@@ -35,7 +49,7 @@ internal static class BowAssist
     {
         static void Prefix(Projectile __instance)
         {
-            if (!on.Value || __instance.TargetToFollow || ours.Contains(__instance)) return;
+            if (!(on.Value || trueAim.Value) || __instance.TargetToFollow || ours.Contains(__instance)) return;
             if ((float)__instance.lived > 0.15f) return;   // only fresh shots
             var gm = Singleton<GameManager>.HasMain ? Singleton<GameManager>.main : null;
             var me = gm ? gm.player : null;
@@ -45,6 +59,10 @@ internal static class BowAssist
                 : who == null && ((Vector2)(__instance.transform.position - me.transform.position)).sqrMagnitude < 2.5f * 2.5f;   // no attacker set: one leaving our bow
             if (!mine) return;
             ours.Add(__instance);
+            // true aim: along the exact aim, not the game's four-way snap (only bow arrows we shot, on their first frame)
+            if (trueAim.Value && me.lastLookDir.sqrMagnitude > 0.01f)
+                __instance.Direction = (Vector3)me.lastLookDir.normalized;
+            if (!on.Value) return;
             var target = Closest(__instance.transform.position, __instance.Direction);
             if (!target) return;
             __instance.TargetToFollow = target;
@@ -67,7 +85,7 @@ internal static class BowAssist
     static Transform Closest(Vector3 from, Vector3 dir)
     {
         Transform best = null;
-        float bestD = LockRange * LockRange;
+        float bestD = range.Value * range.Value;
         var d2 = ((Vector2)dir).normalized;
         foreach (var e in EnemiesManager.AllEnemies)
         {
@@ -76,7 +94,7 @@ internal static class BowAssist
             Vector2 to = at - from;
             float d = to.sqrMagnitude;
             if (d > bestD || d < 0.01f) continue;
-            if (Vector2.Angle(d2, to) > LockAngle) continue;
+            if (Vector2.Angle(d2, to) > angle.Value) continue;
             bestD = d;
             best = e.CenterOfMass ? e.CenterOfMass : e.transform;
         }

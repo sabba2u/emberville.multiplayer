@@ -27,7 +27,7 @@ namespace EmbervilleGhost;
 [BepInDependency("spike.emberville.betterchests", BepInDependency.DependencyFlags.SoftDependency)]   // loads first if installed
 public class Plugin : BaseUnityPlugin, ITransportListener
 {
-    internal const string Version = "0.1.6";
+    internal const string Version = "0.1.7";
     internal const string ModName = "Sabba's Emberville Multiplayer Mod";
     internal static string Title => $"{ModName} v{Version}";
 

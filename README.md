@@ -29,12 +29,14 @@ Work in progress. Player downloads are on the [Releases](../../releases) page; n
 
 ## Companion mods (separate DLLs, each works alone or next to this one)
 - **Better Chests** (`spike/BetterChests`): walk up to a chest and press **X** to put in everything it already holds.
-  With this mod installed, X works in co-op too (the area owner's chest, locks, everyone sees the new contents).
+  "X: quick deposit" shows under a chest's name while you stand at it. With the multiplayer mod installed, X works in
+  co-op too (the area owner's chest, locks, everyone sees the new contents).
 - **Emberville Favourite Weapons** (`spike/EmbervilleFavorites`): hover a weapon in the inventory and press **F5-F8**
-  to put it on that key; F5-F8, a click on the bar above the belt, or the weapon wheel (hold Left Alt / gamepad LT) wield it. The bar is made of the game's own HUD
-  slots, and hovering a slot shows the game's tooltip with the compare against the weapon in hand.
+  to put it on that key (the slot then shows the key in gold); F5-F8, a click on the small bar above the menu buttons, or
+  the weapon wheel (hold Left Alt / gamepad LT) wield it. The bar and wheel are made of the game's own HUD slots and show
+  the game's tooltip with the compare against the weapon in hand. Shift+F5: a how-to in the game's tutorial window.
 
-## The descent and the boss arena (new in v0.1.6)
+## The descent and the boss arena (v0.1.6+)
 - **The descent:** the full game's dungeon generator ships in the demo (its rooms, biomes and caves) without the scene
   it plays in; the mod builds the levels itself. Two glowing pads stand outside the starting area's door, with
   **Rory** (an archer; walk up and talk to him). The ember pad opens the setup: seed (a number or a word: same seed,
@@ -46,7 +48,9 @@ Work in progress. Player downloads are on the [Releases](../../releases) page; n
 - **Boss arena** (the purple pad): a walled floor with six pillars, spike traps and arrow shooters, and a panel to make
   mini-bosses from the game's creatures (name, colour, size, health, damage). **Boss rush**: 30 bosses one after
   another, tougher each wave; the spikes join at wave 5, the arrows at wave 10. Loot left on the floor goes when you leave.
-- **Bow lock-on:** arrows from a bow / crossbow curve onto the creature nearest your aim (`/bowlock` turns it off).
+- **Bows aim true and lock on:** arrows from a bow / crossbow leave in exactly the direction you aim (the game snaps
+  them to up / right / down / left), and curve onto a creature within 20° of your aim (`/bowlock 15` sets the cone,
+  `/bowlock` turns lock-on off; `[Combat]` in the config: angle, range, true aim).
 - **Tools:** `/uidump` (or the Insert menu) writes the game's on-screen UI and its sprites to `BepInEx/UIDumps`;
   diagnostics: a session log on the host (`BepInEx/SessionLogs`) and a mismatch checker between players.
 
@@ -113,7 +117,7 @@ Pets start **off**: `/pet on` (or the Insert menu checkbox) turns them on. Then 
 | `/devpanel` | open the developer panel (no numpad needed) |
 | `/arena` | teleport to this scene's test arena |
 | `/dungeon` | into a generated dungeon (the world map's), or back out |
-| `/bowlock` | bow / crossbow lock-on on / off (on to start with) |
+| `/bowlock`, `/bowlock 15` | bow / crossbow lock-on on / off (on to start with); the cone, degrees either side of your aim |
 | `/nodeath` | testing: take no damage |
 | `/onehitkill` | testing: your hits do 500 damage |
 | `/uidump` | write the game's on-screen UI and sprites to `BepInEx/UIDumps` |
