@@ -49,7 +49,7 @@ internal static class BowAssist
     {
         static void Prefix(Projectile __instance)
         {
-            if (!(on.Value || trueAim.Value) || __instance.TargetToFollow || ours.Contains(__instance)) return;
+            if (!(on.Value || trueAim.Value) || __instance.TargetToFollow || ours.Contains(__instance) || trapShots.Contains(__instance)) return;
             if ((float)__instance.lived > 0.15f) return;   // only fresh shots
             var gm = Singleton<GameManager>.HasMain ? Singleton<GameManager>.main : null;
             var me = gm ? gm.player : null;
@@ -70,12 +70,56 @@ internal static class BowAssist
         }
     }
 
+    /// <summary>
+    /// Homing only bends a shot that's still on its way: once the target is off to the side or behind (it flew past,
+    /// or the creature dodged), or the shot has already turned as far as a near miss needs, it flies straight on. The
+    /// game's homing would keep steering and bring it back round in a loop.
+    /// </summary>
+    [HarmonyPatch(typeof(Projectile), "Update")]
+    static class LetGo
+    {
+        const float GiveUpAngle = 70f, MaxTurn = 50f;
+
+        static void Postfix(Projectile __instance)
+        {
+            var target = __instance.TargetToFollow;
+            if (!target || !ours.Contains(__instance)) return;
+            Vector2 dir = __instance.Direction, to = target.position - __instance.transform.position;
+            if (!fired.TryGetValue(__instance, out var start)) fired[__instance] = start = dir;
+            if (to.sqrMagnitude < 0.04f || Vector2.Angle(dir, to) > GiveUpAngle || Vector2.Angle(start, dir) > MaxTurn)
+                __instance.TargetToFollow = null;
+        }
+    }
+
+    static readonly Dictionary<Projectile, Vector2> fired = new Dictionary<Projectile, Vector2>();
+
+    // ---- trap arrows (wall shooters: no attacker on them either) are never ours ----
+
+    static readonly HashSet<Projectile> trapShots = new HashSet<Projectile>();
+    static bool trapFiring;
+
+    [HarmonyPatch(typeof(ShooterTrap), "ShootFromPoint")]
+    static class TrapFiring
+    {
+        static void Prefix() => trapFiring = true;
+        static void Postfix() => trapFiring = false;
+    }
+
+    /// <summary>A shot switched on while a trap is firing is the trap's.</summary>
+    [HarmonyPatch(typeof(Projectile), "OnEnable")]
+    static class MarkTrapShot
+    {
+        static void Postfix(Projectile __instance) { if (trapFiring) trapShots.Add(__instance); }
+    }
+
     /// <summary>Pooled: a shot coming back for someone else mustn't keep our target.</summary>
     [HarmonyPatch(typeof(Projectile), "DisableProjectile")]
     static class Release
     {
         static void Postfix(Projectile __instance)
         {
+            trapShots.Remove(__instance);
+            fired.Remove(__instance);
             if (!ours.Remove(__instance)) return;
             __instance.TargetToFollow = null;
             __instance.turnSpeed = 20f;   // the game's default
