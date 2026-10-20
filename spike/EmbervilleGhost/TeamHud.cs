@@ -163,13 +163,14 @@ internal static class TeamHud
         cards.Clear();
         float total = Mathf.Min(ids.Count, PerRow) * (CardW + Gap) - Gap;
         float left = (Screen.width - total) / 2f;
+        float top = Mathf.Max(Top, BossBarBottom() + 6f);   // a boss fight: below the boss's health bar, not over it
         var dl = ImGui.GetBackgroundDrawList();
         var alive = new HashSet<int>();
         for (int i = 0; i < ids.Count; i++)
         {
             int id = ids[i];
             alive.Add(id);
-            float x = left + (i % PerRow) * (CardW + Gap), y = Top + (i / PerRow) * (CardH + Gap);
+            float x = left + (i % PerRow) * (CardW + Gap), y = top + (i / PerRow) * (CardH + Gap);
             cards.Add((id, x, y, x + CardW, y + CardH));
             if (id == Plugin.MyId) Card(dl, x, y, id, Me(me), me.transform);
             else
@@ -184,6 +185,30 @@ internal static class TeamHud
         foreach (int id in portraits.Keys) if (!alive.Contains(id)) gone.Add(id);
         foreach (int id in gone) Drop(id);
         Menu();
+    }
+
+    static UIManager ui;
+    static float uiLookedAt = -10f;
+    static readonly UnityEngine.Vector3[] corners = new UnityEngine.Vector3[4];
+
+    /// <summary>The bottom (screen pixels from the top) of the game's boss / mini-boss health bar when one shows; else 0.</summary>
+    static float BossBarBottom()
+    {
+        if (!ui && Time.unscaledTime - uiLookedAt > 1f) { uiLookedAt = Time.unscaledTime; ui = UnityEngine.Object.FindAnyObjectByType<UIManager>(); }
+        if (!ui) return 0f;
+        return Mathf.Max(Bottom(ui.panelBossHud), Bottom(ui.panelMiniBossHud));
+    }
+
+    static float Bottom(GameObject panel)
+    {
+        if (!panel || !panel.activeInHierarchy || !(panel.transform is RectTransform rt)) return 0f;
+        var canvas = panel.GetComponentInParent<Canvas>();
+        var cam = canvas && canvas.rootCanvas.renderMode != RenderMode.ScreenSpaceOverlay ? canvas.rootCanvas.worldCamera : null;
+        rt.GetWorldCorners(corners);
+        float lowest = float.MaxValue;
+        foreach (var c in corners) lowest = Mathf.Min(lowest, RectTransformUtility.WorldToScreenPoint(cam, c).y);
+        float bottom = Screen.height - lowest;   // ImGui counts from the top
+        return bottom > 0f && bottom < Screen.height * 0.33f ? bottom : 0f;   // a full-screen panel: not a bar, ignore
     }
 
     struct Info

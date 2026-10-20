@@ -72,6 +72,19 @@ internal static class FxSync
         finally { spawningFake = false; }
     }
 
+    /// <summary>
+    /// The Acolyte Tracker's hook: its line is drawn to its thrower every frame (AcolyteTrackerProjectile.Update), and
+    /// our copy of it has no thrower (Owner null): NullReference every frame. Ours just flies, without the line.
+    /// </summary>
+    [HarmonyPatch(typeof(AcolyteTrackerProjectile), "Update"), HarmonyPrefix]
+    static bool TrackerHookUpdate(AcolyteTrackerProjectile __instance)
+    {
+        if (__instance.enemy) { if (__instance.lineRenderer && !__instance.lineRenderer.enabled) __instance.lineRenderer.enabled = true; return true; }   // a real one (maybe a reused copy)
+        if (__instance.lineRenderer) __instance.lineRenderer.enabled = false;
+        if (__instance.isRetreating) __instance.gameObject.SetActive(false);
+        return false;
+    }
+
     public static void Clear()
     {
         faked.Clear();

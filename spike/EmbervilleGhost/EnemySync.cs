@@ -647,8 +647,21 @@ internal static class EnemySync
             if (parent && !parent.gameObject.activeInHierarchy) e.transform.SetParent(null, true);
             e.isDead = false;
             e.gameObject.SetActive(true);
+            EnsureGroup(e);   // its group never started here: its AI and ApplyDamage both read the group
             NetLog.Info($"Showing {e.name}: it's out where {Plugin.NameOf(RunnerOf(pair.Key))} is");
         }
+    }
+
+    /// <summary>
+    /// A live creature with no group (a cutscene's creature switched on by us, before its group ever started) breaks the
+    /// game: ApplyDamage and its AI read Group (NullReference, the hit is lost). Make it one the way Enemy.SetupGroup does.
+    /// </summary>
+    static void EnsureGroup(Enemy e)
+    {
+        if (!e || e.IsDead || e.Group != null) return;
+        var g = ScriptableObject.CreateInstance<EnemyGroup>();
+        g.EnemyTag = e.enemyTag;
+        g.Add(e);
     }
 
     /// <summary>Puppet: its runner says it's dead, so it dies here too, through its die state like a lethal hit (no XP, no loot: those came from there).</summary>
@@ -657,7 +670,14 @@ internal static class EnemySync
         e.currentHealth = 0f;
         e.dieState.IsGore = false;
         applyingHost = true;
-        try { e.ChangeState(e.dieState); }
+        try
+        {
+            // What ApplyDamage does on a lethal hit: the die state only animates; SetKilled marks it dead (else we'd
+            // replay this every frame), takes it out of its group and fires its death events (gates, waves, quests).
+            e.ChangeState(e.dieState);
+            e.SetCollisionEnabled(false);
+            e.SetKilled();
+        }
         finally { applyingHost = false; }
         NetLog.Info($"{e.name} died where its runner is; its death played here late");
     }
@@ -827,7 +847,8 @@ internal static class EnemySync
         CombatNet.GetAttackRef(r, out string attackRef, out int[] level);
         bool gore = r.GetBool();
         var e = Find(id);
-        if (!e || !e.isActiveAndEnabled || e.IsDead || e.Group == null || RunnerOf(id) == Plugin.MyId) return;
+        if (!e || !e.isActiveAndEnabled || e.IsDead || RunnerOf(id) == Plugin.MyId) return;
+        EnsureGroup(e);
 
         // Our own hit: our player is the aggressor (the game gives us the XP). Someone else's: their stand-in (knockback only).
         // Its status effects come too: the creature burns / is poisoned here as well (the ticks only hurt it where it's run).
@@ -897,6 +918,7 @@ internal static class EnemySync
     static bool BeforeDamage(Enemy __instance, DamageData damageData, out Before __state)
     {
         __state = new Before { Health = __instance.CurrentHealth, Dead = __instance.IsDead };
+        EnsureGroup(__instance);
         if (!Connected || applyingHost || LocalOnly(__instance) || Runs(__instance)) return true;
         if (__instance.IsDead) return false;
 

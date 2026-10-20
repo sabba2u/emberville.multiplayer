@@ -26,7 +26,7 @@ namespace EmbervilleGhost;
 [BepInPlugin("spike.embervilleghost", "EmbervilleGhost", Version)]
 public class Plugin : BaseUnityPlugin, ITransportListener
 {
-    internal const string Version = "0.1.3";
+    internal const string Version = "0.1.4";
     internal const string ModName = "Sabba's Emberville Multiplayer Mod";
     internal static string Title => $"{ModName} v{Version}";
 
@@ -96,6 +96,8 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         StationSync.Plugin = this;
         FarmSync.Plugin = this;
         PlaceSync.Plugin = this;
+        GroundSync.Plugin = this;
+        InteractSync.Plugin = this;
         StorySync.Plugin = this;
         TeamBuffs.Plugin = this;
         Pings.Plugin = this;
@@ -165,6 +167,7 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         CharacterSafety.Tick();
         DemoEnd.Tick();
         Stockpile.Tick();
+        GroundSync.Tick();
         SteamLobby.Tick();
         CheckLeftWorld();
         DevMode.Tick();
@@ -198,7 +201,7 @@ public class Plugin : BaseUnityPlugin, ITransportListener
 
     void NetTick()
     {
-        if (LocalPlayer.Scene != lastScene) { lastScene = LocalPlayer.Scene; SceneIds.Clear(); EnemySync.SceneChanged(); FxSync.Clear(); AttackFx.Clear(); BossSync.Clear(); StationSync.Clear(); FarmSync.Clear(); Pings.Clear(); }   // ids belong to a scene
+        if (LocalPlayer.Scene != lastScene) { lastScene = LocalPlayer.Scene; SceneIds.Clear(); EnemySync.SceneChanged(); FxSync.Clear(); AttackFx.Clear(); BossSync.Clear(); StationSync.Clear(); FarmSync.Clear(); Pings.Clear(); GroundSync.Clear(); InteractSync.Clear(); }   // ids belong to a scene
 
         Perf.Begin("1 receive"); transport.Poll(); Perf.End("1 receive");
 
@@ -256,6 +259,7 @@ public class Plugin : BaseUnityPlugin, ITransportListener
             ChestSync.SendSnapshot(p.Id);
             GatherSync.SendSnapshot(p.Id);
             DoorSync.SendSnapshot(p.Id);
+            InteractSync.SendSnapshot(p.Id);
             StationSync.SendSnapshot(p.Id);
             FarmSync.SendSnapshot(p.Id);
         }
@@ -1092,6 +1096,10 @@ public class Plugin : BaseUnityPlugin, ITransportListener
             case MsgType.StationXp: StationSync.OnXp(reader); break;
             case MsgType.SoilState: FarmSync.OnState(reader); break;   // farm plots: whoever farms sends the plot
             case MsgType.PlaceChange: PlaceSync.OnChange(reader); break;   // building: whoever builds sends it
+            case MsgType.GroundPress: GroundSync.OnPress(reader, from); break;
+            case MsgType.ItemUnlocked: InteractSync.OnItemUnlocked(reader); break;   // key altars: whoever has the item opens it for all
+            case MsgType.Repaired: InteractSync.OnRepaired(reader); break;   // repairs: the repairer pays, everyone sees it
+            case MsgType.InteractSnapshot: if (!owner) InteractSync.OnSnapshot(reader); break;   // floor buttons: down while anyone stands on one   // building: whoever builds sends it
             case MsgType.EstateUnlock: if (from == 0) DebugPanel.UnlockEstate(); break;   // the host's call
             case MsgType.StoryFlag: StorySync.OnFlag(reader, from); break;   // story progress: anyone's counts for all
             case MsgType.EggSpawn: BossSync.OnEggSpawn(reader, from); break;   // eggs: whoever's boss laid it owns it
@@ -1245,5 +1253,9 @@ internal enum MsgType : byte
     StationState = 113,   // area owner -> area / newcomer, reliable: station key, SavedCraftingStation JSON
     StationXp = 114,      // area owner -> whoever queued it, reliable: recipe id, life skill, xp
     SoilState = 120,      // farmer -> area / owner -> newcomer, reliable: plot save id, SavedSoilState JSON
+    ItemUnlocked = 123, // user -> their place, reliable: item lock (ItemRequester) id; it opens on every copy
+    Repaired = 124,     // repairer -> their place, reliable: kind (building / portal), id
+    InteractSnapshot = 125, // area owner -> arriving player: repaired buildings, portals, opened item locks
+    GroundPress = 122, // anyone -> their place, reliable: floor button id, down (repeated every 2 s while standing on it)
     PlaceChange = 121, // builder -> everyone (ToAll), reliable: op (place / remove object / remove tile), scene, then placeable id, x, y, direction, GUID | id, x, y | layer, x, y, z
 }

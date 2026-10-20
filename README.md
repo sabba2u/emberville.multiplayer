@@ -17,12 +17,13 @@ Work in progress. Player downloads are on the [Releases](../../releases) page; n
   ("in a chest", "talking"...), status effects, damage numbers and a red flash when they're hit, a speech bubble while
   they type and what they said.
 - **A party strip** along the top: every player in join order (the same on every screen) with a live portrait of their
-  character's head, health and Kymia, status. Off-screen teammates get edge arrows with distance; teammates show on the
+  character's weapon, health and Kymia, status (it moves below a boss's health bar during boss fights). Off-screen teammates get edge arrows with distance; teammates show on the
   minimap and on the big world map (M).
 - **One shared world:** creatures (controlled by whoever is nearest, kept with whoever is fighting them), bosses (phases,
   immunity, the spider queen's eggs and hatchlings, webbed players), attacks and spells everyone can see, status effects
   on hits (burning, poison...), matching gory deaths, drops (dupe-proof), chests, breakables, rocks / ore / trees,
-  doors and levers, the clock (day and time), story progress (a door one player opens is open for everyone), every
+  doors and levers, key altars / item locks (whoever has the item opens it for everyone), floor buttons (down while
+  anyone stands on one), town repairs, the clock (day and time), story progress (a door one player opens is open for everyone), every
   crafting station (cooking pot, campfire, anvil, forge, furnace, sawmill...: the food cooks once, collecting is
   dupe-proof), chests that stations and farming pull from, farm plots, building and removing on the estate.
 - **Chat** (Enter), death announcements, pings and drawing on the ground (middle mouse).
@@ -111,8 +112,8 @@ Pets start **off**: `/pet on` (or the Insert menu checkbox) turns them on. Then 
 - **The estate (your house / mansion and farm in Town):** building, placing and repairing are behind two story flags
   the demo never sets. `/estate` or the Insert menu checkbox turns them on (the host decides, everyone gets it), with a
   "Go to Town" button. Everything built is synced. **Repairing the town:** 11 ruined buildings (Blacksmith, Bar,
-  Mayor, Carpenter...): `/resources`, walk onto a ruin and press F (or `/repair`). Repairs aren't synced yet (each
-  player repairs their own copy), and each building now saves on its own (the demo gave them all the same save id).
+  Mayor, Carpenter...): `/resources`, walk onto a ruin and press F (or `/repair`). The repairer pays, everyone sees
+  it repaired (also the broken portal), and each building saves on its own (the demo gave them all the same save id).
 
 ## Build
 Requirements: .NET SDK, Emberville installed with BepInEx 5.4.23 (copy `winhttp.dll`, `doorstop_config.ini`,

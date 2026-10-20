@@ -30,11 +30,35 @@ internal static class DoorSync
     static bool Puppet => EnemySync.PuppetMode;
     static bool Connected => Plugin != null && Plugin.Connected && Plugin.MyId >= 0;
 
+    static float ownUntil;   // a moment after our player used something that opens doors by its events (a key altar...)
+
+    static bool OwnUse => localUse > 0 || Time.unscaledTime < ownUntil;
+
     /// <summary>May this state change happen here? Puppets only take their own player's use and mirrored changes.</summary>
-    static bool Allowed() => !Connected || !Puppet || localUse > 0 || mirroring > 0;
+    static bool Allowed() => !Connected || !Puppet || OwnUse || mirroring > 0;
 
     /// <summary>Should we tell the others? Our own use, or the owner's world changing (not a mirror of someone else).</summary>
-    static bool ShouldSend() => Connected && mirroring == 0 && (localUse > 0 || !Puppet) && Plugin.AnyoneElseHere;
+    static bool ShouldSend() => Connected && mirroring == 0 && (OwnUse || !Puppet) && Plugin.AnyoneElseHere;
+
+    /// <summary>
+    /// Our player used something whose events open / close doors and flip switches (a key altar, a lever-like object,
+    /// a repair): those changes count as our own use (allowed even where someone else runs the area, and sent to everyone)
+    /// while it runs and for a few seconds after (events that open a gate after a short animation).
+    /// </summary>
+    public static void BeginOwnUse() => localUse++;
+    public static void EndOwnUse(float graceSeconds = 4f)
+    {
+        localUse--;
+        ownUntil = Mathf.Max(ownUntil, Time.unscaledTime + graceSeconds);
+    }
+
+    /// <summary>Run someone else's change here: doors and switches it touches follow, nothing is re-broadcast.</summary>
+    public static void Mirror(System.Action change)
+    {
+        mirroring++;
+        try { change(); }
+        finally { mirroring--; }
+    }
 
     // ---- doors ----
 

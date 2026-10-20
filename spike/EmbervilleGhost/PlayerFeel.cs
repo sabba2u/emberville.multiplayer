@@ -105,6 +105,7 @@ internal static class PlayerFeel
         if (!on && eventName != "End") return;
         var me = LocalPlayer.Get();
         if (!Online || !me || !ReferenceEquals(__instance.owner, me) || effect == null) return;
+        if (on && !effect.Duration.HasValue) return;   // gear / mastery passives (always on): not worth a label
         var w = new NetDataWriter();
         w.Put((byte)MsgType.PlayerEffect);
         w.Put(on);
@@ -122,6 +123,7 @@ internal static class PlayerFeel
         var p = Find(from);
         if (p == null || string.IsNullOrEmpty(name)) return;
         if (!on) { p.Effects.Remove(name); return; }
+        if (name.Contains("_")) return;   // an internal id (mstry_CriticalBlades: a passive from an older version): not shown
         if (!p.Effects.Contains(name)) p.Effects.Add(name);
         if (p.Avatar != null && p.Avatar.Visible)
             Bus<UIDamageEvent>.Invoke(new UIDamageEvent(0f, name, p.Avatar.Root.transform.position, DamageResult.None));
