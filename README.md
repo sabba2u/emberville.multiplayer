@@ -7,7 +7,10 @@ Work in progress. Player downloads are on the [Releases](../../releases) page; n
 > Everything below "v0.1.3" is built but not tested in a real session yet; it ships as v0.1.3 once it has been.
 
 ## What works
-- **Connecting:** host with F8 (shared XP, instanced loot, PvP, shared buffs), join with F9 by IP. The joiner downloads
+- **Steam:** host with F8 > **HOST VIA STEAM**: friends join from their Steam friends list (Join Game) or an invite
+  (Insert menu > Invite friends); no IP addresses, no port forwarding (Steam's relay). The mod brings Steamworks.NET
+  and `steam_api64.dll` itself (the demo has no Steam code) and runs as the demo (app 5355880).
+- **Connecting by IP:** host with F8 (shared XP, instanced loot, PvP, shared buffs), join with F9 by IP. The joiner downloads
   the host's world and brings their own character. If the host leaves, the player who joined first takes over hosting
   where they stand and the others reconnect to them.
 - **Other players** as real characters: looks, gear, animations, name, health and Kymia bars, what they're doing
@@ -33,6 +36,13 @@ Work in progress. Player downloads are on the [Releases](../../releases) page; n
   trade; the host can kick and ban (a second click confirms; bans follow a player ID, not the name; unban list).
 - **Sleep vote:** the demo has no beds, so everyone types `/sleep` and the clock skips to 6:00 the next morning.
 - **Team buffs:** a buff you cast on yourself (Swift Foot...) also lands on teammates within 8 m (host option).
+- **Keep playing after the demo:** the demo's "Thank you for playing" screen and freeze (after Gumu's cutscene in Town)
+  are skipped, so you can keep walking around Town, the estate and the mansion (Insert menu to turn it back on).
+- **Characters are safe:** before joining from inside a game, the character files involved are backed up to
+  `Saves/EmbervilleGhost_Backups` (last 10 kept); a character open in another copy of the game can't be picked twice.
+- **"Cohh is the authority of this map"** (top right): whose game runs the enemies, chests and drops of the area you're
+  in (the `[Host]` / `[Client]` tags under the feet say who hosts the session). The status line (top left: version,
+  connection, fps) starts hidden: **Delete** shows it.
 - **Heal / Kymia popups** for teammates, a **Kymia bar** under their health bar, the game's own bordered boxes for
   messages ("you were kicked") and trade invites.
 
@@ -45,13 +55,15 @@ when both are ticked on the offers as they are. Key items and equipped gear can'
 duplicated: each game swaps its own side once both agree on exactly the same two offers.
 
 ## Pets (early)
-`/pet` befriends a pet that follows you around, fights with you and levels up:
+Pets start **off**: `/pet on` (or the Insert menu checkbox) turns them on. Then `/pet` befriends a pet that follows you around, fights with you and levels up:
 - **13 kinds**, the demo's small creatures: Chicken, **Glowbat** (flies, hovers with a bob), Pink / Green / Gray
   Lilshroom, Blue / Green / Purple Lil Tick, Red / Green / Salmon Lil Bomber, Spiderling, Bug Fuzz. (No dog or cat in
   the demo's art.) `/pet list`, `/pet glowbat` to switch: name, level and colour stay.
 - **Immune** to everything (nothing can hit it). It attacks enemies close to you through the game's own damage, so its
   hits count as yours (kills give you the XP, works in multiplayer).
 - **XP and levels:** +1 per hit, +10 per kill; more damage each level; a name tag with an XP bar.
+- **Names:** each kind has its own default (Clucky the chicken, Fang the Glowbat, ...); type your own in the Insert
+  menu's Name box or `/pet name ...` (a name you picked stays when you switch kinds).
 - **Colours:** `/pet color red` (or any `#RRGGBB`) or the colour picker in the Insert menu; everyone sees your pet in
   your colour, following your character on their screen.
 - A kind can be made once the game has that creature loaded (most are; `/pet scan` shows what's in memory here).
@@ -65,19 +77,24 @@ duplicated: each game swaps its own side once both agree on exactly the same two
 | `/online` (`/players`, `/party`) | the Online Players screen |
 | `/trade P2` (or a name) | ask someone to trade |
 | `/sleep` | ready to skip to the morning (everyone has to) |
+| `/pet on`, `/pet off` | pets on / off (they start off) |
 | `/pet` | befriend your pet / call it / send it home |
 | `/pet list`, `/pet <kind>` | the pet kinds; switch to one |
 | `/pet name Clucky`, `/pet color red` | rename, recolour |
 | `/pet scan` | which creatures the game has loaded right now |
-| `/estate` | unlock building and repairs on your estate (host) |
+| `/estate` | unlock building and repairs on your estate (host); lists the broken buildings here |
+| `/resources` (`/resources 250`) | 100 (or more) of every material, and enough for every repair in the area |
+| `/repair` | repair the nearest broken building (uses the materials, like walking onto it and pressing F) |
 | `/devmode` | the game's hidden developer tools on / off |
 | `/devpanel` | open the developer panel (no numpad needed) |
 | `/arena` | teleport to this scene's test arena |
 
 | Key | Mod | | Key | Game (left alone) |
 |---|---|---|---|---|
-| F8 / F9 / F10 | host / join / disconnect | | Tab | inventory + character |
+| F8 / F9 / F10 | host (IP or Steam) / join / disconnect | | Tab | inventory + character |
 | Insert | mod menu | | I / C / P / K / J | inventory, character, classes, masteries, quests |
+| Delete | status line (top left) on / off | | | |
+| Right-click a party card | teleport / trade / mute | | | |
 | Enter | chat | | M | world map |
 | O | Online Players | | F | interact / pick up |
 | X | put matching items into the chest in front of you | | Q E R T | quick-bar items |
@@ -93,7 +110,9 @@ duplicated: each game swaps its own side once both agree on exactly the same two
   `/arena` teleports you to one; Numpad1 then spawns monster groups there.
 - **The estate (your house / mansion and farm in Town):** building, placing and repairing are behind two story flags
   the demo never sets. `/estate` or the Insert menu checkbox turns them on (the host decides, everyone gets it), with a
-  "Go to Town" button. Everything built is synced.
+  "Go to Town" button. Everything built is synced. **Repairing the town:** 11 ruined buildings (Blacksmith, Bar,
+  Mayor, Carpenter...): `/resources`, walk onto a ruin and press F (or `/repair`). Repairs aren't synced yet (each
+  player repairs their own copy), and each building now saves on its own (the demo gave them all the same save id).
 
 ## Build
 Requirements: .NET SDK, Emberville installed with BepInEx 5.4.23 (copy `winhttp.dll`, `doorstop_config.ini`,
@@ -119,4 +138,5 @@ the same character in both. Windows arrange themselves side by side at 1280x720.
 
 ## Not included
 No game code or assets: the decompiled reference used for research stays local (`reference/`, git-ignored).
-`spike/libs/OverlayDearImGui`: ImGui.NET + cimgui (MIT).
+`spike/libs/OverlayDearImGui`: ImGui.NET + cimgui (MIT). `spike/libs/Steamworks`: Steamworks.NET (MIT) + Valve's
+redistributable `steam_api64.dll`.

@@ -98,8 +98,30 @@ internal static class HostWindow
         Visible = true;
         Session.SharedXp = Session.DefaultSharedXp.Value;
         Session.InstancedLoot = Session.DefaultInstancedLoot.Value;
-        Session.Pvp = Session.DefaultPvp.Value;
+        Session.Pvp = false;   // PvP always starts off: someone has to switch it on on purpose, every time
         Session.ShareBuffs = Session.DefaultShareBuffs.Value;
+    }
+
+    const float Width = 470f;
+    static readonly Vector4 OnColour = new Vector4(0.55f, 0.95f, 0.6f, 1f), OffColour = new Vector4(0.7f, 0.7f, 0.72f, 1f);
+
+    /// <summary>A rule: its checkbox, and underneath what it means as it's set now (so you know what you're hosting).</summary>
+    static void Rule(string label, ref bool value, string whenOn, string whenOff)
+    {
+        ImGui.Checkbox(label, ref value);
+        ImGui.Indent(24f);
+        ImGui.PushStyleColor(ImGuiCol.Text, value ? OnColour : OffColour);
+        ImGui.TextWrapped(value ? whenOn : whenOff);
+        ImGui.PopStyleColor();
+        ImGui.Unindent(24f);
+        ImGui.Spacing();
+    }
+
+    static void Remember()
+    {
+        Session.DefaultSharedXp.Value = Session.SharedXp;          // remembered for next time (not PvP)
+        Session.DefaultInstancedLoot.Value = Session.InstancedLoot;
+        Session.DefaultShareBuffs.Value = Session.ShareBuffs;
     }
 
     public static void Draw()
@@ -107,13 +129,15 @@ internal static class HostWindow
         if (!Visible || Plugin == null) return;
         var vp = ImGui.GetMainViewport();
         ImGui.SetNextWindowPos(new Vector2(vp.WorkPos.x + vp.WorkSize.x * 0.5f, vp.WorkPos.y + vp.WorkSize.y * 0.3f), ImGuiCond.Appearing, new Vector2(0.5f, 0.5f));
-        ImGui.SetNextWindowSize(new Vector2(440, 0), ImGuiCond.Always);
+        // A fixed width; it grows taller to fit (long lines wrap instead of being cut off).
+        ImGui.SetNextWindowSizeConstraints(new Vector2(Width, 0), new Vector2(Width, vp.WorkSize.y * 0.9f));
         bool open = true;
         if (!ImGui.Begin("Host a game##host", ref open, ImGuiWindowFlags.NoCollapse | ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.AlwaysAutoResize))
         {
             ImGui.End();
             return;
         }
+        ImGui.PushTextWrapPos(0f);   // every line wraps at the window's edge
 
         if (!LocalPlayer.Get())
             ImGui.TextColored(new Vector4(1f, 0.75f, 0.35f, 1f), "Load your world first: players join the world you're in.");
@@ -124,29 +148,32 @@ internal static class HostWindow
         NetInfo.DrawHostAddresses(Plugin);
 
         ImGui.Separator();
-        ImGui.Checkbox("Shared XP", ref Session.SharedXp);
-        ImGui.TextDisabled("    Everyone in the area gets the XP of a kill, not just the killer.");
-        ImGui.Checkbox("Instanced loot", ref Session.InstancedLoot);
-        ImGui.TextDisabled("    Weapons, armour and gear drop once for every player (each takes their own copy).");
-        ImGui.TextDisabled("    Materials, consumables and key items stay shared: first come, first served.");
-        ImGui.Checkbox("PvP", ref Session.Pvp);
-        ImGui.TextDisabled("    Players can hurt (and kill) each other.");
-        ImGui.Checkbox("Share buffs", ref Session.ShareBuffs);
-        ImGui.TextDisabled($"    A buff you cast on yourself (Swift Foot...) also lands on teammates within {TeamBuffs.Range:0} m.");
+        Rule("Shared XP", ref Session.SharedXp,
+            "ON: everyone nearby gets the XP when a monster dies, not just whoever killed it.",
+            "OFF: only the player who lands the killing blow gets the XP.");
+        Rule("Instanced loot", ref Session.InstancedLoot,
+            "ON: everyone gets their own copy of weapons, armour and gear that drop. Resources (wood, ore, food, materials) are still shared: whoever grabs them first.",
+            "OFF: only one copy of every drop exists: whoever picks it up first gets it.");
+        Rule("PvP", ref Session.Pvp,
+            "ON: players can hurt and kill each other!",
+            "OFF: players can't hurt each other.");
+        Rule("Share buffs", ref Session.ShareBuffs,
+            $"ON: buffs you cast on yourself (like Swift Foot) also help teammates within {TeamBuffs.Range:0} m of you.",
+            "OFF: your buffs only help you.");
         ImGui.Separator();
 
-        if (ImGui.Button("HOST NOW", new Vector2(160, 0)))
-        {
-            Session.DefaultSharedXp.Value = Session.SharedXp;          // remembered for next time
-            Session.DefaultInstancedLoot.Value = Session.InstancedLoot;
-            Session.DefaultPvp.Value = Session.Pvp;
-            Session.DefaultShareBuffs.Value = Session.ShareBuffs;
-            Plugin.Host();
-            Visible = false;
-        }
+        if (ImGui.Button("HOST NOW", new Vector2(140, 0))) { Remember(); Plugin.Host(); Visible = false; }
+        ImGui.SameLine();
+        if (!SteamBoot.Ready) ImGui.BeginDisabled();
+        if (ImGui.Button("HOST VIA STEAM", new Vector2(160, 0))) { Remember(); Plugin.HostSteam(); Visible = false; }
+        if (!SteamBoot.Ready) ImGui.EndDisabled();
         ImGui.SameLine();
         if (ImGui.Button("Cancel", new Vector2(100, 0))) Visible = false;
+        ImGui.TextDisabled(SteamBoot.Ready
+            ? "HOST NOW: friends join with your IP address. HOST VIA STEAM: friends join from your Steam friends list or an invite (no port forwarding)."
+            : "Steam isn't running (start the game from Steam to host through Steam).");
 
+        ImGui.PopTextWrapPos();
         ImGui.End();
         if (!open) Visible = false;
     }

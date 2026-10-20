@@ -89,7 +89,24 @@ internal static class GuestWorld
     public static void Load(string playerFile)
     {
         if (!Ready || string.IsNullOrEmpty(playerFile) || !Singleton<SceneLoader>.HasMain) return;
-        if (LocalPlayer.Get() && GameData.HasWorldData && GameData.GetWorldPrefix != Prefix) GameData.SaveData();   // leaving our own game
+        if (CharacterSafety.InUseElsewhere(playerFile))
+        {
+            NetLog.Warn("That character is being played in another copy of the game: pick another one", toast: true);
+            return;
+        }
+        // Nobody loses a character: copies of the files involved before anything is saved or switched.
+        if (LocalPlayer.Get() && GameData.HasPlayerData) CharacterSafety.Backup(GameData.playerFilePrefix, "before joining");
+        CharacterSafety.Backup(playerFile, "before joining");
+        if (LocalPlayer.Get() && GameData.HasWorldData)
+        {
+            // Leaving a game: save it now, under ITS character and world (our own world, or the guest copy), and keep
+            // the game's own "save when the scene closes" from running on the way out: by then the new character is
+            // loaded, and the old scene's player would write itself into the new character's slot (that's how a
+            // character got overwritten by another).
+            GameData.SaveData();
+            skipNextShutdownSave = true;
+            skipSetAt = Time.unscaledTime;
+        }
         Status = State.Loading;
         loading = true;
         GameData.NewData();
@@ -101,6 +118,23 @@ internal static class GuestWorld
         MainInput.Actions.UI.Disable();
         NetLog.Info($"Joining the host's world \"{WorldName}\"...", toast: true);
         Singleton<SceneLoader>.main.CallScene(scene, null).Forget();
+    }
+
+    static bool skipNextShutdownSave;
+    static float skipSetAt;
+
+    /// <summary>The game saves when the gameplay scene closes (SavingManager on shutdown): not the one we just did by hand.</summary>
+    [HarmonyLib.HarmonyPatch(typeof(SavingManager), nameof(SavingManager.OnShutdown))]
+    static class SkipShutdownSave
+    {
+        static bool Prefix()
+        {
+            if (!skipNextShutdownSave) return true;
+            skipNextShutdownSave = false;
+            if (Time.unscaledTime - skipSetAt > 30f) return true;   // that join never left the scene: a real save now
+            NetLog.Info("Skipped the game's save on leaving (already saved before joining)");
+            return false;
+        }
     }
 
     /// <summary>Every frame: at the main menu, once a character is picked, load the host's world instead of showing ours.</summary>

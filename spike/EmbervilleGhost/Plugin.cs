@@ -42,6 +42,9 @@ public class Plugin : BaseUnityPlugin, ITransportListener
 
     ITransport transport;
     LiteNetTransport lan;
+    SteamTransport steam;
+    /// <summary>Connected (or connecting) through Steam rather than by IP.</summary>
+    internal bool OnSteam => transport != null && transport == steam;
     readonly NetDataWriter writer = new NetDataWriter();
     float sendTimer, lookTimer;
     byte[] myLook;   // last look we sent (LookSync); null = send on the next check
@@ -70,14 +73,19 @@ public class Plugin : BaseUnityPlugin, ITransportListener
     {
         Log = Logger;
         AddressSetting = Config.Bind("Network", "Address", "127.0.0.1", "Host address to join with F9");
+        if (string.IsNullOrWhiteSpace(AddressSetting.Value)) AddressSetting.Value = "127.0.0.1";   // cleared: this PC
         PortSetting = Config.Bind("Network", "Port", 9060, "UDP port to host on / join");
-        MaxPlayers = Config.Bind("Network", "MaxPlayers", 4, "Players including the host");
+        MaxPlayers = Config.Bind("Network", "MaxPlayers", 16, "Players including the host (also the Steam lobby size)");
+        if (MaxPlayers.Value == 4) MaxPlayers.Value = 16;   // the old default
         FreeMouse = Config.Bind("Window", "FreeMouse", true, "Don't let the game lock/confine the mouse to its window (easier with two copies)");
         WindowFix.Bind(Config);
         var harmony = new Harmony("spike.embervilleghost");
         SaveIsolation.Init(Config);
         harmony.PatchAll();
         lan = new LiteNetTransport(this);
+        steam = new SteamTransport(this);
+        SteamLobby.Plugin = this;
+        SteamBoot.Init();
         // Keep running while the other copy has focus.
         Application.runInBackground = true;
         Hud.Plugin = this;
@@ -111,6 +119,8 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         OnlinePlayers.Bind(Config);
         TeamHud.Bind(Config);
         Pet.Bind(Config);
+        Hud.ShowStatus = Config.Bind("Hud", "ShowStatus", false, "The status line top-left (version, connection, fps); Delete shows / hides it");
+        DemoEnd.Bind(Config);
         Pet.Plugin = this;
         TeamHud.Plugin = this;
         MapMates.Plugin = this;
@@ -119,7 +129,7 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         ImGuiUnity.OnRender += Hud.Draw;
         try { ImGuiUnity.Init(Config, System.IO.Path.GetDirectoryName(Info.Location)); }
         catch (Exception e) { Log.LogError($"ImGui init failed, no menu/HUD: {e}"); }
-        NetLog.Info($"{Title} loaded. F8 host, F9 join, F10 disconnect, Insert = menu.", toast: true);
+        NetLog.Info($"{Title} loaded. F8 host, F9 join, F10 disconnect, Insert = menu, Delete = status line.", toast: true);
     }
 
     void LateUpdate()
@@ -148,8 +158,14 @@ public class Plugin : BaseUnityPlugin, ITransportListener
             if (kb.f8Key.wasPressedThisFrame) HostWindow.Show();   // pick the session rules, then HOST NOW
             if (kb.f9Key.wasPressedThisFrame) Join();
             if (kb.f10Key.wasPressedThisFrame) Stop();
+            if (kb.deleteKey.wasPressedThisFrame && !ImGuiUnity.Typing && !Chat.IsOpen) Hud.ShowStatus.Value = !Hud.ShowStatus.Value;   // the status line top-left
         }
 
+        SteamBoot.Tick();
+        CharacterSafety.Tick();
+        DemoEnd.Tick();
+        Stockpile.Tick();
+        SteamLobby.Tick();
         CheckLeftWorld();
         DevMode.Tick();
         Pings.Tick();
@@ -157,6 +173,7 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         OnlinePlayers.Tick();
         Trade.Tick();
         TeamHud.Tick();   // right-click a party card: teleport / trade / mute
+        TeamHud.RenderPortraits();
         Pet.Tick();
         TickKicks();
         TickMigration();
@@ -246,6 +263,41 @@ public class Plugin : BaseUnityPlugin, ITransportListener
 
     void OnDestroy() => Stop();
 
+    void OnApplicationQuit()
+    {
+        CharacterSafety.Release();
+        Stop();
+        SteamBoot.Shutdown();
+    }
+
+    /// <summary>Host through Steam: a friends-only lobby, friends join from the friends list or an invite (no IPs).</summary>
+    internal void HostSteam()
+    {
+        if (!SteamBoot.Ready) { NetLog.Error("Steam isn't running (start the game from Steam)", toast: true); return; }
+        Stop();
+        transport = steam;
+        steam.StartHost();
+        IsHost = true;
+        MyId = 0;
+        nextPlayerId = 1;
+        Status = "creating a Steam lobby...";
+        SteamLobby.Host(MaxPlayers.Value);
+    }
+
+    /// <summary>SteamLobby: our lobby exists, friends can come.</summary>
+    internal void SteamHostReady() => Status = $"hosting through Steam (up to {MaxPlayers.Value} players)";
+
+    /// <summary>SteamLobby: we're in a friend's lobby; connect to its owner through Steam.</summary>
+    internal void JoinSteam(Steamworks.CSteamID host)
+    {
+        Stop(leaveLobby: false);
+        transport = steam;
+        steam.StartClient(host);
+        hostAddress = host.m_SteamID.ToString();
+        Status = $"connecting to {Steamworks.SteamFriends.GetFriendPersonaName(host)} through Steam...";
+        JoinWindow.Show();
+    }
+
     internal void Host() => Host(PortSetting.Value);
 
     internal void Host(int port)
@@ -271,6 +323,8 @@ public class Plugin : BaseUnityPlugin, ITransportListener
     {
         Stop();
         transport = lan;
+        if (string.IsNullOrWhiteSpace(AddressSetting.Value)) AddressSetting.Value = "127.0.0.1";   // blank = this PC
+        AddressSetting.Value = AddressSetting.Value.Trim();
         lan.StartClient(AddressSetting.Value, PortSetting.Value);
         hostAddress = AddressSetting.Value;
         Status = $"connecting to {AddressSetting.Value}:{PortSetting.Value}...";
@@ -278,8 +332,11 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         NetLog.Info($"Connecting to {AddressSetting.Value}:{PortSetting.Value}...", toast: true);
     }
 
-    internal void Stop()
+    internal void Stop() => Stop(leaveLobby: true);
+
+    internal void Stop(bool leaveLobby)
     {
+        if (leaveLobby && OnSteam) SteamLobby.Leave();
         if (transport != null && transport.IsRunning)
         {
             transport.Stop();
@@ -537,6 +594,7 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         writer.Put(me.characterStats ? Mathf.Max(me.CurrentKymiaPoints, 0f) : 0f);   // Kymia: what skills and spells cost
         writer.Put(me.characterStats ? me.MaxKymiaPoints : 0f);
         writer.Put(MapMates.InWilds);   // in the generated wilds: our spot goes on everyone's world map
+        writer.Put(me.currentWeaponItem?.data != null ? me.currentWeaponItem.data.addressKey ?? "" : "");   // the party strip shows it
         writer.Put(Pet.KindByte);   // our pet (0 none, else which kind), so theirs follows our stand-in
         writer.Put((byte)Mathf.Min(Pet.Level, 255));
         writer.Put(Pet.Out ? Pet.Name : "");
@@ -619,7 +677,10 @@ public class Plugin : BaseUnityPlugin, ITransportListener
             return;
         }
 
-        int id = nextPlayerId++;
+        // The lowest free number (P2, P3...): someone who left frees theirs, so a cancelled join doesn't push the next
+        // player up to P5, P6...
+        int id = 1;
+        while (idPeers.ContainsKey(id) || players.ContainsKey(id)) id++;
         peerIds[peer] = id;
         idPeers[id] = peer;
         GetPlayer(id);
@@ -682,7 +743,7 @@ public class Plugin : BaseUnityPlugin, ITransportListener
             NetLog.Warn($"Host disconnected: {reason}");
             // Only when the host really left (closed the connection: quit to menu, quit the game, F10). A timeout can
             // be our own network blipping while the host carries on: taking over then would split the session.
-            if (me > 0 && LocalPlayer.Get() && reason == "RemoteConnectionClose" && !kicked) TakeOver(me, next, nextName, others);
+            if (me > 0 && LocalPlayer.Get() && reason == "RemoteConnectionClose" && !kicked) { migrateSteam = OnSteam; TakeOver(me, next, nextName, others); }
             return;
         }
 
@@ -690,6 +751,8 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         peerIds.Remove(peer);
         idPeers.Remove(id);
         RemovePlayer(id);
+        snapshotSentFor.Remove(id);   // their number may be given out again: the next one is a fresh arrival
+        arrivals.Remove(id);
         ChestSync.Unlock(id);
         TimeSync.Forget(id);
         TeamBuffs.Forget(id);
@@ -772,6 +835,7 @@ public class Plugin : BaseUnityPlugin, ITransportListener
     bool rejoining;              // reconnecting to a new host from inside its world: skip the world download
     string hostAddress = "";     // client: the address we reached the host at
     bool migrateHost;            // we're the one taking over: start hosting
+    bool migrateSteam;           // the session was on Steam: take over / reconnect through Steam (addresses are Steam IDs)
     float migrateAt = -1f;
     string migrateTo = "";
     int migratePort;
@@ -833,7 +897,17 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         if (migrateAt < 0f || Time.unscaledTime < migrateAt) return;
         migrateAt = -1f;
         if (!LocalPlayer.Get()) { migrateHost = false; return; }   // went to the menu meanwhile
-        if (migrateHost) { migrateHost = false; Host(migratePort); return; }
+        if (migrateHost) { migrateHost = false; if (migrateSteam) HostSteam(); else Host(migratePort); return; }
+        if (migrateSteam && ulong.TryParse(migrateTo, out ulong steamId))
+        {
+            Stop(leaveLobby: true);
+            transport = steam;
+            rejoining = true;
+            steam.StartClient(new Steamworks.CSteamID(steamId));
+            hostAddress = migrateTo;
+            Status = "reconnecting to the new host through Steam...";
+            return;
+        }
         Stop();
         transport = lan;
         rejoining = true;
@@ -1050,6 +1124,7 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         float kymia = reader.GetFloat();
         float maxKymia = reader.GetFloat();
         bool inWilds = reader.GetBool();
+        string weapon = reader.GetString();
         byte petKind = reader.GetByte();
         int petLevel = reader.GetByte();
         string petName = reader.GetString();
@@ -1066,6 +1141,7 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         p.Kymia = kymia;
         p.MaxKymia = maxKymia;
         p.InWilds = inWilds;
+        p.Weapon = weapon;
         p.PetKind = petKind;
         p.PetLevel = petLevel;
         p.PetName = petName;

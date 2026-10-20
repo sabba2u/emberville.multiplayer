@@ -69,6 +69,7 @@ internal static class EnemySync
         public float DeadSince;   // when its runner first said it's dead
         public bool Immune;       // its runner's copy can't take damage right now (boss phases: the AI sets it)
         public bool Attacking;    // mid-attack there (keeps it with its runner, InFight)
+        public int Controller;    // which animation set it plays there (colour variants: ControllerOf)
         public float ImmuneSince;
     }
 
@@ -454,7 +455,14 @@ internal static class EnemySync
                 if (Time.unscaledTime - s.DeadSince > DeathReplayWait) KillHere(e);
                 continue;
             }
-            if (e.IsDead) continue;   // our own death replay plays out (animation, corpse, fade)
+            if (e.IsDead)
+            {
+                // Our death replay plays out (animation, fade), but the body ends up where it does on the runner's copy:
+                // there it slid from its real spot with its own knockback; here we were a moment behind and pushed it
+                // from where we saw the hitter. Keep following the runner's reports until it's gone.
+                if (s.Snapshots.Sample(now, out var corpse, out _, out _)) e.transform.position = corpse;
+                continue;
+            }
             if (e.CanTakeDamage == s.Immune) e.CanTakeDamage = !s.Immune;
             if (!s.Snapshots.Sample(now, out var pos, out _, out _)) continue;
             e.transform.position = pos;
@@ -464,6 +472,7 @@ internal static class EnemySync
                 var c = e.fadableRenderers[0].color;
                 if (c.r != s.Tint.r || c.g != s.Tint.g || c.b != s.Tint.b) e.SetSpriteColor(s.Tint);   // keeps each sprite's alpha
             }
+            MatchController(e, s.Controller);   // same colour variant as there, before its animation states
             ApplyParts(e, s);   // before the animators: a just-switched-on effect animator gets its state too
             AnimSync.Apply(AnimatorsOf(e), s.Anim);
         }
@@ -483,6 +492,7 @@ internal static class EnemySync
         w.Put(e.CurrentHealth);
         w.Put(!e.CanTakeDamage);
         w.Put(e.isAttacking);
+        w.Put(ControllerOf(e));
         var stage = StageOf(e);
         w.Put(stage != null ? (byte)stage.Value : NoStage);
         // Tint: the AI recolours creatures (behaviour graph "Tint Enemy" -> SetSpriteColor), and the AI only runs here.
@@ -495,6 +505,42 @@ internal static class EnemySync
         PutBits(w, parts.sprites.Length, i => parts.sprites[i] && parts.sprites[i].enabled);
         AnimSync.Write(w, AnimatorsOf(e));
         Plugin.SendToPlace(w, DeliveryMethod.Unreliable);
+    }
+
+    // ---- which animation set (colour variants) ----
+    //
+    // Some creatures come in colours (the Lilshrooms' pink / green / gray, "RandomColor" ones) that are separate
+    // animation sets (sprite sheets per colour) picked when they appear, so each copy can pick its own. The runner sends
+    // a hash of its main animator's controller name; the others switch theirs to the same controller.
+
+    static Dictionary<int, RuntimeAnimatorController> controllers;
+    static float controllersAt = -10f;
+
+    static int ControllerOf(Enemy e)
+    {
+        var a = e.animator;
+        var c = a ? a.runtimeAnimatorController : null;
+        return c ? Fnv(c.name) : 0;
+    }
+
+    static int Fnv(string s)
+    {
+        uint h = 2166136261;
+        foreach (char ch in s) { h ^= ch; h *= 16777619; }
+        return (int)h;
+    }
+
+    static void MatchController(Enemy e, int wanted)
+    {
+        var a = e.animator;
+        if (wanted == 0 || !a || ControllerOf(e) == wanted) return;
+        if (controllers == null || (!controllers.ContainsKey(wanted) && Time.unscaledTime - controllersAt > 5f))
+        {
+            controllersAt = Time.unscaledTime;
+            controllers = new Dictionary<int, RuntimeAnimatorController>();
+            foreach (var c in Resources.FindObjectsOfTypeAll<RuntimeAnimatorController>()) if (c) controllers[Fnv(c.name)] = c;
+        }
+        if (controllers.TryGetValue(wanted, out var found) && found) a.runtimeAnimatorController = found;
     }
 
     // ---- the creature's parts (child objects, sprites), mirrored as bits ----
@@ -559,6 +605,7 @@ internal static class EnemySync
         float health = r.GetFloat();
         bool immune = r.GetBool();
         bool attacking = r.GetBool();
+        int controller = r.GetInt();
         byte stage = r.GetByte();
         var tint = new Color(r.GetFloat(), r.GetFloat(), r.GetFloat(), 1f);
         var nodes = GetBits(r);
@@ -571,6 +618,7 @@ internal static class EnemySync
         if (immune && !s.Immune) s.ImmuneSince = Time.unscaledTime;
         s.Immune = immune;
         s.Attacking = attacking;
+        s.Controller = controller;
         if (stage != NoStage && Find(id) is Enemy staged) stages[staged] = stage;
         s.Snapshots.Add(t, pos, 0f, Time.unscaledTimeAsDouble);
         s.Flip = flip; s.Dead = dead; s.Health = health; s.Anim = anim; s.Tint = tint;

@@ -77,14 +77,31 @@ internal static class ImGuiUnity
         material = new Material(shader) { mainTexture = fontTexture, hideFlags = HideFlags.HideAndDontSave };
         commands = new CommandBuffer { name = "EmbervilleGhost ImGui" };
 
-        if (Keyboard.current != null) Keyboard.current.onTextInput += c => typed.Add(c);
+        HookTyping();
         ready = true;
+    }
+
+    static Keyboard hookedKeyboard;
+    static readonly Action<char> onChar = c => typed.Add(c);
+
+    /// <summary>
+    /// Typed characters for ImGui's text fields. The keyboard often doesn't exist yet when the plugin loads (Init), so
+    /// this runs every frame until it does, and again if the keyboard device changes.
+    /// </summary>
+    static void HookTyping()
+    {
+        var kb = Keyboard.current;
+        if (kb == null || kb == hookedKeyboard) return;
+        if (hookedKeyboard != null) hookedKeyboard.onTextInput -= onChar;
+        kb.onTextInput += onChar;
+        hookedKeyboard = kb;
     }
 
     /// <summary>Build this frame's UI (call from Update).</summary>
     public static void Update()
     {
         if (!ready) return;
+        HookTyping();
         var kb = Keyboard.current;
         if (kb != null && kb[MenuKey.Value].wasPressedThisFrame && Application.isFocused) SetOpen(!IsOpen);
 
@@ -101,7 +118,14 @@ internal static class ImGuiUnity
                 catch (Exception e) { Plugin.Log.LogError($"imgui: {e}"); }
             }
         ImGui.Render();
+
+        // Typing into one of our text fields: the game's controls and our hotkeys stay out of it (I, M, O, X...).
+        Typing = ImGui.GetIO().WantTextInput;
+        if (Typing) GameInput.Block("imgui-text"); else GameInput.Unblock("imgui-text");
     }
+
+    /// <summary>A text field of ours has the keyboard (as of the last frame).</summary>
+    public static bool Typing { get; private set; }
 
     static void SetOpen(bool open)
     {

@@ -35,6 +35,7 @@ internal static class AttackFx
     static readonly Dictionary<ulong, IHoldAttack> theirHolds = new Dictionary<ulong, IHoldAttack>(); // (player, fx id) -> copy
     static uint nextFx;
     static Dictionary<string, GameObject> prefabs;
+    static readonly HashSet<string> missing = new HashSet<string>();   // told once each, in the log only
 
     static bool Connected => Plugin != null && Plugin.Connected && Plugin.MyId >= 0 && Plugin.AnyoneElseHere;
 
@@ -124,13 +125,37 @@ internal static class AttackFx
         if (capturing && prefab && __result) spawned.Add((prefab, __result));
     }
 
-    static bool Mirrorable(GameObject go) =>
+    /// <summary>
+    /// Only real attack objects and charge-up effects (an Attack asset's attackSpawner / buildupVFX): the game takes other
+    /// things from its pool during an attack too (floating damage numbers, health bars...), which aren't ours to copy.
+    /// Projectiles and projectile spawners go through FxSync.
+    /// </summary>
+    static bool Mirrorable(GameObject prefab, GameObject go) =>
+        prefab && IsAttackPrefab(prefab) &&
         !go.GetComponent<Projectile>() && !go.GetComponent<ProjectileSpawner>() && !go.GetComponent<ProjectileSpawnerCircularSpread>();
+
+    static HashSet<GameObject> attackPrefabs;
+    static float attackPrefabsAt = -10f;
+
+    /// <summary>Is it an Attack's object or charge-up effect? (The set is rebuilt at most every few seconds, on a miss.)</summary>
+    static bool IsAttackPrefab(GameObject prefab)
+    {
+        if (attackPrefabs != null && attackPrefabs.Contains(prefab)) return true;
+        if (attackPrefabs != null && Time.unscaledTime - attackPrefabsAt < 5f) return false;
+        attackPrefabsAt = Time.unscaledTime;
+        attackPrefabs = new HashSet<GameObject>();
+        foreach (var a in Resources.FindObjectsOfTypeAll<Attack>())
+        {
+            if (a.attackSpawner) attackPrefabs.Add(a.attackSpawner);
+            if (a.buildupVFX) attackPrefabs.Add(a.buildupVFX);
+        }
+        return attackPrefabs.Contains(prefab);
+    }
 
     static void Send(MonoBehaviour attacker, Kind kind, bool endBuildup)
     {
         int count = 0;
-        foreach (var s in spawned) if (s.go && Mirrorable(s.go)) count++;
+        foreach (var s in spawned) if (s.go && Mirrorable(s.prefab, s.go)) count++;
         if (count == 0 && !endBuildup) return;
 
         var player = attacker as PlayerMaster;
@@ -147,7 +172,7 @@ internal static class AttackFx
         w.Put((byte)count);
         foreach (var (prefab, go) in spawned)
         {
-            if (!go || !Mirrorable(go)) continue;
+            if (!go || !Mirrorable(prefab, go)) continue;
             uint fx = 0;
             if (player && go.GetComponent<IHoldAttack>() != null) ourHolds[go] = fx = ++nextFx;
             w.Put(prefab.name);
@@ -202,7 +227,7 @@ internal static class AttackFx
             uint fx = r.GetUInt();
             if (!ok) continue;
             var prefab = FindPrefab(name);
-            if (!prefab) { NetLog.Warn($"Can't show attack '{name}': no such prefab here"); continue; }
+            if (!prefab) { if (missing.Add(name)) NetLog.Info($"Can't show attack '{name}' here (not loaded)"); continue; }
             var go = Spawn(owner, e ? e.currentAttack : null, prefab, pos, angle, scaleX, dir, trigger);
             if (!go) continue;
             if (kind == Kind.Buildup && e)

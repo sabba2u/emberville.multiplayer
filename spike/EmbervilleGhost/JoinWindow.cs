@@ -14,7 +14,9 @@ internal static class JoinWindow
     public static bool Visible { get; private set; }
 
     static (string name, string file)[] characters = new (string, string)[0];
+    static bool[] inUse = new bool[0];   // played by another running copy on this PC (CharacterSafety)
     static int selected = -1;
+    static string current;   // in a game: the character we're playing (we join as that one, no picking)
 
     public static void Show()
     {
@@ -28,15 +30,22 @@ internal static class JoinWindow
     {
         var files = GameData.GetPlayerFiles();
         characters = new (string, string)[files.Length];
+        inUse = new bool[files.Length];
         selected = -1;
-        string current = LocalPlayer.Get() ? GameData.playerFilePrefix : null;   // in a game: bring that one
+        current = LocalPlayer.Get() && GameData.HasPlayerData ? GameData.playerFilePrefix : null;   // in a game: bring that one
+        string currentName = current != null ? GameData.playerData?.playerName : null;
         for (int i = 0; i < files.Length; i++)
         {
             var (data, file) = files[i];
             characters[i] = (string.IsNullOrEmpty(data.playerName) ? file : data.playerName, file);
-            if (file == current) selected = i;
+            inUse[i] = CharacterSafety.InUseElsewhere(file);
+            if (current != null && string.Equals(file, current, StringComparison.OrdinalIgnoreCase)) selected = i;
         }
-        if (selected < 0 && characters.Length > 0) selected = 0;
+        // In a game but the file didn't match (renamed?): by the character's name, never just "the first one".
+        if (current != null && selected < 0 && !string.IsNullOrEmpty(currentName))
+            for (int i = 0; i < characters.Length; i++) if (characters[i].name == currentName && !inUse[i]) { selected = i; break; }
+        if (current == null && selected < 0)
+            for (int i = 0; i < characters.Length; i++) if (!inUse[i]) { selected = i; break; }
     }
 
     public static void Draw()
@@ -56,6 +65,7 @@ internal static class JoinWindow
 
         // ---- connection ----
         if (Plugin.IsClient && Plugin.MyId >= 0) Line(true, $"Connected as P{Plugin.MyId + 1}  (ping {Plugin.Remote?.Ping ?? 0} ms)");
+        else if (Plugin.OnSteam) Line(null, char.ToUpper(Plugin.Status[0]) + Plugin.Status.Substring(1));
         else if (Plugin.IsClient || Plugin.Status.StartsWith("connecting")) Line(null, $"Connecting to {Plugin.AddressSetting.Value}:{Plugin.PortSetting.Value}...");
         else Line(false, $"Not connected ({Plugin.Status})");
 
@@ -77,6 +87,12 @@ internal static class JoinWindow
 
         // ---- character ----
         if (characters.Length == 0) ImGui.TextColored(new Vector4(1f, 0.6f, 0.4f, 1f), "No characters yet: create one in the game first (Play > New).");
+        else if (current != null)
+        {
+            // In a game: we join as the character we're playing (never a different one by accident).
+            if (selected >= 0) ImGui.Text($"You'll join as {characters[selected].name} (the character you're playing).");
+            else ImGui.TextColored(new Vector4(1f, 0.6f, 0.4f, 1f), "Couldn't find the character you're playing: go to the title screen and join from there.");
+        }
         else
         {
             string label = selected >= 0 ? characters[selected].name : "pick one";
@@ -84,7 +100,11 @@ internal static class JoinWindow
             if (ImGui.BeginCombo("Character", label))
             {
                 for (int i = 0; i < characters.Length; i++)
-                    if (ImGui.Selectable($"{characters[i].name}##{characters[i].file}", i == selected)) selected = i;
+                {
+                    if (inUse[i]) ImGui.BeginDisabled();
+                    if (ImGui.Selectable($"{characters[i].name}{(inUse[i] ? "  (in use by another copy)" : "")}##{characters[i].file}", i == selected)) selected = i;
+                    if (inUse[i]) ImGui.EndDisabled();
+                }
                 ImGui.EndCombo();
             }
             ImGui.SameLine();
@@ -92,7 +112,7 @@ internal static class JoinWindow
         }
 
         // ---- go ----
-        bool can = GuestWorld.Ready && selected >= 0 && selected < characters.Length;
+        bool can = GuestWorld.Ready && selected >= 0 && selected < characters.Length && !inUse[selected];
         if (!can) ImGui.BeginDisabled();
         if (ImGui.Button("Connect now", new Vector2(160, 0)))
         {

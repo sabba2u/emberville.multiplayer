@@ -32,13 +32,13 @@ Set-Content "$stage\BepInEx\config\BepInEx.cfg" $cfg -NoNewline
 
 # The mod: our DLL + what it needs (no game / Unity DLLs)
 $plugin = "$stage\BepInEx\plugins\EmbervilleMultiplayer"
-foreach ($f in "EmbervilleGhost.dll", "LiteNetLib.dll", "ImGui.NET.dll", "cimgui.dll", "System.Runtime.CompilerServices.Unsafe.dll") { Copy-Item (Join-Path $out $f) $plugin }
+foreach ($f in "EmbervilleGhost.dll", "LiteNetLib.dll", "ImGui.NET.dll", "cimgui.dll", "System.Runtime.CompilerServices.Unsafe.dll", "com.rlabrecque.steamworks.net.dll", "steam_api64.dll") { Copy-Item (Join-Path $out $f) $plugin }
 Copy-Item (Join-Path $out "Assets\Fonts\*") "$plugin\Assets\Fonts\"
 
 # Read me
 @"
 $((Get-Content "$here\Plugin.cs" -Raw | Select-String 'ModName = "([^"]+)"').Matches[0].Groups[1].Value) v$version
-Unofficial co-op for the Emberville Demo (2-4 players). Not made or supported by Cygnus Cross.
+Unofficial co-op for the Emberville Demo (up to 16 players). Not made or supported by Cygnus Cross.
 
 INSTALL
 1. Find the game folder: Steam > right-click Emberville Demo > Manage > Browse local files.
@@ -47,13 +47,23 @@ INSTALL
 Everyone playing together needs the same mod version.
 
 PLAY
+Steam (easiest, start the game from Steam):
+Host:   load your world, press F8, pick the rules, HOST VIA STEAM. Friends right-click you in their Steam friends
+        list > Join Game, or you invite them (Insert menu > Invite friends, Steam overlay).
+Join:   accept the invite or Join Game (from the title screen or in a game); the host's world downloads; pick your
+        character; Connect now. No IP addresses, no port forwarding.
+
+By IP:
 Host:   load your world, press F8, pick the rules (shared XP, instanced loot, PvP), HOST NOW.
         Copy your address with the Copy button and send it to your friends.
         Over the internet: forward UDP port 9060 on your router to your PC (same network: not needed).
 Join:   on the title screen, press Insert, click "Paste address" (or type it), press F9.
         Wait for "downloaded", pick your character, press "Connect now".
         You play your own character in the host's world; the host's world is never changed on your PC.
-Keys:   F8 host, F9 join, F10 disconnect, Insert menu (teleport to a teammate, rules, log), Enter chat.
+Keys:   F8 host, F9 join, F10 disconnect, Insert menu (teleport to a teammate, rules, log), Enter chat,
+        O online players, X at a chest (put matching items in), Delete status line, right-click a party card.
+Chat:   /help lists every command (/trade, /sleep, /pet on, /estate, /resources, /repair, /devmode...).
+Saves:  your characters are backed up before joining from inside a game: Saves\EmbervilleGhost_Backups.
 
 UNINSTALL
 Delete winhttp.dll (the game then runs without mods), or also the BepInEx folder, doorstop_config.ini, .doorstop_version.

@@ -17,6 +17,7 @@ internal class RemotePlayer
     public int Health, MaxHealth;
     public float Kymia, MaxKymia;
     public bool InWilds;
+    public string Weapon = "";      // their weapon's item key (the party strip shows its icon)
     public byte PetKind;            // their pet (0 none, 1 chicken), its level and name (Pet)
     public int PetLevel;
     public string PetName = "";

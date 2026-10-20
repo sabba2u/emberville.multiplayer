@@ -41,13 +41,22 @@ internal static class DebugPanel
         if (plugin.IsClient) ImGui.Text($"Ping to host: {plugin.Remote.Ping} ms");
 
         string address = plugin.AddressSetting.Value;
-        if (ImGui.InputText("Address", ref address, 64)) plugin.AddressSetting.Value = address;
+        if (ImGui.InputTextWithHint("Address", "127.0.0.1 (this PC)", ref address, 64)) plugin.AddressSetting.Value = address;
         ImGui.SameLine();
         if (ImGui.SmallButton("Paste address")) NetInfo.PasteAddress(plugin);
         if (plugin.IsHost) NetInfo.DrawHostAddresses(plugin);
         int port = plugin.PortSetting.Value;
         if (ImGui.InputInt("Port", ref port)) plugin.PortSetting.Value = Math.Max(1, Math.Min(65535, port));
 
+        if (SteamBoot.Ready)
+        {
+            if (ImGui.Button("Host via Steam")) plugin.HostSteam();
+            ImGui.SameLine();
+            if (ImGui.Button("Invite friends (Steam)")) SteamLobby.OpenInviteDialog();
+            ImGui.SameLine();
+            ImGui.TextDisabled(SteamLobby.InLobby ? "(in a Steam lobby)" : "(friends join from their Steam friends list)");
+        }
+        else ImGui.TextDisabled("Steam isn't running: IP joining only");
         if (ImGui.Button("Host LAN (F8)")) HostWindow.Show();
         ImGui.SameLine();
         if (ImGui.Button("Join LAN (F9)")) plugin.Join();
@@ -99,6 +108,8 @@ internal static class DebugPanel
         // The game's own developer tools (DevMode): on in every scene while ticked.
         bool dev = DevMode.On;
         if (ImGui.Checkbox("Dev mode (the game's developer tools)", ref dev)) DevMode.Toggle();
+        bool keep = DemoEnd.On;
+        if (ImGui.Checkbox("Keep playing after the demo ends (no \"Thank you for playing\")", ref keep)) DemoEnd.Toggle(keep);
         if (DevMode.On)
         {
             ImGui.SameLine();
@@ -151,6 +162,30 @@ internal static class DebugPanel
         GameData.gameBools[BoolID.PlaceablesActive] = true;
         GameData.gameBools[BoolID.RepairablesActive] = true;
         NetLog.Info("Estate building and repairs unlocked: walk onto your estate in Town to build", toast: true);
+        ReportRepairables();
+    }
+
+    /// <summary>What can be repaired in the loaded scenes (in chat): how many, how many are done, the nearest one.</summary>
+    internal static void ReportRepairables()
+    {
+        var all = UnityEngine.Object.FindObjectsByType<RepairableBuilding>(UnityEngine.FindObjectsInactive.Include, UnityEngine.FindObjectsSortMode.None);
+        var me = LocalPlayer.Get();
+        int done = 0, hidden = 0;
+        RepairableBuilding nearest = null;
+        float best = float.MaxValue;
+        foreach (var b in all)
+        {
+            if (b.isRepaired) done++;
+            if (!b.gameObject.activeInHierarchy) { hidden++; continue; }
+            if (!me || b.isRepaired) continue;
+            float d = UnityEngine.Vector2.Distance(me.transform.position, b.transform.position);
+            if (d < best) { best = d; nearest = b; }
+        }
+        Chat.System(all.Length == 0 ? "No repairable buildings in this area." :
+            $"Repairable buildings here: {all.Length} ({done} repaired, {hidden} hidden by the demo)." +
+            (nearest ? $" Nearest broken one: {nearest.name}, {best:0} away: walk onto it, then F to repair." : ""));
+        foreach (var b in all)
+            NetLog.Info($"Repairable {b.name} (id {b.saveID}) repaired={b.isRepaired} active={b.gameObject.activeInHierarchy} at {b.transform.position}");
     }
 
     internal static void SendEstateUnlock(Plugin plugin)

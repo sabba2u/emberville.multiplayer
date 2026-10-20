@@ -133,6 +133,8 @@ internal class RemoteAvatar
         foreach (var j in copy.GetComponentsInChildren<Joint2D>(true)) UnityEngine.Object.DestroyImmediate(j);
         foreach (var rb in copy.GetComponentsInChildren<Rigidbody2D>(true)) UnityEngine.Object.DestroyImmediate(rb);
         foreach (var l in copy.GetComponentsInChildren<AudioListener>(true)) UnityEngine.Object.DestroyImmediate(l);
+        foreach (var c in copy.GetComponentsInChildren<Component>(true))
+            if (c && c.GetType().Name == "NavMeshAgent") UnityEngine.Object.DestroyImmediate(c);   // we move it ourselves
     }
 
     /// <summary>Keep Unity's rendering/animation scripts; everything else (game code, Wwise, input) goes.</summary>
@@ -140,6 +142,7 @@ internal class RemoteAvatar
     {
         string asm = type.Assembly.GetName().Name;
         if (asm.StartsWith("Unity.InputSystem") || asm.StartsWith("Unity.Cinemachine")) return false;
+        if (asm.StartsWith("Unity.Behavior") || asm.StartsWith("Unity.AI")) return false;   // a creature's AI graph: it would run with no creature
         return asm.StartsWith("UnityEngine") || asm.StartsWith("Unity.");
     }
 

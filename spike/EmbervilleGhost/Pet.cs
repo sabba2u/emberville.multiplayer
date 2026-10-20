@@ -11,9 +11,10 @@ namespace EmbervilleGhost;
 /// <summary>One kind of pet: a creature of the game (its prefab name) and how it moves.</summary>
 internal sealed class PetKind
 {
-    public readonly string Id, Label, Prefab;
+    public readonly string Id, Label, Prefab, DefaultName;
     public readonly bool Flies;
-    public PetKind(string id, string label, string prefab, bool flies = false) { Id = id; Label = label; Prefab = prefab; Flies = flies; }
+    public PetKind(string id, string label, string prefab, string defaultName, bool flies = false)
+    { Id = id; Label = label; Prefab = prefab; DefaultName = defaultName; Flies = flies; }
 }
 
 /// <summary>
@@ -41,22 +42,22 @@ internal static class Pet
 
     public static readonly PetKind[] Kinds =
     {
-        new PetKind("chicken", "Chicken", "Mob_Chicken"),
-        new PetKind("glowbat", "Glowbat", "Mob_Glowbat", flies: true),
-        new PetKind("pinkshroom", "Pink Lilshroom", "Mob_LilShroom_Pink"),
-        new PetKind("greenshroom", "Green Lilshroom", "Mob_LilShroom_Green"),
-        new PetKind("grayshroom", "Gray Lilshroom", "Mob_LilShroom_Gray"),
-        new PetKind("bluetick", "Blue Lil Tick", "Mob_LilTick_Blue"),
-        new PetKind("greentick", "Green Lil Tick", "Mob_LilTick_Green"),
-        new PetKind("purpletick", "Purple Lil Tick", "Mob_LilTick_Purple"),
-        new PetKind("redbomber", "Red Lil Bomber", "Mob_LilBomber_Red"),
-        new PetKind("greenbomber", "Green Lil Bomber", "Mob_LilBomber_DarkGreen"),
-        new PetKind("salmonbomber", "Salmon Lil Bomber", "Mob_LilBomber_Salmon"),
-        new PetKind("spiderling", "Spiderling", "Mob_Kamikaze"),
-        new PetKind("bugfuzz", "Bug Fuzz", "Mob_BugFuzz"),
+        new PetKind("chicken", "Chicken", "Mob_Chicken", "Clucky"),
+        new PetKind("glowbat", "Glowbat", "Mob_Glowbat", "Fang", flies: true),
+        new PetKind("pinkshroom", "Pink Lilshroom", "Mob_LilShroom_Pink", "Sporey"),
+        new PetKind("greenshroom", "Green Lilshroom", "Mob_LilShroom_Green", "Mossy"),
+        new PetKind("grayshroom", "Gray Lilshroom", "Mob_LilShroom_Gray", "Pebble"),
+        new PetKind("bluetick", "Blue Lil Tick", "Mob_LilTick_Blue", "Blueberry"),
+        new PetKind("greentick", "Green Lil Tick", "Mob_LilTick_Green", "Pickle"),
+        new PetKind("purpletick", "Purple Lil Tick", "Mob_LilTick_Purple", "Grape"),
+        new PetKind("redbomber", "Red Lil Bomber", "Mob_LilBomber_Red", "Boom"),
+        new PetKind("greenbomber", "Green Lil Bomber", "Mob_LilBomber_DarkGreen", "Fuse"),
+        new PetKind("salmonbomber", "Salmon Lil Bomber", "Mob_LilBomber_Salmon", "Kaboom"),
+        new PetKind("spiderling", "Spiderling", "Mob_Kamikaze", "Webby"),
+        new PetKind("bugfuzz", "Bug Fuzz", "Mob_BugFuzz", "Fuzzy"),
     };
 
-    static ConfigEntry<bool> owned, outNow;
+    static ConfigEntry<bool> enabled, owned, outNow;
     static ConfigEntry<string> petName, petColor, petKind;
     static ConfigEntry<int> level, xp;
 
@@ -71,16 +72,17 @@ internal static class Pet
 
     public static void Bind(ConfigFile config)
     {
+        enabled = config.Bind("Pet", "Enabled", false, "Pets on (an early feature, off to start with: /pet on or the Insert menu)");
         owned = config.Bind("Pet", "Owned", false, "You have a pet");
         outNow = config.Bind("Pet", "Out", true, "Your pet is out with you");
         petKind = config.Bind("Pet", "Kind", "chicken", "Which creature your pet is (/pet list)");
-        petName = config.Bind("Pet", "Name", "Clucky", "Your pet's name");
+        petName = config.Bind("Pet", "Name", "Clucky", "Your pet's name (each kind has a default: Clucky the chicken, Fang the Glowbat...)");
         level = config.Bind("Pet", "Level", 1, "Your pet's level");
         xp = config.Bind("Pet", "Xp", 0, "Your pet's XP towards the next level");
         petColor = config.Bind("Pet", "Color", "FFFFFF", "Your pet's tint (hex RRGGBB; FFFFFF = its own colours)");
     }
 
-    public static bool Out => owned.Value && outNow.Value;
+    public static bool Out => enabled.Value && owned.Value && outNow.Value;
     public static string Name => petName.Value;
     public static int Level => Mathf.Max(1, level.Value);
     static int XpNeeded => 15 * Level;
@@ -118,6 +120,8 @@ internal static class Pet
     public static void Command(string args)
     {
         args = args.Trim();
+        if (args == "on" || args == "off") { SetEnabled(args == "on"); return; }
+        if (!enabled.Value) { Chat.System("Pets are off: /pet on (or the Insert menu) turns them on."); return; }
         if (args.StartsWith("color") || args.StartsWith("colour"))
         {
             string want = args.Substring(args.StartsWith("color") ? 5 : 6).Trim().TrimStart('#').ToLowerInvariant();
@@ -177,7 +181,9 @@ internal static class Pet
         if (!PetBody.Available(kind))
         { Chat.System($"No {kind.Label} anywhere to befriend yet: get near one once (it has to be loaded), then try again."); return; }
         bool first = !owned.Value;
+        bool defaultName = first || System.Array.Exists(Kinds, k => k.DefaultName == petName.Value);
         petKind.Value = kind.Id;
+        if (defaultName) petName.Value = kind.DefaultName;   // a name you picked yourself stays
         owned.Value = true;
         outNow.Value = true;
         Despawn();   // the new body comes next frame
@@ -187,13 +193,27 @@ internal static class Pet
     }
 
     /// <summary>Insert menu: befriend / out, kind, colour.</summary>
+    static void SetEnabled(bool on)
+    {
+        enabled.Value = on;
+        Chat.System(on ? "Pets on: /pet to befriend one or call yours." : "Pets off.");
+    }
+
     public static void DrawMenu()
     {
         ImGui.Separator();
+        bool on = enabled.Value;
+        if (ImGui.Checkbox("Pets (early feature)", ref on)) SetEnabled(on);
+        if (!enabled.Value) return;
         if (owned.Value)
         {
             bool isOut = outNow.Value;
-            if (ImGui.Checkbox($"Pet: {Name} (level {Level}, {xp.Value}/{XpNeeded} XP)", ref isOut)) outNow.Value = isOut;
+            if (ImGui.Checkbox($"Pet out (level {Level}, {xp.Value}/{XpNeeded} XP)", ref isOut)) outNow.Value = isOut;
+            ImGui.SameLine();
+            string name = petName.Value;
+            ImGui.SetNextItemWidth(140);
+            if (ImGui.InputTextWithHint("Name##pet", Kind.DefaultName, ref name, 20))
+                petName.Value = string.IsNullOrWhiteSpace(name) ? Kind.DefaultName : name;
             var c = Tint;
             var col = new ImGuiNET.Vector3(c.r, c.g, c.b);
             ImGui.SameLine();
@@ -237,7 +257,7 @@ internal static class Pet
 
     public static void Tick()
     {
-        Learn();
+        if (enabled.Value) Learn();
         var me = LocalPlayer.Get();
         if (!Out || !me || me.IsDead && mine == null) { Despawn(); TickOthers(); return; }
         if (mine == null || !mine.Alive || mine.Kind != Kind)

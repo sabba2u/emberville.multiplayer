@@ -553,7 +553,7 @@ internal static class ChestSync
     {
         var kb = UnityEngine.InputSystem.Keyboard.current;
         if (kb == null || !kb.xKey.wasPressedThisFrame || !Application.isFocused) return;
-        if (Chat.IsOpen || ImGuiUnity.IsOpen || PlayerStatusUtil.LocalBusy) return;
+        if (Chat.IsOpen || ImGuiUnity.IsOpen || ImGuiUnity.Typing || PlayerStatusUtil.LocalBusy) return;
         var me = LocalPlayer.Get();
         if (!me) return;
         var handler = me.GetComponentInChildren<InteractablesHandler>();

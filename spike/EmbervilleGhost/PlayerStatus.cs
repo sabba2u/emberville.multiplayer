@@ -58,7 +58,7 @@ internal static class PlayerStatusUtil
         get
         {
             var s = Local();
-            return s != PlayerStatus.None && s != PlayerStatus.Chatting && s != PlayerStatus.ModMenu && s != PlayerStatus.Dead;
+            return s != PlayerStatus.None && s != PlayerStatus.Chatting && s != PlayerStatus.ModMenu;   // dead: the "YOU DIED" screen covers it
         }
     }
 

@@ -99,7 +99,7 @@ internal static class OnlinePlayers
     public static void Tick()
     {
         var kb = Keyboard.current;
-        if (kb == null || !UnityEngine.Application.isFocused || Chat.IsOpen) return;
+        if (kb == null || !UnityEngine.Application.isFocused || Chat.IsOpen || ImGuiUnity.Typing) return;
         if (kb[keyEntry.Value].wasPressedThisFrame && (Visible || !PlayerStatusUtil.LocalBusy)) Toggle();
         else if (Visible && kb.escapeKey.wasPressedThisFrame) SetVisible(false);
     }

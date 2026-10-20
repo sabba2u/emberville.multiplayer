@@ -11,7 +11,7 @@ namespace EmbervilleGhost;
 /// <summary>
 /// Chat, like our BDSP mod: Enter opens a text box, Enter sends (an empty line just closes), Esc cancels.
 /// Bottom-left corner: the last messages, fading out after a while (all of them stay visible while typing).
-/// (Who runs this area, "Cohh is the host here", is drawn top-right by Hud: the game uses the bottom corners.) While the box is open the game's own input is off, so typing doesn't
+/// (Who runs this area, "Cohh is the authority of this map", is drawn top-right by Hud: the game uses the bottom corners.) While the box is open the game's own input is off, so typing doesn't
 /// walk, attack or open menus. Sent to everyone (the host relays).
 /// </summary>
 [HarmonyLib.HarmonyPatch]   // its death patches (PlayerMaster.Die / ApplyDamage) only run with this on the class
@@ -117,6 +117,12 @@ internal static class Chat
     {
         if (cmd.StartsWith("trade")) { Trade.InviteByName(cmd.Substring(5)); return true; }
         if (cmd == "pet" || cmd.StartsWith("pet ")) { Pet.Command(cmd.Length > 3 ? cmd.Substring(4) : ""); return true; }
+        if (cmd == "resources" || cmd.StartsWith("resources ") || cmd == "mats" || cmd.StartsWith("mats "))
+        {
+            var arg = cmd.Contains(" ") ? cmd.Substring(cmd.IndexOf(' ') + 1).Trim() : "";
+            Stockpile.Give(int.TryParse(arg, out int n) ? n : 100);
+            return true;
+        }
         switch (cmd)
         {
             case "sleep": TimeSync.ToggleSleep(); return true;   // everyone goes to bed
@@ -126,6 +132,7 @@ internal static class Chat
                 DebugPanel.UnlockEstate();
                 if (Plugin.Connected) DebugPanel.SendEstateUnlock(Plugin);
                 return true;
+            case "repair": Repairs.RepairNearest(); return true;
             case "devmode": DevMode.Toggle(); return true;
             case "online":
             case "party":
@@ -136,7 +143,8 @@ internal static class Chat
             case "?":
                 System("/sleep: ready to skip to morning (everyone must)   /estate: unlock building on your estate (host)");
                 System("/devmode: the game's developer tools on/off   /devpanel: open the developer panel   /arena: to this scene's test arena");
-                System("/trade P2 (or a name): trade items with someone   /pet: befriend / call / send home, /pet list, /pet glowbat, /pet name ..., /pet color red");
+                System("/resources (or /resources 250): 100 of every material, and enough for the town's repairs   /repair: fix the nearest broken building");
+                System("/trade P2 (or a name): trade items with someone   /pet on (pets start off), /pet: befriend / call / send home, /pet list, /pet glowbat, /pet name ..., /pet color red");
                 System($"/online (or {OnlinePlayers.KeyName}): who's connected, mute; the host also kicks and bans   X at a chest: put in what it already has");
                 return true;
         }
@@ -241,6 +249,8 @@ internal static class Chat
     public static void Draw()
     {
         if (Plugin == null) return;
+        var me = LocalPlayer.Get();
+        if (!IsOpen && me && me.IsDead) return;   // the "YOU DIED" screen: nothing of ours on it
         var vp = ImGui.GetMainViewport();
         float now = Time.unscaledTime;
         const ImGuiWindowFlags flags = ImGuiWindowFlags.NoDecoration | ImGuiWindowFlags.NoSavedSettings |
@@ -249,9 +259,13 @@ internal static class Chat
         // Above the game's own HUD (health bar + hotbar in the bottom-left), which scales with the window.
         float lift = vp.WorkSize.y * (Lift?.Value ?? 0.25f);
         ImGui.SetNextWindowPos(new Vector2(vp.WorkPos.x + 12, vp.WorkPos.y + vp.WorkSize.y - lift), ImGuiCond.Always, new Vector2(0f, 1f));
-        ImGui.SetNextWindowSizeConstraints(new Vector2(380, 0), new Vector2(520, vp.WorkSize.y * 0.5f));
+        // A fixed width: the box doesn't grow as you type (only taller, up to half the screen).
+        ImGui.SetNextWindowSizeConstraints(new Vector2(Width, 0), new Vector2(Width, vp.WorkSize.y * 0.5f));
         ImGui.SetNextWindowBgAlpha(IsOpen ? 0.7f : 0.0f);
-        if (ImGui.Begin("##chat", flags | ImGuiWindowFlags.NoInputs))
+        ImGui.PushStyleVar(ImGuiStyleVar.WindowBorderSize, IsOpen ? 1f : 0f);   // closed: just the lines, no box outline
+        bool shown = ImGui.Begin("##chat", flags | ImGuiWindowFlags.NoInputs);
+        ImGui.PopStyleVar();
+        if (shown)
         {
             int start = Math.Max(0, lines.Count - MaxLines);
             for (int i = start; i < lines.Count; i++)
@@ -266,7 +280,7 @@ internal static class Chat
                     ImGui.TextColored(c, l.Who + ":");
                     ImGui.SameLine();
                 }
-                ImGui.PushTextWrapPos(500);
+                ImGui.PushTextWrapPos(0f);   // at the window's edge
                 var tc = l.Who.Length > 0 ? new Vector4(1, 1, 1, 1) : l.Color;   // system lines (deaths...) in their own colour
                 tc.w = alpha;
                 ImGui.TextColored(tc, l.Text);
@@ -278,21 +292,49 @@ internal static class Chat
                 // Our own text line (see Tick): what's typed so far and a blinking caret.
                 bool caret = (now * 2f) % 2f < 1f;
                 ImGui.Separator();
-                ImGui.PushTextWrapPos(500);
-                ImGui.TextUnformatted("> " + typing + (caret ? "_" : " "));
-                ImGui.PopTextWrapPos();
+                // Wrapped by width, letter by letter (a long word or a pasted link wraps too); a long message shows
+                // its last few lines, so the box stays its size while you type.
+                var rows = WrapByWidth("> " + typing + (caret ? "_" : " "), ImGui.GetContentRegionAvail().x);
+                int first = Math.Max(0, rows.Count - TypingRows);
+                if (first > 0) ImGui.TextDisabled("...");
+                for (int r = first; r < rows.Count; r++) ImGui.TextUnformatted(rows[r]);
                 ImGui.TextDisabled("Enter: send   Esc: cancel");
             }
         }
         ImGui.End();
     }
 
-    /// <summary>Who runs the area we're in, for the HUD: "Sabba is the host here" / "You are the host here". Empty when not connected.</summary>
+    const float Width = 440f;
+    const int TypingRows = 4;
+
+    /// <summary>Break text into rows no wider than <paramref name="width"/>: at spaces when it can, else mid-word.</summary>
+    static List<string> WrapByWidth(string text, float width)
+    {
+        var rows = new List<string>();
+        int start = 0;
+        while (start < text.Length)
+        {
+            int end = start, lastSpace = -1;
+            while (end < text.Length && ImGui.CalcTextSize(text.Substring(start, end - start + 1)).x <= width)
+            {
+                if (text[end] == ' ') lastSpace = end;
+                end++;
+            }
+            if (end < text.Length && lastSpace > start) end = lastSpace + 1;   // break after the last space that fits
+            if (end == start) end = start + 1;                                  // a single wide character
+            rows.Add(text.Substring(start, end - start));
+            start = end;
+        }
+        if (rows.Count == 0) rows.Add("");
+        return rows;
+    }
+
+    /// <summary>Who runs the area we're in, for the HUD: "Sabba is the authority of this map" / "You are the authority of this map" (not "host": the tags under our feet already say who hosts the game). Empty when not connected.</summary>
     public static string HostHereLine()
     {
         if (Plugin == null || !Plugin.Connected || Plugin.MyId < 0) return "";
         int owner = Plugin.OwnerHere;
-        return owner == Plugin.MyId ? "You are the host here" : $"{OwnerName(owner)} is the host here";
+        return owner == Plugin.MyId ? "You are the authority of this map" : $"{OwnerName(owner)} is the authority of this map";
     }
 
     static string OwnerName(int id)

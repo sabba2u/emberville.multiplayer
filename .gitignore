@@ -16,6 +16,10 @@
 !/spike/libs/OverlayDearImGui/ImGui.NET.dll
 !/spike/libs/OverlayDearImGui/cimgui.dll
 !/spike/libs/OverlayDearImGui/System.Runtime.CompilerServices.Unsafe.dll
+!/spike/libs/Steamworks/
+/spike/libs/Steamworks/*
+!/spike/libs/Steamworks/com.rlabrecque.steamworks.net.dll
+!/spike/libs/Steamworks/steam_api64.dll
 
 bin/
 obj/

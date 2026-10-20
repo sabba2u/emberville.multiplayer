@@ -60,6 +60,11 @@
     <None Include="Assets\Fonts\**\*" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\libs\OverlayDearImGui\System.Runtime.CompilerServices.Unsafe.dll" Link="System.Runtime.CompilerServices.Unsafe.dll" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\libs\OverlayDearImGui\cimgui.dll" Link="cimgui.dll" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Steam (friends list joining): Steamworks.NET (MIT) + Valve's redistributable steam_api64.dll, shipped with the
+         mod because the demo has neither (SteamBoot loads the native DLL from the plugin folder). -->
+    <Reference Include="UnityEngine.UIModule"><HintPath>$(Managed)\UnityEngine.UIModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="com.rlabrecque.steamworks.net"><HintPath>..\libs\Steamworks\com.rlabrecque.steamworks.net.dll</HintPath><Private>true</Private></Reference>
+    <None Include="..\libs\Steamworks\steam_api64.dll" Link="steam_api64.dll" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <!-- Copy the plugin and everything it needs into the game's BepInEx/plugins folder after each build. -->

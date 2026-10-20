@@ -305,7 +305,7 @@ replaces `input` with (mouse world point - player position) normalized/scaled do
 primary attack, right = secondary attack, and the game already aims with the mouse (mouseLook); maybe a held key +
 mouse, or middle (but middle is our ping/path in Duckov). Generic enough to reuse in any top-down game.
 
-**NEXT VERSION (after 0.1): join through Steam / friends list.** Decided 2026-10-19: get the LAN/IP build solid first.
+**BUILT 2026-10-19 (untested; needs 2 Steam accounts on 2 PCs): join through Steam / friends list** (SteamBoot loads our steam_api64.dll + SteamAPI.Init as app 5355880; SteamTransport + SteamLobby from Duckov; F8 HOST VIA STEAM, Insert menu Invite friends, +connect_lobby launches; host migration over Steam IDs). Original plan: Decided 2026-10-19: get the LAN/IP build solid first.
 Today: IP only (LAN, or internet by IP with the host forwarding UDP 9060). Plan:
 - The demo ships no Steam (no `steam_api64.dll`, even after the 0.20.16.232 update), so the mod brings Steamworks.NET
   (MIT) + `steam_api64.dll` in the plugin folder and calls `SteamAPI.Init` itself (+ `RunCallbacks` every frame).

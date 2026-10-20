@@ -25,7 +25,9 @@ internal static class Hud
         var me = LocalPlayer.Get();
         if (Plugin.Connected && me)
         {
-            float y = Place(UnderFeet(cam, me.transform.position, out float x), x, 1);
+            // Ours doesn't take part in the pushing apart (Place): a teammate standing next to us keeps their tags at
+            // their feet instead of being pushed down under ours.
+            float y = UnderFeet(cam, me.transform.position, out float x);
             Tag(x, y, Plugin.IsHost ? "[host]" : "[client]", RoleColor(Plugin.IsHost), Plugin.IOwnHere);
         }
         foreach (var p in Plugin.Players) DrawTeammate(cam, p);
@@ -148,7 +150,9 @@ internal static class Hud
         var avatar = p.Avatar;
         if (avatar == null || !avatar.Visible) return;
 
-        if (p.MaxHealth > 0)
+        // Down: no health / Kymia bars over them (the tags under their feet say "down").
+        bool dead = p.Status == PlayerStatus.Dead || (p.MaxHealth > 0 && p.Health <= 0);
+        if (p.MaxHealth > 0 && !dead)
         {
             var head = cam.WorldToScreenPoint(avatar.HeadPosition);
             float hx = head.x, hy = UnityEngine.Screen.height - head.y;
@@ -208,6 +212,9 @@ internal static class Hud
         dl.AddText(new Vector2(min.x + 8, min.y + 5), ImGui.ColorConvertFloat4ToU32(new Vector4(0.1f, 0.1f, 0.12f, 1f)), text);
     }
 
+    /// <summary>The status line top-left: off to start with, Delete shows it.</summary>
+    public static BepInEx.Configuration.ConfigEntry<bool> ShowStatus;
+
     public static void Draw()
     {
         if (Plugin == null) return;
@@ -215,16 +222,19 @@ internal static class Hud
         var vp = ImGui.GetMainViewport();
         ImGui.SetNextWindowPos(new Vector2(vp.WorkPos.x + 10, vp.WorkPos.y + 10));
         ImGui.SetNextWindowBgAlpha(0.45f);
-        if (ImGui.Begin("##status", HudFlags))
+        if (ShowStatus.Value)
         {
+            if (ImGui.Begin("##status", HudFlags))
+            {
             string line = $"[Emberville MP v{Plugin.Version} #{SaveIsolation.CopyNumber}] {Plugin.Status}";
             if (Plugin.IsClient) line += $" | ping {Plugin.Remote.Ping}ms";
             if (Plugin.Connected) line += $" | {Plugin.PlayerCount} players" + (Session.Pvp ? " | PvP ON" : "");
             line += $" | {Plugin.Fps:0} fps, mod {Plugin.ModMs:0.0} ms";
             ImGui.TextUnformatted(line);
-            if (!ImGuiUnity.IsOpen) ImGui.TextDisabled($"{ImGuiUnity.MenuKey.Value}: menu");
+            if (!ImGuiUnity.IsOpen) ImGui.TextDisabled($"{ImGuiUnity.MenuKey.Value}: menu   Delete: hide this");
+            }
+            ImGui.End();
         }
-        ImGui.End();
 
         // Top-right (the game uses both bottom corners): who runs the area we're in. Toasts stack below it.
         string hostHere = Chat.HostHereLine();
