@@ -139,13 +139,18 @@ internal static class Chat
             case "players": OnlinePlayers.Toggle(); return true;
             case "devpanel": DevMode.TogglePanel(); return true;
             case "arena": DevMode.GoToFirst(); return true;
+            case "uidump": UiDump.Dump(); return true;   // the game's UI on screen -> BepInEx/UIDumps
+            case "dungeon": Dungeon.Command(); return true;
+            case "nodeath": NoDeath.Toggle(); return true;   // testing: take no damage
+            case "onehitkill": OneHitKill.Toggle(); return true;   // testing: 500 damage a hit
+            case "bowlock": BowAssist.Toggle(); return true;   // arrows curve onto the creature nearest your aim   // into the world map's generated dungeon, or back out
             case "help":
             case "?":
                 System("/sleep: ready to skip to morning (everyone must)   /estate: unlock building on your estate (host)");
-                System("/devmode: the game's developer tools on/off   /devpanel: open the developer panel   /arena: to this scene's test arena");
+                System("/devmode: the game's developer tools on/off   /devpanel: open the developer panel   /arena: to this scene's test arena   /dungeon: into a generated dungeon (or out)   /nodeath: take no damage   /onehitkill: 500 damage a hit (testing)   /bowlock: arrows home in (on by default)");
                 System("/resources (or /resources 250): 100 of every material, and enough for the town's repairs   /repair: fix the nearest broken building");
                 System("/trade P2 (or a name): trade items with someone   /pet on (pets start off), /pet: befriend / call / send home, /pet list, /pet glowbat, /pet name ..., /pet color red");
-                System($"/online (or {OnlinePlayers.KeyName}): who's connected, mute; the host also kicks and bans   X at a chest: put in what it already has");
+                System($"/online (or {OnlinePlayers.KeyName}): who's connected, mute; the host also kicks and bans   X at a chest (Better Chests mod): put in what it already has");
                 return true;
         }
         return false;

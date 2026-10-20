@@ -1,8 +1,8 @@
 // SPIKE: a second player in Emberville. Patterns carried over from DuckovGhost.
 //
-// F8  = host on LAN (listen on Port)
-// F9  = join (connect to Address:Port)
-// F10 = disconnect
+// F9  = host (host window: LAN / Steam)
+// F10 = join (connect to Address:Port)
+// F10 = disconnect (when connected)
 // Insert = open the Dear ImGui menu (drawn by Unity inside the game frame)
 //
 // Star topology: clients only talk to the host; the host relays player messages to the other clients.
@@ -24,9 +24,10 @@ using UnityEngine.InputSystem;
 namespace EmbervilleGhost;
 
 [BepInPlugin("spike.embervilleghost", "EmbervilleGhost", Version)]
+[BepInDependency("spike.emberville.betterchests", BepInDependency.DependencyFlags.SoftDependency)]   // loads first if installed
 public class Plugin : BaseUnityPlugin, ITransportListener
 {
-    internal const string Version = "0.1.5";
+    internal const string Version = "0.1.6";
     internal const string ModName = "Sabba's Emberville Multiplayer Mod";
     internal static string Title => $"{ModName} v{Version}";
 
@@ -67,12 +68,12 @@ public class Plugin : BaseUnityPlugin, ITransportListener
     internal bool IsClient => !IsHost && hostPeer != null;
     internal IEnumerable<RemotePlayer> Players => players.Values;
     internal int PlayerCount => players.Count + 1;
-    internal string Status { get; private set; } = "idle (F8 host, F9 join)";
+    internal string Status { get; private set; } = "idle (F9 host, F10 join)";
 
     void Awake()
     {
         Log = Logger;
-        AddressSetting = Config.Bind("Network", "Address", "127.0.0.1", "Host address to join with F9");
+        AddressSetting = Config.Bind("Network", "Address", "127.0.0.1", "Host address to join with F10");
         if (string.IsNullOrWhiteSpace(AddressSetting.Value)) AddressSetting.Value = "127.0.0.1";   // cleared: this PC
         PortSetting = Config.Bind("Network", "Port", 9060, "UDP port to host on / join");
         MaxPlayers = Config.Bind("Network", "MaxPlayers", 16, "Players including the host (also the Steam lobby size)");
@@ -82,6 +83,7 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         var harmony = new Harmony("spike.embervilleghost");
         SaveIsolation.Init(Config);
         harmony.PatchAll();
+        ChestSync.HookBetterChests(harmony);   // X at a chest (Better Chests mod), if installed
         lan = new LiteNetTransport(this);
         steam = new SteamTransport(this);
         SteamLobby.Plugin = this;
@@ -99,6 +101,13 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         GroundSync.Plugin = this;
         InteractSync.Plugin = this;
         CutsceneSync.Plugin = this;
+        Diag.Plugin = this;
+        DesyncCheck.Plugin = this;
+        Dungeon.Plugin = this;
+        MiniBoss.Plugin = this;
+        Arena.Init();
+        Delve.Plugin = this;
+        Dungeon.Init();
         StorySync.Plugin = this;
         TeamBuffs.Plugin = this;
         Pings.Plugin = this;
@@ -126,6 +135,10 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         DemoEnd.Bind(Config);
         Magnet.Bind(Config);
         MouseWalk.Bind(Config);
+        Diag.Bind(Config);
+        DesyncCheck.Bind(Config);
+        Delve.Bind(Config);
+        BowAssist.Bind(Config);
         Pet.Plugin = this;
         TeamHud.Plugin = this;
         MapMates.Plugin = this;
@@ -134,7 +147,7 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         ImGuiUnity.OnRender += Hud.Draw;
         try { ImGuiUnity.Init(Config, System.IO.Path.GetDirectoryName(Info.Location)); }
         catch (Exception e) { Log.LogError($"ImGui init failed, no menu/HUD: {e}"); }
-        NetLog.Info($"{Title} loaded. F8 host, F9 join, F10 disconnect, Insert = menu, Delete = status line.", toast: true);
+        NetLog.Info($"{Title} loaded. F9 host, F10 join / disconnect, Insert = menu, Delete = status line.", toast: true);
     }
 
     void LateUpdate()
@@ -160,9 +173,8 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         var kb = Keyboard.current;
         if (kb != null && Application.isFocused)
         {
-            if (kb.f8Key.wasPressedThisFrame) HostWindow.Show();   // pick the session rules, then HOST NOW
-            if (kb.f9Key.wasPressedThisFrame) Join();
-            if (kb.f10Key.wasPressedThisFrame) Stop();
+            if (kb.f9Key.wasPressedThisFrame) HostWindow.Show();   // pick the session rules, then HOST NOW
+            if (kb.f10Key.wasPressedThisFrame) { if (Connected) Stop(); else Join(); }   // join, or leave when connected
             if (kb.deleteKey.wasPressedThisFrame && !ImGuiUnity.Typing && !Chat.IsOpen) Hud.ShowStatus.Value = !Hud.ShowStatus.Value;   // the status line top-left
         }
 
@@ -173,11 +185,16 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         GroundSync.Tick();
         Magnet.Tick();
         MouseWalk.Tick();
+        Diag.Tick();
+        DesyncCheck.Tick();
+        Delve.Tick();   // the descent: entrance pad, stronger creatures on deeper floors
+        MiniBoss.Tick();   // our mini-bosses: health, colour, the boss bar, loot
+        Arena.Tick();
+        Rory.Tick();
         SteamLobby.Tick();
         CheckLeftWorld();
         DevMode.Tick();
         Pings.Tick();
-        ChestSync.QuickTick();   // X at a chest: put in what it already has
         OnlinePlayers.Tick();
         Trade.Tick();
         TeamHud.Tick();   // right-click a party card: teleport / trade / mute
@@ -365,7 +382,7 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         menuCheck = 0f;
         IsHost = false;
         MyId = -1;
-        Status = "idle (F8 host, F9 join)";
+        Status = "idle (F9 host, F10 join)";
     }
 
     void ForgetEveryone()
@@ -1103,6 +1120,10 @@ public class Plugin : BaseUnityPlugin, ITransportListener
             case MsgType.SoilState: FarmSync.OnState(reader); break;   // farm plots: whoever farms sends the plot
             case MsgType.PlaceChange: PlaceSync.OnChange(reader); break;   // building: whoever builds sends it
             case MsgType.GroundPress: GroundSync.OnPress(reader, from); break;
+            case MsgType.LogBatch: if (IsHost) Diag.OnBatch(reader, from); break;   // diagnostics: everyone's lines in one log
+            case MsgType.StateDigest: DesyncCheck.OnDigest(reader, from); break;   // diagnostics: the mismatch checker
+            case MsgType.DungeonOpen: Dungeon.OnOpen(reader, from); break;
+            case MsgType.BossLook: MiniBoss.OnLook(reader); break;   // a mini-boss's size, colour, name, toughness   // generated dungeons: someone went in, the others may join
             case MsgType.CutsceneStart: CutsceneSync.OnStart(reader, from); break;   // story cutscenes: everyone in the area watches
             case MsgType.CutsceneSnapshot: if (!owner) CutsceneSync.OnSnapshot(reader); break;   // story cutscenes: everyone in the area watches
             case MsgType.ItemUnlocked: InteractSync.OnItemUnlocked(reader); break;   // key altars: whoever has the item opens it for all
@@ -1264,6 +1285,10 @@ internal enum MsgType : byte
     ItemUnlocked = 123, // user -> their place, reliable: item lock (ItemRequester) id; it opens on every copy
     Repaired = 124,     // repairer -> their place, reliable: kind (building / portal), id
     InteractSnapshot = 125, // area owner -> arriving player: repaired buildings, portals, opened item locks
+    LogBatch = 128,     // client -> host, reliable: dropped count, lines (kind, text) for the host's session log
+    StateDigest = 129,  // player -> area owner, every 3 s: scene, area, (category, id, value) of what their game sees
+    BossLook = 131,     // boss spawner -> their place, reliable: creature id, name, base, tint rgb, scale, health x, damage x
+    DungeonOpen = 130,  // player -> everyone (ToAll), reliable: scene, dungeon settings name, seed, region (they went into a generated dungeon)
     CutsceneSnapshot = 127, // area owner -> arriving player: cutscenes already played here (index, id), skipped to their end
     CutsceneStart = 126, // whoever set it off -> their place, reliable: entry index, cutscene id; everyone there plays it
     GroundPress = 122, // anyone -> their place, reliable: floor button id, down (repeated every 2 s while standing on it)

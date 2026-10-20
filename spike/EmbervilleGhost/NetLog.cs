@@ -32,6 +32,7 @@ public static class NetLog
             default: Plugin.Log.LogInfo(text); break;
         }
 
+        Diag.Capture(kind, text);   // the host's session log
         if (toast) Toasts.Show(kind, text);
     }
 

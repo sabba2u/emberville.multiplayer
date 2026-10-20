@@ -8,6 +8,8 @@
 !/spike/
 /spike/*
 !/spike/EmbervilleGhost/
+!/spike/EmbervilleFavorites/
+!/spike/BetterChests/
 !/spike/libs/
 
 /spike/libs/*

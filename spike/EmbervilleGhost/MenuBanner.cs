@@ -7,7 +7,7 @@ namespace EmbervilleGhost;
 
 /// <summary>
 /// A note on the game's title screen, between the Emberville logo and PLAY: clients should join from here (F9), the
-/// host loads its world first (F8). While connected it says what's going on instead. Only on the main screen of the
+/// host loads its world first (F9). While connected it says what's going on instead. Only on the main screen of the
 /// main menu (MainMenuManager.state == MainScreen), not in character / world selection or the options.
 /// </summary>
 internal static class MenuBanner
@@ -38,8 +38,8 @@ internal static class MenuBanner
         else
         {
             title = "MULTIPLAYER";
-            line1 = "Joining as a client? Press F9 here, on this main menu.";
-            line2 = "Hosting? Load your world first, then press F8.";
+            line1 = "Joining as a client? Press F10 here, on this main menu.";
+            line2 = "Hosting? Load your world first, then press F9.";
             if (SteamBoot.Ready) line3 = "You can also join via the Steam Friends list (Join Game, or accept an invite).";
         }
 

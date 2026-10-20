@@ -5,7 +5,7 @@ namespace EmbervilleGhost;
 
 /// <summary>
 /// Steam lobby + invites, as the Emberville demo (SteamBoot), from our Duckov mod:
-///  - Host (F8 window > HOST VIA STEAM): a friends-only lobby whose owner is the host's Steam ID; rich presence
+///  - Host (F9 window > HOST VIA STEAM): a friends-only lobby whose owner is the host's Steam ID; rich presence
 ///    "connect" so friends see "Join Game" on us in their friends list; "Invite friends" opens the Steam overlay's
 ///    invite dialog (the overlay needs the game started from Steam).
 ///  - Joining: accepting an invite or "Join Game" while the game runs (GameLobbyJoinRequested_t,
@@ -70,7 +70,7 @@ internal static class SteamLobby
         // Friends list "Join Game": Steam launches / tells the game with this connect string.
         SteamFriends.SetRichPresence("connect", $"+connect_lobby {Lobby.m_SteamID}");
         SteamFriends.SetRichPresence("status", "Hosting Emberville co-op");
-        NetLog.Success("Steam lobby ready: invite friends (F8 window or Insert menu), or they Join Game from your friends list", toast: true);
+        NetLog.Success("Steam lobby ready: invite friends (F9 window or Insert menu), or they Join Game from your friends list", toast: true);
         Plugin.SteamHostReady();
     }
 

@@ -55,12 +55,42 @@ internal class RemoteAvatar
         for (int i = 0; i < sprites.Length; i++) if (sprites[i]) sprites[i].color = spriteColors[i];
     }
 
+    GameObject bubble;
+    TMPro.TextMeshProUGUI bubbleText;
+    string bubbleShown;
+
+    /// <summary>Has the game's own speech bubble (else the HUD draws one).</summary>
+    public bool HasBubble => bubble && bubbleText;
+
+    /// <summary>The game's speech bubble over them: this text, or hidden (null). Sized the way TextBox.Show does it.</summary>
+    public void SetBubble(string text)
+    {
+        if (!HasBubble || text == bubbleShown) return;
+        bubbleShown = text;
+        if (text == null) { bubble.SetActive(false); return; }
+        bubbleText.text = text;
+        bubble.SetActive(true);
+        // TextBox.Show rebuilds its content size fitters (innermost first) so the box fits the new text.
+        var fitted = new List<RectTransform>();
+        foreach (var f in bubble.GetComponentsInChildren<UnityEngine.UI.ContentSizeFitter>(true)) fitted.Add((RectTransform)f.transform);
+        foreach (var g in bubble.GetComponentsInChildren<UnityEngine.UI.LayoutGroup>(true)) fitted.Add((RectTransform)g.transform);
+        fitted.Sort((a, b) => Depth(b).CompareTo(Depth(a)));
+        foreach (var rt in fitted) UnityEngine.UI.LayoutRebuilder.ForceRebuildLayoutImmediate(rt);
+    }
+
+    static int Depth(Transform t) { int d = 0; for (; t; t = t.parent) d++; return d; }
+
     public static RemoteAvatar Create(PlayerMaster template, int playerId)
     {
         var holder = new GameObject("EmbervilleGhost_holder");
         holder.SetActive(false);
         GameObject copy;
         Collider2D[] keep;
+        // The game's own speech bubble over the player (PlayerTextReaction's TextBox: "I can't repair this yet"):
+        // where it and its text sit, so the copy's (its art stays, only the scripts go) can talk for them.
+        var reaction = template.GetComponentInChildren<PlayerTextReaction>(true);
+        string bubblePath = reaction && reaction.textBox ? PathFrom(template.transform, reaction.textBox.transform) : null;
+        string bubbleTextPath = reaction && reaction.textBox && reaction.textBox.text ? PathFrom(template.transform, reaction.textBox.text.transform) : null;
         try
         {
             copy = UnityEngine.Object.Instantiate(template.gameObject, holder.transform);
@@ -78,6 +108,14 @@ internal class RemoteAvatar
         }
 
         var avatar = new RemoteAvatar { Root = copy };
+        var bubble = bubblePath == null ? null : bubblePath.Length == 0 ? copy.transform : copy.transform.Find(bubblePath);
+        var bubbleText = bubbleTextPath == null ? null : copy.transform.Find(bubbleTextPath);
+        if (bubble && bubble != copy.transform && bubbleText && bubbleText.GetComponent<TMPro.TextMeshProUGUI>() is TMPro.TextMeshProUGUI tmp)
+        {
+            avatar.bubble = bubble.gameObject;
+            avatar.bubbleText = tmp;
+            avatar.bubble.SetActive(false);
+        }
         if (keep != null && keep.Length > 0)
         {
             foreach (var c in keep) if (c) c.isTrigger = true;   // hittable, but nothing bumps into it

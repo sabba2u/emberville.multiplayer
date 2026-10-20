@@ -414,6 +414,19 @@ Today: IP only (LAN, or internet by IP with the host forwarding UDP 9060). Plan:
         eat the rare cake), a short note in chat when it fires ("Auto potion: Small Health Potion, +30").
       - Never while dead, in cutscenes / dialogue, or when the hit is from our own PvP opt-out. Purely local, nothing to
         sync (the heal shows to others through PlayerFeel's "+N" and the health bar).
+- [ ] **FUTURE (full game): loot distributor pad, like Abiotic Factor** (asked 2026-10-20). Abiotic Factor has a
+      device you stand on that sends everything in your bag to every storage chest that already holds that item:
+      it checks all the chests and the items visibly fly into them. Wait for the full game, when we build our own
+      chests (placed storage on the estate). Plan, building on Better Chests' X (`QuickStack.StackInto`, the
+      chest screen's own "send common" without the screen):
+      - A placeable pad (or a Better Chests block) in the base; standing on it (or F on it) runs the deposit into
+        every chest within range / in the base, nearest first, one chest at a time.
+      - Each moved stack flies from the player to its chest (a sprite copy on a short arc, staggered), then the
+        game's "Stored X (n)" lines, maybe a summary per chest.
+      - Rules: only stackables a chest already holds (like X); never equipped gear, the belt, key items; optional
+        "fill empty chests by category" later. Respect locks (a chest someone has open is skipped).
+      - Multiplayer: one deposit per chest through the multiplayer mod's chest sync (the area owner's real contents,
+        everyone sees the new contents), same as X today.
 - [ ] **Team buffs** (asked during online play with Rory, 2026-10-19: "was I affected by his Swift Foot buff?" No.)
       The game is single-player at heart: no allies/party anywhere in its code, so buffs like Swift Foot (toggled
       movement buff) only ever touch the caster, and the mod doesn't sync buffs/status effects at all yet (a remote

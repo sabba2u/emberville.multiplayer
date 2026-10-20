@@ -7,7 +7,7 @@ using LiteNetLib.Utils;
 namespace EmbervilleGhost;
 
 /// <summary>
-/// The host's rules for the session, picked in the host window (F8) and sent to everyone (SessionSettings: on joining
+/// The host's rules for the session, picked in the host window (F9) and sent to everyone (SessionSettings: on joining
 /// and whenever the host changes them in the Insert menu). Defaults come from the config file.
 ///  - Shared XP: everyone in the area gets the XP of a kill (EnemySync.ShareKillXp). Default on.
 ///  - Instanced loot: weapons, armour and gear that drop are there once for EVERY player (each can take their own copy,
@@ -87,7 +87,7 @@ internal static class Session
     }
 }
 
-/// <summary>The window F8 opens: port, the session rules, and "Host now".</summary>
+/// <summary>The window F9 opens: port, the session rules, and "Host now".</summary>
 internal static class HostWindow
 {
     public static Plugin Plugin;

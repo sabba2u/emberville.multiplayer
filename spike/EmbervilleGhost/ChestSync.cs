@@ -538,91 +538,68 @@ internal static class ChestSync
         });
     }
 
-    // ---- X: put what the chest already has into it ----
+    // ---- X at a chest: the Better Chests mod, in a session ----
     //
-    // Walk up to a chest (it shows its arrow) and press X: every stackable item in your bag that the chest already
-    // holds goes in, onto its stacks and then into free slots while there's room. That's the chest screen's own
-    // "send common" button (Inventory.SendCommonToChest), run without opening the screen: the chest's items join the
-    // inventory as its chest section (as opening does), the button runs, and taking the section out again writes the
-    // chest back (as closing does). In a session it's an open + close as far as everyone else is concerned: the owner's
-    // real contents and lock for a puppet (ChestOpen -> ChestContents -> ChestClose), the new contents to everyone.
+    // Better Chests (BetterChests.QuickStack, a separate mod) does "X at a chest: put in what it already holds" on this
+    // copy's contents. In a session that has to be an open + close as far as everyone else is concerned, so when it's
+    // installed we patch its Run: a puppet asks the owner for the real contents and lock first (ChestOpen ->
+    // ChestContents, then its StackInto, then ChestClose); the owner checks nobody else has the chest open, lets it run,
+    // and sends the new contents to everyone.
 
     static uint quickPending;   // puppet: asked the owner for this chest to quick-stack into
+    static System.Reflection.MethodInfo betterStackInto;
 
-    public static void QuickTick()
+    /// <summary>From Plugin.Awake: hook Better Chests if it's installed (it loads first: soft dependency).</summary>
+    public static void HookBetterChests(Harmony harmony)
     {
-        var kb = UnityEngine.InputSystem.Keyboard.current;
-        if (kb == null || !kb.xKey.wasPressedThisFrame || !Application.isFocused) return;
-        if (Chat.IsOpen || ImGuiUnity.IsOpen || ImGuiUnity.Typing || PlayerStatusUtil.LocalBusy) return;
-        var me = LocalPlayer.Get();
-        if (!me) return;
-        var handler = me.GetComponentInChildren<InteractablesHandler>();
-        if (!handler || !(handler.CurrentTarget is Chest chest) || chest.isOpened) return;
-        QuickStack(chest);
+        var type = AccessTools.TypeByName("BetterChests.QuickStack");
+        var run = type != null ? AccessTools.Method(type, "Run", new[] { typeof(Chest) }) : null;
+        betterStackInto = type != null ? AccessTools.Method(type, "StackInto", new[] { typeof(Chest) }) : null;
+        if (run == null || betterStackInto == null) return;
+        harmony.Patch(run, prefix: new HarmonyMethod(typeof(ChestSync), nameof(BeforeQuickStack)),
+                           postfix: new HarmonyMethod(typeof(ChestSync), nameof(AfterQuickStack)));
+        NetLog.Info("Better Chests found: X at a chest works in multiplayer");
     }
 
-    static void QuickStack(Chest chest)
+    static bool BeforeQuickStack(Chest chest, ref int __result, out bool __state)
     {
+        __state = false;
         bool connected = Plugin != null && Plugin.Connected && Plugin.MyId >= 0;
+        if (!connected || !chest) return true;
         uint id = IdOf(chest);
-        if (connected && Puppet)
+        if (Puppet)
         {
-            if (quickPending != 0 || pending != 0) return;
+            __result = 0;
+            if (quickPending != 0 || pending != 0) return false;
             quickPending = id;
             var w = new NetDataWriter();
             w.Put((byte)MsgType.ChestOpen); w.Put(id);
             Plugin.SendToOwner(w, DeliveryMethod.ReliableOrdered);
-            return;
+            return false;
         }
-        if (connected && lockedBy.TryGetValue(id, out int who) && who != Plugin.MyId)
+        if (lockedBy.TryGetValue(id, out int who) && who != Plugin.MyId)
         {
             NetLog.Warn($"{Plugin.NameOf(who)} is using that chest");
-            return;
+            __result = 0;
+            return false;
         }
-        if (StackInto(chest) == 0 || !connected) return;
+        __state = true;
+        return true;
+    }
+
+    static void AfterQuickStack(Chest chest, int __result, bool __state)
+    {
+        if (!__state || __result == 0) return;
+        uint id = IdOf(chest);
         Touch(id);
         if (Plugin.AnyoneElseHere) Plugin.SendToPlace(StateMessage(id, chest), DeliveryMethod.ReliableOrdered);
         if (chest.shareContent != ChestShare.None && !string.IsNullOrEmpty(chest.ID)) BroadcastShared(chest.ID);
     }
 
-    /// <summary>The chest screen's "send common" on this chest's list, without the screen. Returns how many items went in.</summary>
-    static int StackInto(Chest chest)
+    /// <summary>Better Chests' deposit on this copy's contents (for a puppet, once the owner's contents are here).</summary>
+    static void StackInto(Chest chest)
     {
-        var list = Singleton<ChestManager>.main.GetChestItems(chest.ID);
-        if (list == null) { NetLog.Warn("That chest isn't ready yet: open it once first"); return 0; }
-        var inv = Singleton<Inventory>.main;
-        var before = BagByItem(inv);
-        inv.AddSectionItems(list);
-        try { inv.SendCommonToChest(); }
-        finally { inv.RemoveSectionItems(InventorySection.Chest); }   // writes the chest section back into its list
-        var after = BagByItem(inv);
-
-        // Each item that went in, in the game's notification list on the right ("Stored Carrot (12)").
-        int moved = 0;
-        foreach (var pair in before)
-        {
-            after.TryGetValue(pair.Key, out var now);
-            int gone = pair.Value.count - now.count;
-            if (gone <= 0) continue;
-            moved += gone;
-            var data = pair.Value.data;
-            GameUi.Notify("EG_stored_" + pair.Key, data.itemIconUI, "Stored " + GameUi.ItemName(data), gone);
-        }
-        if (moved == 0) NetLog.Info("Nothing in your bag that this chest already has", toast: true);
-        return moved;
-    }
-
-    /// <summary>How many of each item (by address key) are in the bag.</summary>
-    static Dictionary<string, (ItemData data, int count)> BagByItem(Inventory inv)
-    {
-        var counts = new Dictionary<string, (ItemData, int)>();
-        foreach (var it in inv.allItems)
-        {
-            if (it.section != InventorySection.Main || it.itemObject?.data == null) continue;
-            string key = it.itemObject.data.addressKey ?? it.itemObject.data.name;
-            counts.TryGetValue(key, out var c);
-            counts[key] = (it.itemObject.data, c.Item2 + it.itemObject.amount);
-        }
-        return counts;
+        try { betterStackInto?.Invoke(null, new object[] { chest }); }
+        catch (System.Exception e) { NetLog.Warn($"Better Chests: {e.InnerException?.Message ?? e.Message}"); }
     }
 }

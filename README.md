@@ -4,13 +4,11 @@ Unofficial co-op for **Emberville** (the demo; Unity 6, Mono) as a BepInEx 5 plu
 Work in progress. Player downloads are on the [Releases](../../releases) page; notes and the roadmap are in
 [`todo.md`](todo.md) (top section: "Emberville").
 
-> Everything below "v0.1.3" is built but not tested in a real session yet; it ships as v0.1.3 once it has been.
-
 ## What works
-- **Steam:** host with F8 > **HOST VIA STEAM**: friends join from their Steam friends list (Join Game) or an invite
+- **Steam:** host with F9 > **HOST VIA STEAM**: friends join from their Steam friends list (Join Game) or an invite
   (Insert menu > Invite friends); no IP addresses, no port forwarding (Steam's relay). The mod brings Steamworks.NET
   and `steam_api64.dll` itself (the demo has no Steam code) and runs as the demo (app 5355880).
-- **Connecting by IP:** host with F8 (shared XP, instanced loot, PvP, shared buffs), join with F9 by IP. The joiner downloads
+- **Connecting by IP:** host with F9 (shared XP, instanced loot, PvP, shared buffs), join with F10 by IP. The joiner downloads
   the host's world and brings their own character. If the host leaves, the player who joined first takes over hosting
   where they stand and the others reconnect to them.
 - **Other players** as real characters: looks, gear, animations, name, health and Kymia bars, what they're doing
@@ -29,16 +27,35 @@ Work in progress. Player downloads are on the [Releases](../../releases) page; n
   dupe-proof), chests that stations and farming pull from, farm plots, building and removing on the estate.
 - **Chat** (Enter), death announcements, pings and drawing on the ground (middle mouse).
 
+## Companion mods (separate DLLs, each works alone or next to this one)
+- **Better Chests** (`spike/BetterChests`): walk up to a chest and press **X** to put in everything it already holds.
+  With this mod installed, X works in co-op too (the area owner's chest, locks, everyone sees the new contents).
+- **Emberville Favourite Weapons** (`spike/EmbervilleFavorites`): hover a weapon in the inventory and press **F5-F8**
+  to put it on that key; F5-F8, a click on the bar above the belt, or the weapon wheel (hold Left Alt / gamepad LT) wield it. The bar is made of the game's own HUD
+  slots, and hovering a slot shows the game's tooltip with the compare against the weapon in hand.
+
+## The descent and the boss arena (new in v0.1.6)
+- **The descent:** the full game's dungeon generator ships in the demo (its rooms, biomes and caves) without the scene
+  it plays in; the mod builds the levels itself. Two glowing pads stand outside the starting area's door, with
+  **Rory** (an archer; walk up and talk to him). The ember pad opens the setup: seed (a number or a word: same seed,
+  same floors), how many floors (or endless), how much stronger each floor's creatures get (health and damage, 100-400%
+  a floor, compounding; presets up to 200% / 300%), and the most creatures on a floor. Each floor has chests (loot from
+  the game's own items, better deeper down), the stairs down at the far end, a mini-boss guarding them every 5th floor,
+  and a blue pad (or the Leave button at the top) back to where you came in. Co-op: everyone gets the same floors;
+  the others can follow you down from the Insert menu.
+- **Boss arena** (the purple pad): a walled floor with six pillars, spike traps and arrow shooters, and a panel to make
+  mini-bosses from the game's creatures (name, colour, size, health, damage). **Boss rush**: 30 bosses one after
+  another, tougher each wave; the spikes join at wave 5, the arrows at wave 10. Loot left on the floor goes when you leave.
+- **Bow lock-on:** arrows from a bow / crossbow curve onto the creature nearest your aim (`/bowlock` turns it off).
+- **Tools:** `/uidump` (or the Insert menu) writes the game's on-screen UI and its sprites to `BepInEx/UIDumps`;
+  diagnostics: a session log on the host (`BepInEx/SessionLogs`) and a mismatch checker between players.
+
 ## Quality of life
 - **Mouse walking:** hold the mouse side (thumb) button and your character walks toward the mouse (closer = slower,
   rings show it); a quick click walks to that spot. Walls still block, WASD / pad always win. Insert menu: on / off,
   which button (Back, Forward, or Middle).
 - **Magnet:** Insert menu > Magnet picks up items near you by themselves (range 1-8, per category: materials, food,
   coins, weapons, armour, gear, placeables, key items, other), only what fits in your bag. Off to start with.
-- **X at a chest:** walk up to a chest (its arrow shows) and press X: everything in your bag that the chest already
-  holds goes in (onto its stacks, then free slots while there's room), and each item shows in the game's list on the
-  right ("Stored Carrot (12)"). It's the chest screen's own "send common" button without opening the screen, and works
-  in multiplayer like a normal open + close.
 - **Online Players screen (O):** who's connected, where, health, ping, what they're doing; mute anyone (just for you);
   trade; the host can kick and ban (a second click confirms; bans follow a player ID, not the name; unban list).
 - **Sleep vote:** the demo has no beds, so everyone types `/sleep` and the clock skips to 6:00 the next morning.
@@ -95,17 +112,23 @@ Pets start **off**: `/pet on` (or the Insert menu checkbox) turns them on. Then 
 | `/devmode` | the game's hidden developer tools on / off |
 | `/devpanel` | open the developer panel (no numpad needed) |
 | `/arena` | teleport to this scene's test arena |
+| `/dungeon` | into a generated dungeon (the world map's), or back out |
+| `/bowlock` | bow / crossbow lock-on on / off (on to start with) |
+| `/nodeath` | testing: take no damage |
+| `/onehitkill` | testing: your hits do 500 damage |
+| `/uidump` | write the game's on-screen UI and sprites to `BepInEx/UIDumps` |
 
 | Key | Mod | | Key | Game (left alone) |
 |---|---|---|---|---|
-| F8 / F9 / F10 | host (IP or Steam) / join / disconnect | | Tab | inventory + character |
+| F9 / F10 | host (IP or Steam) / join (again: disconnect) | | Tab | inventory + character |
 | Insert | mod menu | | I / C / P / K / J | inventory, character, classes, masteries, quests |
 | Delete | status line (top left) on / off | | | |
 | Mouse side button | hold: walk toward the mouse; click: walk there | | | |
 | Right-click a party card | teleport / trade / mute | | | |
 | Enter | chat | | M | world map |
 | O | Online Players | | F | interact / pick up |
-| X | put matching items into the chest in front of you | | Q E R T | quick-bar items |
+| X | (Better Chests) put matching items into the chest | | Q E R T | quick-bar items |
+| F5-F8, Left Alt | (Favourite Weapons) wield a favourite, weapon wheel | | | |
 | Middle mouse | ping (click), draw (hold and drag) | | Space / Shift / Ctrl | dodge / show names / walk |
 
 ## Secrets: the dev panel, test arenas and the estate

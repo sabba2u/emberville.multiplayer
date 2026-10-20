@@ -192,13 +192,30 @@ internal static class Hud
     /// A speech bubble over their head (above the health bar): "..." while they're typing, then what they said for a
     /// few seconds.
     /// </summary>
+    /// <summary>What their bubble says now: "..." while they type, their line for as long as the game would show it, or null.</summary>
+    static string BubbleText(RemotePlayer p)
+    {
+        if (p.Status == PlayerStatus.Chatting) return "...";
+        if (string.IsNullOrEmpty(p.Said)) return null;
+        // PlayerTextReaction's read time (0.34 s a word, up to 6 s), at least 3 s for a chat line.
+        int words = p.Said.Split(new[] { ' ' }, System.StringSplitOptions.RemoveEmptyEntries).Length;
+        float seconds = UnityEngine.Mathf.Clamp(words * 0.34f, 3f, SaidSeconds);
+        if (UnityEngine.Time.unscaledTime - p.SaidAt >= seconds) return null;
+        return p.Said.Length > 80 ? p.Said.Substring(0, 77) + "..." : p.Said;
+    }
+
+    /// <summary>Every frame for everyone (even with the HUD hidden): the game's own bubble over their character.</summary>
+    static void UpdateGameBubbles()
+    {
+        foreach (var p in Plugin.Players)
+            if (p.Avatar != null && p.Avatar.HasBubble) p.Avatar.SetBubble(p.Avatar.Visible ? BubbleText(p) : null);
+    }
+
     static void DrawBubble(UnityEngine.Camera cam, RemotePlayer p)
     {
-        string text;
-        if (p.Status == PlayerStatus.Chatting) text = "...";
-        else if (!string.IsNullOrEmpty(p.Said) && UnityEngine.Time.unscaledTime - p.SaidAt < SaidSeconds)
-            text = p.Said.Length > 60 ? p.Said.Substring(0, 57) + "..." : p.Said;
-        else return;
+        if (p.Avatar.HasBubble) return;   // the game's own bubble does it (UpdateGameBubbles)
+        string text = BubbleText(p);
+        if (text == null) return;
 
         var head = cam.WorldToScreenPoint(p.Avatar.HeadPosition);
         float x = head.x, bottom = UnityEngine.Screen.height - head.y - 6f;   // just above the health bar
@@ -252,12 +269,16 @@ internal static class Hud
         }
 
         // Menus, the journal, dialogue, cutscenes: the game covers the world, so no name tags / labels on top of it.
-        if (!PlayerStatusUtil.LocalBusy) { DrawTeammates(); Pet.DrawLabels(); Pings.Draw(); TeamHud.Draw(); }
+        UpdateGameBubbles();
+        if (!PlayerStatusUtil.LocalBusy) { DrawTeammates(); Pet.DrawLabels(); Pings.Draw(); TeamHud.Draw(); Delve.Draw(); Rory.Draw(); }
         MouseWalk.Draw();
         MapMates.Draw();   // the world map is a menu: not hidden with the rest
         Chat.Draw();
         MenuBanner.Draw();
         JoinWindow.Draw();
+        Delve.DrawSetup();   // the descent's setup box (clickable)
+        NoDeath.Draw();
+        Arena.Draw();        // the boss arena's panel
         HostWindow.Draw();
         OnlinePlayers.Draw();
         Trade.Draw();

@@ -139,7 +139,7 @@ internal static class ImGuiUnity
     static void FeedInput(ImGuiIOPtr io, Keyboard kb)
     {
         var mouse = Mouse.current;
-        if (!(IsOpen || JoinWindow.Visible || HostWindow.Visible || OnlinePlayers.Visible || Trade.Visible || TeamHud.WantsMouse) || mouse == null)   // those windows are clickable without the menu
+        if (!(IsOpen || JoinWindow.Visible || HostWindow.Visible || OnlinePlayers.Visible || Trade.Visible || TeamHud.WantsMouse || Delve.SetupOpen || Arena.WantsMouse) || mouse == null)   // those windows are clickable without the menu
         {
             // HUD only: no hover, no clicks.
             io.AddMousePosEvent(-float.MaxValue, -float.MaxValue);

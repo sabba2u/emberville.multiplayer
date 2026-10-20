@@ -57,9 +57,9 @@ internal static class DebugPanel
             ImGui.TextDisabled(SteamLobby.InLobby ? "(in a Steam lobby)" : "(friends join from their Steam friends list)");
         }
         else ImGui.TextDisabled("Steam isn't running: IP joining only");
-        if (ImGui.Button("Host LAN (F8)")) HostWindow.Show();
+        if (ImGui.Button("Host LAN (F9)")) HostWindow.Show();
         ImGui.SameLine();
-        if (ImGui.Button("Join LAN (F9)")) plugin.Join();
+        if (ImGui.Button("Join LAN (F10)")) plugin.Join();
         ImGui.SameLine();
         if (ImGui.Button("Disconnect (F10)")) plugin.Stop();
         ImGui.SameLine();
@@ -69,6 +69,16 @@ internal static class DebugPanel
         if (SeedTest.Result.Length > 0) { ImGui.SameLine(); ImGui.TextWrapped(SeedTest.Result); }
         Session.DrawSettings();
         DrawEstate(plugin);
+        Dungeon.DrawMenu();
+        if (plugin.Connected)
+        {
+            ImGui.Separator();
+            int bad = DesyncCheck.MismatchCount;
+            if (bad > 0) ImGui.TextColored(new Vector4(1f, 0.6f, 0.3f, 1f), $"Mismatches right now: {bad} (details in the log)");
+            else if (plugin.IOwnHere) ImGui.TextDisabled("Mismatch checker: everyone here agrees with your game");
+            else ImGui.TextDisabled($"Mismatch checker: {plugin.NameOf(plugin.OwnerHere)} compares your game with theirs");
+            if (Diag.FilePath != null) ImGui.TextDisabled($"Session log: {Diag.FilePath}");
+        }
         MouseWalk.DrawMenu();
         Magnet.DrawMenu();
         Pet.DrawMenu();
@@ -118,6 +128,9 @@ internal static class DebugPanel
             if (ImGui.SmallButton("Open dev panel")) DevMode.TogglePanel();
             ImGui.TextDisabled("    Ctrl+Shift+Numpad7: dev panel, Numpad1: test arenas; Ctrl+Shift + Numpad+ XP, Numpad- hurt yourself");
         }
+        if (ImGui.SmallButton("Dump game UI")) UiDump.Dump();
+        ImGui.SameLine();
+        ImGui.TextDisabled("what's on screen now (also /uidump) -> BepInEx/UIDumps");
 
         // Test arenas in this scene (the dev panel's own button loads a scene the demo doesn't ship).
         if (LocalPlayer.Get())

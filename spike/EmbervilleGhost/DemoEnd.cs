@@ -68,4 +68,18 @@ internal static class DemoEnd
             return false;
         }
     }
+
+    /// <summary>The ending's timers (TimedTrigger, waiting for the game to start) never start: removing the ending
+    /// later would cancel them mid-wait, and the game logs that as an OperationCanceledException.</summary>
+    [HarmonyPatch(typeof(TimedTrigger), nameof(TimedTrigger.Trigger))]
+    static class SkipEndingTimers
+    {
+        static bool Prefix(TimedTrigger __instance)
+        {
+            if (!On) return true;
+            for (var t = __instance.transform; t; t = t.parent)
+                if (System.Array.IndexOf(Endings, t.name) >= 0) return false;
+            return true;
+        }
+    }
 }

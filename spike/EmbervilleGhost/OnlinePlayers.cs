@@ -117,7 +117,7 @@ internal static class OnlinePlayers
             return;
         }
 
-        if (!Plugin.Connected) ImGui.TextDisabled("Not connected. F8 hosts, F9 joins.");
+        if (!Plugin.Connected) ImGui.TextDisabled("Not connected. F9 hosts, F10 joins.");
         else
         {
             bool host = Plugin.IsHost;
