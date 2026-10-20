@@ -1,7 +1,7 @@
 # emberville.multiplayer
 
 Unofficial co-op for **Emberville** (the demo; Unity 6, Mono) as a BepInEx 5 plugin: `spike/EmbervilleGhost`.
-Work in progress. Player downloads are on the [Releases](../../releases) page; notes and the roadmap are in
+Work in progress. Player downloads are on the [Releases](../../releases) page (**EmbervilleModPack** has everything in one zip); notes and the roadmap are in
 [`todo.md`](todo.md) (top section: "Emberville").
 
 ## What works
@@ -160,6 +160,8 @@ The build references the game's own DLLs from `<GamePath>/Emberville_Data/Manage
 plugin into `<GamePath>/BepInEx/plugins/EmbervilleGhost`. Default `GamePath` is in `EmbervilleGhost.csproj`.
 
 ## Release zip (for players)
+`pwsh spike/package-all.ps1` makes the all-in-one download, `spike/dist/EmbervilleModPack-v<version>.zip`: BepInEx,
+the multiplayer mod, Favourite Weapons and Better Chests together (each mod's own `package.ps1` makes its zip on its own).
 ```
 pwsh spike/EmbervilleGhost/package.ps1 [-GamePath "<path to Emberville Demo>"]
 ```
