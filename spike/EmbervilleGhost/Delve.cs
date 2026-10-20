@@ -568,10 +568,15 @@ internal static class Delve
     static readonly string[] SprawlNames = { "the game's own layouts", "branching", "sprawling", "a web", "a maze" };
     static float healthEdit, damageEdit;
 
+    static bool seedRolled;   // this game session
+
     static void OpenSetup(bool startAfter = true)
     {
         Delve.startAfter = startAfter;
-        seedText = seed.Value != 0 ? seed.Value.ToString() : new System.Random().Next(1, int.MaxValue).ToString();
+        // a fresh seed the first time the box opens after starting the game (new floors each session); after that, the
+        // seed you last used (type one in, or "Continue at floor N" in the Insert menu, to replay a run)
+        if (!seedRolled || seed.Value == 0) { seedRolled = true; seedText = new System.Random().Next(1, int.MaxValue).ToString(); }
+        else seedText = seed.Value.ToString();
         floorsEdit = floors.Value; maxEdit = maxEnemies.Value;
         sprawlEdit = sprawl.Value; growsEdit = sprawlGrows.Value; bigEdit = bigFloors.Value;
         healthEdit = healthGrowth.Value * 100f; damageEdit = damageGrowth.Value * 100f;

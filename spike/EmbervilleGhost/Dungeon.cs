@@ -210,6 +210,7 @@ internal static class Dungeon
             Loading.End();
             if (oldRoot && oldRoot != root) Cleanup(oldRoot);
             SpawnCreatures(biome, where);
+            DebugWalls.Refresh();
             if (where.Floor > 0) Delve.AfterSpawn(where, biome);   // a floor boss every few floors
             status = "";
             if (where.Floor > 0) NetLog.Success($"Floor {where.Floor} ({settings.name}): creatures {Delve.HealthMul(where.Floor):0.##}x health, {Delve.DamageMul(where.Floor):0.##}x damage. Find the stairs down", toast: true);

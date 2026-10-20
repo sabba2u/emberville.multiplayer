@@ -11,6 +11,11 @@ Emberville released 2026-10-19. **Duckov is done**; from now on this repo is abo
 is only what we learned in Duckov: the techniques, the notes in this file, and the reusable code in
 `spike/DuckovGhost` (as a source to copy from, not to keep developing). No more Duckov work.
 
+### Open: descent walkability
+- **Test seed 810581054** (type it in the descent setup box): a big open floor ("Endless Tunnel") with open-looking
+  floor you can't walk on. Debug with `/walls` (red = tiles we made solid from the rooms' Wall / WallCover / Water
+  layers, orange = other colliders near you); fix in `Dungeon.BuildCollision`.
+
 ### What we carry over from Duckov
 - **Code to copy (game-independent):** `Transport.cs` + `SteamTransport.cs` + `SteamLobby.cs` (LiteNetLib or
   Steam relay, lobbies, invites), `SnapshotBuffer.cs` (100 ms smoothing), `ImGuiUnity.cs` (menu drawn inside the

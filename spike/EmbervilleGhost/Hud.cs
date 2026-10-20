@@ -278,6 +278,7 @@ internal static class Hud
         JoinWindow.Draw();
         Delve.DrawSetup();   // the descent's setup box (clickable)
         NoDeath.Draw();
+        DebugWalls.Draw();
         Dungeon.Loading.Draw();   // building a dungeon floor: what it's doing
         Arena.Draw();        // the boss arena's panel
         HostWindow.Draw();
