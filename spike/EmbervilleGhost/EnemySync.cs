@@ -35,6 +35,18 @@ internal static class EnemySync
     const float SendInterval = 0.1f;
     const float AssignInterval = 0.5f;
     const float HandoverMargin = 2f;       // another player must be this much closer to take a creature over
+    // A creature in a fight (attacking, or hit in the last few seconds) stays with its runner, unless they're this far
+    // from it: every handover is a moment where hits and health can go astray, and mid-fight is where it hurts.
+    const float FightSeconds = 3f;
+    const float FightLeash = 10f;
+    static readonly Dictionary<Enemy, float> lastHit = new Dictionary<Enemy, float>();
+
+    static bool InFight(Enemy e, uint id)
+    {
+        if (lastHit.TryGetValue(e, out float t) && Time.unscaledTime - t < FightSeconds) return true;
+        if (RunnerOf(id) == Plugin.MyId) return e.isAttacking;
+        return remote.TryGetValue(id, out var s) && s.Attacking;
+    }
     const float MissingHideSeconds = 3f;   // a creature we don't run and haven't heard about for this long is gone there
 
     static float sendTimer, assignTimer;
@@ -56,6 +68,7 @@ internal static class EnemySync
         public float LastHeard;
         public float DeadSince;   // when its runner first said it's dead
         public bool Immune;       // its runner's copy can't take damage right now (boss phases: the AI sets it)
+        public bool Attacking;    // mid-attack there (keeps it with its runner, InFight)
         public float ImmuneSince;
     }
 
@@ -150,6 +163,7 @@ internal static class EnemySync
                 if (d < bestDist) { bestDist = d; best = pid; }
             }
             if (best == current || bestDist + HandoverMargin >= currentDist) continue;
+            if (currentDist < FightLeash && InFight(e, id)) continue;
             SetRunner(id, best);
             var w = new NetDataWriter();
             w.Put((byte)MsgType.EnemyRunner);
@@ -157,6 +171,24 @@ internal static class EnemySync
             w.Put(best);
             Plugin.SendToPlace(w, DeliveryMethod.ReliableOrdered);
         }
+    }
+
+    /// <summary>
+    /// Area owner: hand this creature to that player now (a boss going after whoever it webbed: its AI only ever
+    /// chases the player of the copy that runs it). Fighting keeps it there (InFight) until the fight moves on.
+    /// </summary>
+    public static void HandTo(Enemy e, int player)
+    {
+        if (!Connected || !Plugin.IOwnHere || !e || LocalOnly(e)) return;
+        uint id = IdOf(e);
+        if (id == 0 || RunnerOf(id) == player) return;
+        SetRunner(id, player);
+        lastHit[e] = Time.unscaledTime;   // counts as in a fight: AssignRunners leaves it there for now
+        var w = new NetDataWriter();
+        w.Put((byte)MsgType.EnemyRunner);
+        w.Put(id);
+        w.Put(player);
+        Plugin.SendToPlace(w, DeliveryMethod.ReliableOrdered);
     }
 
     static void SetRunner(uint id, int player)
@@ -198,7 +230,7 @@ internal static class EnemySync
     public static void SceneChanged()
     {
         runtimeIds.Clear(); runtimeById.Clear(); isRuntime.Clear(); announce.Clear();
-        expected.Clear(); claimed.Clear(); stageVars.Clear(); stages.Clear();
+        expected.Clear(); claimed.Clear(); stageVars.Clear(); stages.Clear(); lastHit.Clear();
         animators.Clear(); woken.Clear(); runnerOf.Clear(); remote.Clear();
         frozen.Clear(); frozenSince.Clear(); parts.Clear(); localOnly.Clear();
         prefabs = null;
@@ -362,7 +394,7 @@ internal static class EnemySync
         foreach (var e in new List<Enemy>(frozen.Keys)) Unfreeze(e);
         animators.Clear(); remote.Clear(); runnerOf.Clear(); frozenSince.Clear(); woken.Clear(); parts.Clear(); immuneSince.Clear();
         runtimeIds.Clear(); runtimeById.Clear(); isRuntime.Clear(); announce.Clear();
-        expected.Clear(); claimed.Clear(); stageVars.Clear(); stages.Clear();
+        expected.Clear(); claimed.Clear(); stageVars.Clear(); stages.Clear(); lastHit.Clear();
         hitFrom = -1; applyingHost = false;
     }
 
@@ -450,6 +482,7 @@ internal static class EnemySync
         w.Put(e.IsDead);
         w.Put(e.CurrentHealth);
         w.Put(!e.CanTakeDamage);
+        w.Put(e.isAttacking);
         var stage = StageOf(e);
         w.Put(stage != null ? (byte)stage.Value : NoStage);
         // Tint: the AI recolours creatures (behaviour graph "Tint Enemy" -> SetSpriteColor), and the AI only runs here.
@@ -525,6 +558,7 @@ internal static class EnemySync
         bool dead = r.GetBool();
         float health = r.GetFloat();
         bool immune = r.GetBool();
+        bool attacking = r.GetBool();
         byte stage = r.GetByte();
         var tint = new Color(r.GetFloat(), r.GetFloat(), r.GetFloat(), 1f);
         var nodes = GetBits(r);
@@ -536,6 +570,7 @@ internal static class EnemySync
         if (dead && !s.Dead) s.DeadSince = Time.unscaledTime;
         if (immune && !s.Immune) s.ImmuneSince = Time.unscaledTime;
         s.Immune = immune;
+        s.Attacking = attacking;
         if (stage != NoStage && Find(id) is Enemy staged) stages[staged] = stage;
         s.Snapshots.Add(t, pos, 0f, Time.unscaledTimeAsDouble);
         s.Flip = flip; s.Dead = dead; s.Health = health; s.Anim = anim; s.Tint = tint;
@@ -637,6 +672,8 @@ internal static class EnemySync
         bool noStagger = r.GetBool();
         int attacker = r.GetInt();
         byte hops = r.GetByte();
+        var effects = CombatNet.GetEffects(r);
+        CombatNet.GetAttackRef(r, out string attackRef, out int[] level);
         var e = Find(id);
         if (!e || !e.isActiveAndEnabled || e.IsDead) return;
 
@@ -646,7 +683,7 @@ internal static class EnemySync
             // It was handed on before this hit got here (it changes hands as players move): pass the hit along
             // instead of losing it. A couple of hops at most, in case two of us still disagree.
             if (hops >= 2) return;
-            Plugin.SendTo(runner, HitMessage(id, amount, result, hitType, knock, noStagger, attacker, (byte)(hops + 1)));
+            Plugin.SendTo(runner, HitMessage(id, amount, result, hitType, knock, noStagger, attacker, (byte)(hops + 1), effects, attackRef, level));
             return;
         }
 
@@ -670,20 +707,24 @@ internal static class EnemySync
             graced = true;
             e.CanTakeDamage = true;
         }
+        // The status effects it rolled and the attack's own effects come along (burning, poisoned, slowed...).
+        var created = CombatNet.CreateEffects(attackRef, level);
+        hitAttackRef = attackRef; hitLevel = level;
         try
         {
             if (attacker == Plugin.MyId)
             {
                 // Our own hit, come back to us because we run it now: apply it as our player's.
                 var me = LocalPlayer.Get();
-                if (me) e.ApplyDamage(new DamageData(me, e, amount, hitType, knock, result: result, noStagger: noStagger));
+                if (me) e.ApplyDamage(new DamageData(me, e, amount, hitType, knock, effects, result, createdEffects: created, noStagger: noStagger));
                 return;
             }
-            var d = new DamageData(RemoteHitter.For(Plugin, attacker), e, amount, hitType, knock, result: result, noStagger: noStagger);
+            var d = new DamageData(RemoteHitter.For(Plugin, attacker), e, amount, hitType, knock, effects, result, createdEffects: created, noStagger: noStagger);
             ApplyFor(attacker, () => e.ApplyDamage(d));
         }
         finally
         {
+            hitAttackRef = null; hitLevel = null;
             if (graced && e) e.CanTakeDamage = false;
         }
     }
@@ -701,7 +742,12 @@ internal static class EnemySync
     static void ShowImmune(Enemy e) =>
         Bus<UIDamageEvent>.Invoke(new UIDamageEvent(0f, "Immune", e.CenterOfMass.position, DamageResult.Block));
 
-    static NetDataWriter HitMessage(uint id, int amount, DamageResult result, DamageHitType hitType, KnockBack knock, bool noStagger, int attacker, byte hops)
+    // Runner, applying a request: the attack its custom effects came from (for our broadcast of the result).
+    static string hitAttackRef;
+    static int[] hitLevel;
+
+    static NetDataWriter HitMessage(uint id, int amount, DamageResult result, DamageHitType hitType, KnockBack knock, bool noStagger,
+        int attacker, byte hops, List<DamageEffect> effects, string attackRef, int[] level)
     {
         var w = new NetDataWriter();
         w.Put((byte)MsgType.EnemyHit);
@@ -713,6 +759,8 @@ internal static class EnemySync
         w.Put(noStagger);
         w.Put(attacker);   // in the message, not the sender: a passed-on hit comes from whoever passed it
         w.Put(hops);
+        CombatNet.PutEffects(w, effects);
+        CombatNet.PutAttackRef(w, attackRef, level);
         return w;
     }
 
@@ -727,16 +775,30 @@ internal static class EnemySync
         bool noStagger = r.GetBool();
         float healthBefore = r.GetFloat();
         int hitter = r.GetInt();
+        var effects = CombatNet.GetEffects(r);
+        CombatNet.GetAttackRef(r, out string attackRef, out int[] level);
+        bool gore = r.GetBool();
         var e = Find(id);
         if (!e || !e.isActiveAndEnabled || e.IsDead || e.Group == null || RunnerOf(id) == Plugin.MyId) return;
 
         // Our own hit: our player is the aggressor (the game gives us the XP). Someone else's: their stand-in (knockback only).
-        var d = new DamageData(RemoteHitter.For(Plugin, hitter), e, amount, hitType, knock, result: result, noStagger: noStagger);
+        // Its status effects come too: the creature burns / is poisoned here as well (the ticks only hurt it where it's run).
+        var d = new DamageData(RemoteHitter.For(Plugin, hitter), e, amount, hitType, knock, effects, result,
+            createdEffects: CombatNet.CreateEffects(attackRef, level), noStagger: noStagger);
         e.currentHealth = healthBefore;
+        // A killing blow: the same death as there (the game rolls the gory one at random on each copy).
+        bool lethal = healthBefore - amount <= 0f;
+        bool useGore = e.useDeathGore;
+        float goreChance = e.randomGoreDeathChance;
+        if (lethal) { e.useDeathGore = gore; e.randomGoreDeathChance = gore ? 2f : 0f; }
         applyingHost = true;
         replayHitter = hitter;
         try { e.ApplyDamage(d); }
-        finally { applyingHost = false; replayHitter = -1; }
+        finally
+        {
+            applyingHost = false; replayHitter = -1;
+            if (lethal) { e.useDeathGore = useGore; e.randomGoreDeathChance = goreChance; }
+        }
     }
 
     /// <summary>
@@ -800,7 +862,8 @@ internal static class EnemySync
         }
         if (id != 0 && me && ReferenceEquals(damageData.Aggressor, me))
             Plugin.SendTo(RunnerOf(id), HitMessage(id, damageData.Amount, damageData.Result, damageData.HitType,
-                damageData.KnockBackForce, damageData.NoStagger, Plugin.MyId, 0));
+                damageData.KnockBackForce, damageData.NoStagger, Plugin.MyId, 0, damageData.Effects,
+                CombatNet.AttackRef(PlayerHits.ResolvingAttack, damageData.CreatedEffects), PlayerHits.ResolvingLevel));
         return false;
     }
 
@@ -808,6 +871,7 @@ internal static class EnemySync
     static void AfterDamage(Enemy __instance, DamageData damageData, Before __state)
     {
         if (!Connected || __state.Dead || LocalOnly(__instance)) return;
+        if (__instance.CurrentHealth < __state.Health) lastHit[__instance] = Time.unscaledTime;   // ours or replayed: it's in a fight
         bool ours = !applyingHost && Runs(__instance);
         if (__instance.IsDead) ShareKillXp(__instance, ours ? HitterId(damageData) : replayHitter);
         if (!ours || !Plugin.AnyoneElseHere) return;
@@ -822,6 +886,10 @@ internal static class EnemySync
         w.Put(damageData.NoStagger);
         w.Put(__state.Health);
         w.Put(HitterId(damageData));
+        CombatNet.PutEffects(w, damageData.Effects);
+        if (hitAttackRef != null) CombatNet.PutAttackRef(w, hitAttackRef, hitLevel);
+        else CombatNet.PutAttackRef(w, CombatNet.AttackRef(PlayerHits.ResolvingAttack, damageData.CreatedEffects), PlayerHits.ResolvingLevel);
+        w.Put(__instance.IsDead && __instance.dieState.IsGore);
         Plugin.SendToPlace(w, DeliveryMethod.ReliableOrdered);
     }
 }

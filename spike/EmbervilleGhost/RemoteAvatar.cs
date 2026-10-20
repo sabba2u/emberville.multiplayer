@@ -26,6 +26,35 @@ internal class RemoteAvatar
     readonly List<Transform> flipPivots = new List<Transform>();
     bool flipped;
 
+    // A hit: the whole character tinted red for a moment (the game's own hurt flash is a script we stripped).
+    SpriteRenderer[] sprites;
+    Color[] spriteColors;
+    float flashUntil;
+
+    public void Flash()
+    {
+        if (!Root) return;
+        if (sprites == null) sprites = Root.GetComponentsInChildren<SpriteRenderer>(true);
+        if (flashUntil == 0f)
+        {
+            spriteColors = new Color[sprites.Length];
+            for (int i = 0; i < sprites.Length; i++)
+            {
+                if (!sprites[i]) continue;
+                spriteColors[i] = sprites[i].color;
+                sprites[i].color = spriteColors[i] * new Color(1f, 0.35f, 0.35f, 1f);
+            }
+        }
+        flashUntil = Time.unscaledTime + 0.15f;
+    }
+
+    void EndFlash()
+    {
+        if (flashUntil == 0f || Time.unscaledTime < flashUntil) return;
+        flashUntil = 0f;
+        for (int i = 0; i < sprites.Length; i++) if (sprites[i]) sprites[i].color = spriteColors[i];
+    }
+
     public static RemoteAvatar Create(PlayerMaster template, int playerId)
     {
         var holder = new GameObject("EmbervilleGhost_holder");
@@ -56,6 +85,7 @@ internal class RemoteAvatar
         }
         else NetLog.Warn($"P{playerId + 1}'s stand-in has no hurtbox: creatures can't hit them here");
         avatar.materials = LookSync.OwnMaterials(copy);
+        TintMinimapMarker(copy, playerId);
         avatar.animators = AnimSync.Collect(copy);
         foreach (var a in avatar.animators)
         {
@@ -79,7 +109,7 @@ internal class RemoteAvatar
 
     /// <summary>Remove everything that would make the copy act like a player. Keeps Unity's own visual components
     /// (sprites, 2D animation skinning, sorting groups, lights) and the <paramref name="keep"/> colliders (the hurtbox).</summary>
-    static void Strip(GameObject copy, Collider2D[] keep)
+    internal static void Strip(GameObject copy, Collider2D[] keep)
     {
         foreach (var t in copy.GetComponentsInChildren<Transform>(true))
         {
@@ -113,7 +143,7 @@ internal class RemoteAvatar
         return asm.StartsWith("UnityEngine") || asm.StartsWith("Unity.");
     }
 
-    static string PathFrom(Transform root, Transform child)
+    internal static string PathFrom(Transform root, Transform child)
     {
         if (!child) return null;
         if (child == root) return "";
@@ -126,6 +156,22 @@ internal class RemoteAvatar
         return string.Join("/", parts);
     }
 
+    /// <summary>
+    /// The minimap is a second camera (tag MinimapCam) filming the "Minimap" layer, where the player has its marker.
+    /// The stand-in is a copy of our player, so it carries that marker too: tint it in the player's tag colour
+    /// (host gold, clients blue), so teammates on the minimap aren't mistaken for us.
+    /// </summary>
+    static void TintMinimapMarker(GameObject copy, int playerId)
+    {
+        int layer = LayerMask.NameToLayer("Minimap");
+        if (layer < 0) return;
+        var tint = playerId == 0 ? new Color(1f, 0.8f, 0.3f, 1f) : new Color(0.45f, 0.8f, 1f, 1f);
+        int n = 0;
+        foreach (var r in copy.GetComponentsInChildren<SpriteRenderer>(true))
+            if (r.gameObject.layer == layer) { r.color = tint; n++; }
+        if (n == 0) NetLog.Info($"P{playerId + 1}'s stand-in has no minimap marker of its own");
+    }
+
     public void SetActive(bool on)
     {
         if (Root && Root.activeSelf != on) Root.SetActive(on);
@@ -134,6 +180,7 @@ internal class RemoteAvatar
     public void Apply(Vector3 position, bool flip, AnimSync.Frame[] anim)
     {
         if (!Root) return;
+        EndFlash();
         Root.transform.position = position;
         if (flip != flipped)
         {

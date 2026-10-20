@@ -112,10 +112,42 @@ internal static class Chat
         savedMaps = null;
     }
 
+    /// <summary>Chat commands. True = it was one (not sent as chat).</summary>
+    static bool Command(string cmd)
+    {
+        if (cmd.StartsWith("trade")) { Trade.InviteByName(cmd.Substring(5)); return true; }
+        if (cmd == "pet" || cmd.StartsWith("pet ")) { Pet.Command(cmd.Length > 3 ? cmd.Substring(4) : ""); return true; }
+        switch (cmd)
+        {
+            case "sleep": TimeSync.ToggleSleep(); return true;   // everyone goes to bed
+            case "estate":
+                if (Plugin.Connected && !Plugin.IsHost) { System("Only the host can unlock the estate (it's the host's world)."); return true; }
+                if (!GameData.HasWorldData) { System("Load a world first."); return true; }
+                DebugPanel.UnlockEstate();
+                if (Plugin.Connected) DebugPanel.SendEstateUnlock(Plugin);
+                return true;
+            case "devmode": DevMode.Toggle(); return true;
+            case "online":
+            case "party":
+            case "players": OnlinePlayers.Toggle(); return true;
+            case "devpanel": DevMode.TogglePanel(); return true;
+            case "arena": DevMode.GoToFirst(); return true;
+            case "help":
+            case "?":
+                System("/sleep: ready to skip to morning (everyone must)   /estate: unlock building on your estate (host)");
+                System("/devmode: the game's developer tools on/off   /devpanel: open the developer panel   /arena: to this scene's test arena");
+                System("/trade P2 (or a name): trade items with someone   /pet: befriend / call / send home, /pet list, /pet glowbat, /pet name ..., /pet color red");
+                System($"/online (or {OnlinePlayers.KeyName}): who's connected, mute; the host also kicks and bans   X at a chest: put in what it already has");
+                return true;
+        }
+        return false;
+    }
+
     static void Send(string text)
     {
         text = text.Trim();
         if (text.Length == 0) return;
+        if (text.StartsWith("/") && Command(text.Substring(1).Trim().ToLowerInvariant())) return;
         if (text.Length > 200) text = text.Substring(0, 200);
         Add(Plugin.MyId, text);
         if (!Plugin.Connected || Plugin.MyId < 0) { System("Not connected: nobody else sees this."); return; }
@@ -133,8 +165,11 @@ internal static class Chat
     static void Add(int id, string text)
     {
         string who = id == Plugin.MyId ? MyName() : Plugin.NameOf(id);
+        if (id != Plugin.MyId && OnlinePlayers.IsMuted(who)) return;   // muted (Online Players screen): not shown, no bubble
         var color = id == 0 ? new Vector4(1f, 0.8f, 0.3f, 1f) : new Vector4(0.45f, 0.8f, 1f, 1f);
         lines.Add(new Line { Time = Time.unscaledTime, Who = who, Text = text, Color = color });
+        foreach (var p in Plugin.Players)
+            if (p.Id == id) { p.Said = text; p.SaidAt = Time.unscaledTime; }   // speech bubble over their head (Hud)
         if (lines.Count > 50) lines.RemoveAt(0);
         NetLog.Info($"[chat] {who}: {text}");
     }

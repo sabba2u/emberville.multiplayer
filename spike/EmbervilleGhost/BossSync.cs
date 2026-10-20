@@ -225,20 +225,31 @@ internal static class BossSync
             var p = me ? me.transform.position : Vector3.zero;
             w.Put(p.x); w.Put(p.y);
             Plugin.SendToPlace(w, DeliveryMethod.ReliableOrdered);
+            React(on, p, Plugin.MyId);   // and here: the spiders we run, her if we own the area
         }
         return false;
     }
 
-    /// <summary>Her runner: another player is (no longer) stuck in a web; react like the game does for our own player.</summary>
+    /// <summary>
+    /// Everyone in the area: another player is (no longer) stuck in a web; react like the game does for its own player.
+    /// She goes for whoever she webbed, as in single player: the area owner hands her to them (her AI only chases the
+    /// player of the copy that runs her). The spiders nearby rush there: each copy moves the ones it runs.
+    /// </summary>
     public static void OnPlayerTrapped(NetDataReader r, int from)
     {
         bool on = r.GetBool();
         var pos = new Vector3(r.GetFloat(), r.GetFloat(), 0f);
         var avatar = Plugin.AvatarOf(from);
         if (avatar) pos = avatar.position;
+        React(on, pos, from);
+    }
+
+    static void React(bool on, Vector3 pos, int from)
+    {
         foreach (var m in Object.FindObjectsByType<SpiderMatriarch>(FindObjectsSortMode.None))
         {
-            if (!m.enemy || m.enemy.IsDead || !EnemySync.Runs(m.enemy)) continue;
+            if (!m.enemy || m.enemy.IsDead) continue;
+            if (on) EnemySync.HandTo(m.enemy, from);
             NetLog.Info($"{Plugin.NameOf(from)} is {(on ? "trapped" : "free again")}: the spiders react");
             m.playerTrappedEvent.SendEventMessage(on);
             if (on) RushTo(m, pos);

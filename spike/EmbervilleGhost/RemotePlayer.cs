@@ -15,11 +15,20 @@ internal class RemotePlayer
     public bool Flip;
     public string Scene = "", Area = "";
     public int Health, MaxHealth;
+    public float Kymia, MaxKymia;
+    public bool InWilds;
+    public byte PetKind;            // their pet (0 none, 1 chicken), its level and name (Pet)
+    public int PetLevel;
+    public string PetName = "";
+    public UnityEngine.Color PetColor = UnityEngine.Color.white;            // in the generated wilds (world map positions apply: MapMates)   // skill / spell energy; MaxKymia 0 = they have none (no bar)
     public PlayerStatus Status;
     public bool HaveState;
     public Vector3 LastPosition;  // newest position heard (for "teleport to them" when their stand-in isn't showing)
     public byte[] Look;          // LookSync bytes; the host keeps them for players who join later
     public string CharacterName; // from their save, sent with the look
+    public readonly System.Collections.Generic.List<string> Effects = new System.Collections.Generic.List<string>();   // status effects on them (PlayerFeel)
+    public string Said;          // their last chat line, shown in a bubble over their head for a while
+    public float SaidAt;
     string failedAt;
 
     public RemotePlayer(int id) { Id = id; }

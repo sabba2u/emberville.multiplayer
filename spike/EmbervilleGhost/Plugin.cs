@@ -26,7 +26,7 @@ namespace EmbervilleGhost;
 [BepInPlugin("spike.embervilleghost", "EmbervilleGhost", Version)]
 public class Plugin : BaseUnityPlugin, ITransportListener
 {
-    internal const string Version = "0.1.2";
+    internal const string Version = "0.1.3";
     internal const string ModName = "Sabba's Emberville Multiplayer Mod";
     internal static string Title => $"{ModName} v{Version}";
 
@@ -83,6 +83,14 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         Hud.Plugin = this;
         EnemySync.Plugin = this;
         AttackFx.Plugin = this;
+        TimeSync.Plugin = this;
+        PlayerFeel.Plugin = this;
+        StationSync.Plugin = this;
+        FarmSync.Plugin = this;
+        PlaceSync.Plugin = this;
+        StorySync.Plugin = this;
+        TeamBuffs.Plugin = this;
+        Pings.Plugin = this;
         BossSync.Plugin = this;
         DropSync.Plugin = this;
         PropSync.Plugin = this;
@@ -100,6 +108,14 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         Session.Plugin = this;
         HostWindow.Plugin = this;
         Session.Bind(Config);
+        OnlinePlayers.Bind(Config);
+        TeamHud.Bind(Config);
+        Pet.Bind(Config);
+        Pet.Plugin = this;
+        TeamHud.Plugin = this;
+        MapMates.Plugin = this;
+        Trade.Plugin = this;
+        OnlinePlayers.Plugin = this;
         ImGuiUnity.OnRender += Hud.Draw;
         try { ImGuiUnity.Init(Config, System.IO.Path.GetDirectoryName(Info.Location)); }
         catch (Exception e) { Log.LogError($"ImGui init failed, no menu/HUD: {e}"); }
@@ -134,7 +150,17 @@ public class Plugin : BaseUnityPlugin, ITransportListener
             if (kb.f10Key.wasPressedThisFrame) Stop();
         }
 
+        CheckLeftWorld();
+        DevMode.Tick();
+        Pings.Tick();
+        ChestSync.QuickTick();   // X at a chest: put in what it already has
+        OnlinePlayers.Tick();
+        Trade.Tick();
+        Pet.Tick();
+        TickKicks();
+        TickMigration();
         CoopDeath.Tick();   // before the game's frame logic: last frame's death reset (if any) is over
+        TimeSync.Tick();
         if (transport != null && transport.IsRunning) NetTick();
         Chat.Tick();
 
@@ -154,7 +180,7 @@ public class Plugin : BaseUnityPlugin, ITransportListener
 
     void NetTick()
     {
-        if (LocalPlayer.Scene != lastScene) { lastScene = LocalPlayer.Scene; SceneIds.Clear(); EnemySync.SceneChanged(); FxSync.Clear(); AttackFx.Clear(); BossSync.Clear(); }   // ids belong to a scene
+        if (LocalPlayer.Scene != lastScene) { lastScene = LocalPlayer.Scene; SceneIds.Clear(); EnemySync.SceneChanged(); FxSync.Clear(); AttackFx.Clear(); BossSync.Clear(); StationSync.Clear(); FarmSync.Clear(); Pings.Clear(); }   // ids belong to a scene
 
         Perf.Begin("1 receive"); transport.Poll(); Perf.End("1 receive");
 
@@ -175,6 +201,8 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         if (IsHost) UpdateOwners();
         NoticeOwnerChange();
         GuestWorld.Tick();
+        PlaceSync.Tick();
+        StorySync.Tick();
 
         Perf.Begin("2 world");
         if (MyId >= 0)
@@ -210,16 +238,20 @@ public class Plugin : BaseUnityPlugin, ITransportListener
             ChestSync.SendSnapshot(p.Id);
             GatherSync.SendSnapshot(p.Id);
             DoorSync.SendSnapshot(p.Id);
+            StationSync.SendSnapshot(p.Id);
+            FarmSync.SendSnapshot(p.Id);
         }
     }
 
     void OnDestroy() => Stop();
 
-    internal void Host()
+    internal void Host() => Host(PortSetting.Value);
+
+    internal void Host(int port)
     {
         Stop();
         transport = lan;
-        if (lan.StartHost(PortSetting.Value))
+        if (lan.StartHost(port))
         {
             IsHost = true;
             MyId = 0;
@@ -239,6 +271,7 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         Stop();
         transport = lan;
         lan.StartClient(AddressSetting.Value, PortSetting.Value);
+        hostAddress = AddressSetting.Value;
         Status = $"connecting to {AddressSetting.Value}:{PortSetting.Value}...";
         JoinWindow.Show();
         NetLog.Info($"Connecting to {AddressSetting.Value}:{PortSetting.Value}...", toast: true);
@@ -253,6 +286,15 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         }
         transport = null;
         ForgetEveryone();
+        // A session ended: nothing of a host migration in progress or of the old session's world-leaving check survives.
+        roster.Clear();
+        guids.Clear();
+        pendingKicks.Clear();
+        kicked = false;
+        rejoining = migrateHost = false;
+        migrateAt = -1f;
+        hadWorld = false;
+        menuCheck = 0f;
         IsHost = false;
         MyId = -1;
         Status = "idle (F8 host, F9 join)";
@@ -278,6 +320,10 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         ChestSync.Clear();
         GatherSync.Clear();
         GuestWorld.Clear();
+        PlaceSync.Clear();
+        TeamBuffs.ForgetAll();
+        TimeSync.Clear();
+        Pet.ForgetAll();
         SceneIds.Clear();
     }
 
@@ -440,6 +486,16 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         hostPeer?.Send(w, method);
     }
 
+    /// <summary>To every other player, wherever they are (things that outlive a visit: buildings on the estate).</summary>
+    internal void SendToAll(NetDataWriter data, DeliveryMethod method)
+    {
+        if (IsHost) { SendToAllClients(data, method); return; }
+        var w = new NetDataWriter();
+        w.Put((byte)MsgType.ToAll);
+        w.Put(data.Data, 0, data.Length);
+        hostPeer?.Send(w, method);
+    }
+
     /// <summary>Host: deliver a message from <paramref name="from"/> to every client in that place except the sender.</summary>
     void SendToPlaceFrom(int from, string scene, string area, byte[] data, int offset, int length, DeliveryMethod method)
     {
@@ -477,6 +533,14 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         writer.Put(me.isFliped);
         writer.Put(me.CurrentHealthPoints);
         writer.Put(me.characterStats ? me.MaxHealthPoints : 0);
+        writer.Put(me.characterStats ? Mathf.Max(me.CurrentKymiaPoints, 0f) : 0f);   // Kymia: what skills and spells cost
+        writer.Put(me.characterStats ? me.MaxKymiaPoints : 0f);
+        writer.Put(MapMates.InWilds);   // in the generated wilds: our spot goes on everyone's world map
+        writer.Put(Pet.KindByte);   // our pet (0 none, else which kind), so theirs follows our stand-in
+        writer.Put((byte)Mathf.Min(Pet.Level, 255));
+        writer.Put(Pet.Out ? Pet.Name : "");
+        Color32 petTint = Pet.Tint;
+        writer.Put(petTint.r); writer.Put(petTint.g); writer.Put(petTint.b);
         writer.Put((byte)PlayerStatusUtil.Local());
         AnimSync.Write(writer, LocalPlayer.Animators(me));
         StateBytes = writer.Length;   // unreliable packets must fit one MTU (~1.4 KB)
@@ -566,6 +630,7 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         w.Put(id);
         peer.Send(w, DeliveryMethod.ReliableOrdered);
         Session.SendTo(id);   // the host's rules (shared XP, instanced loot)
+        SendRoster();
         ownersSig = "";       // re-send who runs which area, now including them
 
         // The looks of everyone already here (host + other clients); later changes arrive as they happen.
@@ -578,7 +643,18 @@ public class Plugin : BaseUnityPlugin, ITransportListener
     {
         MyId = reader.GetInt();
         Status = $"connected as P{MyId + 1}";
+        var who = new NetDataWriter();
+        who.Put((byte)MsgType.Identity);
+        who.Put(OnlinePlayers.MyGuid);   // the host's bans follow this, not our name
+        hostPeer?.Send(who, DeliveryMethod.ReliableOrdered);
         NetLog.Success($"You are P{MyId + 1}");
+        if (rejoining)
+        {
+            // Reconnected to the player who took over from a host that left: we're already in that world.
+            rejoining = false;
+            NetLog.Success("Back together with the new host", toast: true);
+            return;
+        }
         GuestWorld.Request();   // the host brings the world; we bring our character
     }
 
@@ -590,12 +666,22 @@ public class Plugin : BaseUnityPlugin, ITransportListener
             {
                 NetLog.Warn($"Couldn't connect: {reason}");
                 Status = $"failed ({reason})";
+                if (rejoining)
+                {
+                    rejoining = false;
+                    NetLog.Warn("Couldn't reach the new host (on the internet they need port " + migratePort + " forwarded). You're playing on your own.", toast: true);
+                }
                 return;
             }
+            int me = MyId;
+            var (next, nextName, others) = Successor(me);
             ForgetEveryone();
             MyId = -1;
             Status = $"disconnected ({reason})";
             NetLog.Warn($"Host disconnected: {reason}");
+            // Only when the host really left (closed the connection: quit to menu, quit the game, F10). A timeout can
+            // be our own network blipping while the host carries on: taking over then would split the session.
+            if (me > 0 && LocalPlayer.Get() && reason == "RemoteConnectionClose" && !kicked) TakeOver(me, next, nextName, others);
             return;
         }
 
@@ -604,6 +690,8 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         idPeers.Remove(id);
         RemovePlayer(id);
         ChestSync.Unlock(id);
+        TimeSync.Forget(id);
+        TeamBuffs.Forget(id);
         Status = peerIds.Count > 0 ? $"hosting, {PlayerCount} players" : $"hosting on {PortSetting.Value}, waiting...";
         NetLog.Warn($"P{id + 1} left ({reason})");
 
@@ -611,6 +699,161 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         w.Put((byte)MsgType.PlayerLeft);
         w.Put(id);
         SendToAllClients(w, DeliveryMethod.ReliableOrdered);
+        SendRoster();
+    }
+
+    // ---- the Online Players screen's moderation (host): kick, ban; ping ----
+
+    readonly Dictionary<int, string> guids = new Dictionary<int, string>();   // host: player id -> their player ID (bans)
+    readonly List<(int id, float at)> pendingKicks = new List<(int, float)>();
+    bool kicked;   // client: the host threw us out (no taking over)
+
+    /// <summary>Round trip to that player in ms (host: anyone; client: only the host), -1 unknown.</summary>
+    internal int PingOf(int id)
+    {
+        if (IsHost) return idPeers.TryGetValue(id, out var peer) ? peer.Ping : -1;
+        return id == 0 && hostPeer != null ? hostPeer.Ping : -1;
+    }
+
+    void OnIdentity(NetDataReader r, int from)
+    {
+        string guid = r.GetString();
+        guids[from] = guid;
+        if (!OnlinePlayers.IsBanned(guid)) return;
+        NetLog.Warn($"A banned player tried to join ({NameOf(from)}): sent away");
+        Kick(from, ban: false, silent: true, why: "You're banned from this host's games.");
+    }
+
+    /// <summary>Host: tell them why, then close their connection a moment later (so the message gets there).</summary>
+    internal void Kick(int id, bool ban, bool silent = false, string why = null)
+    {
+        if (!IsHost || id == 0 || !idPeers.TryGetValue(id, out var peer)) return;
+        string name = NameOf(id);
+        if (ban) OnlinePlayers.AddBan(guids.TryGetValue(id, out var g) && !string.IsNullOrEmpty(g) ? g : "name:" + name, name);
+        var w = new NetDataWriter();
+        w.Put((byte)MsgType.Kicked);
+        w.Put(ban);
+        w.Put(why ?? (ban ? "The host banned you." : "The host removed you from the game."));
+        peer.Send(w, DeliveryMethod.ReliableOrdered);
+        pendingKicks.Add((id, Time.unscaledTime + 0.5f));
+        if (!silent) NetLog.Warn($"{name} was {(ban ? "banned" : "kicked")}", toast: true);
+    }
+
+    void TickKicks()
+    {
+        for (int i = 0; i < pendingKicks.Count; i++)
+        {
+            if (Time.unscaledTime < pendingKicks[i].at) continue;
+            if (idPeers.TryGetValue(pendingKicks[i].id, out var peer)) peer.Disconnect();
+            pendingKicks.RemoveAt(i--);
+        }
+    }
+
+    void OnKicked(NetDataReader r)
+    {
+        bool ban = r.GetBool();
+        string why = r.GetString();
+        kicked = true;
+        NetLog.Warn(why + (ban ? " (banned)" : ""), toast: true);
+        GameUi.Message(ban ? "Banned" : "Removed from the game", why);   // the game's own bordered box
+    }
+
+    // ---- the host leaving: the next player takes over (todo #10) ----
+    //
+    // When the host goes back to the main menu (or quits, or crashes), the clients don't stay attached to it: the
+    // player who joined first (lowest id) starts hosting right where they are, in the world they're already in, and
+    // the others reconnect to them without loading anything. The host keeps everyone's address (as it sees them) in a
+    // roster it sends to all, so every client knows the same successor and where to find them. On a LAN that just
+    // works; over the internet the new host needs the port forwarded (Steam relay will remove that, next version).
+
+    readonly Dictionary<int, string> roster = new Dictionary<int, string>();   // client: player id -> address (host's view)
+    int rosterPort;
+    bool rejoining;              // reconnecting to a new host from inside its world: skip the world download
+    string hostAddress = "";     // client: the address we reached the host at
+    bool migrateHost;            // we're the one taking over: start hosting
+    float migrateAt = -1f;
+    string migrateTo = "";
+    int migratePort;
+    bool hadWorld;
+    float menuCheck;
+
+    void SendRoster()
+    {
+        var w = new NetDataWriter();
+        w.Put((byte)MsgType.Roster);
+        w.Put(PortSetting.Value);
+        w.Put(idPeers.Count);
+        foreach (var pair in idPeers) { w.Put(pair.Key); w.Put(pair.Value.Address); }
+        SendToAllClients(w, DeliveryMethod.ReliableOrdered);
+    }
+
+    void OnRoster(NetDataReader r)
+    {
+        roster.Clear();
+        rosterPort = r.GetInt();
+        int n = r.GetInt();
+        for (int i = 0; i < n; i++) roster[r.GetInt()] = r.GetString();
+    }
+
+    /// <summary>Who takes over when the host is gone: the client who joined first. Also their name, and how many others there are.</summary>
+    (int id, string name, int others) Successor(int me)
+    {
+        int next = me;
+        foreach (int id in roster.Keys) if (id > 0 && id < next) next = id;
+        int others = 0;
+        foreach (int id in roster.Keys) if (id > 0 && id != me) others++;
+        return (next, NameOf(next), others);
+    }
+
+    void TakeOver(int me, int next, string nextName, int others)
+    {
+        if (next == me)
+        {
+            // Not here: we're inside the transport's event loop. Next frame (TickMigration).
+            migrateHost = true;
+            migratePort = rosterPort > 0 ? rosterPort : PortSetting.Value;   // the old host's port: where the others will look
+            migrateAt = Time.unscaledTime;
+            NetLog.Success(others > 0
+                ? $"The host left. You're the host now; {others} other player{(others == 1 ? "" : "s")} will reconnect to you."
+                : "The host left. You're hosting now (the world carries on here; others can join you).", toast: true);
+            return;
+        }
+        if (!roster.TryGetValue(next, out string address)) return;
+        // The host saw them on its own machine (127.0.0.1): for us that machine is the host's address.
+        if (address == "127.0.0.1" || address == "::1" || address.StartsWith("::ffff:127.")) address = hostAddress;
+        migrateTo = address;
+        migratePort = rosterPort > 0 ? rosterPort : PortSetting.Value;
+        migrateAt = Time.unscaledTime + 2f;   // give them a moment to start hosting
+        NetLog.Info($"The host left. {nextName} takes over; reconnecting to them...", toast: true);
+    }
+
+    void TickMigration()
+    {
+        if (migrateAt < 0f || Time.unscaledTime < migrateAt) return;
+        migrateAt = -1f;
+        if (!LocalPlayer.Get()) { migrateHost = false; return; }   // went to the menu meanwhile
+        if (migrateHost) { migrateHost = false; Host(migratePort); return; }
+        Stop();
+        transport = lan;
+        rejoining = true;
+        hostAddress = migrateTo;
+        lan.StartClient(migrateTo, migratePort);
+        Status = $"reconnecting to the new host {migrateTo}:{migratePort}...";
+    }
+
+    /// <summary>Back at the main menu from a world: we left the session (as host, the next player takes over).</summary>
+    void CheckLeftWorld()
+    {
+        if (LocalPlayer.Get()) { hadWorld = Connected; return; }   // in a world as part of a session
+        if (!hadWorld || !Connected) return;
+        menuCheck += Time.unscaledDeltaTime;
+        if (menuCheck < 1f) return;
+        menuCheck = 0f;
+        if (!UnityEngine.Object.FindAnyObjectByType<MainMenuManager>()) return;   // just a scene change inside the world
+        hadWorld = false;
+        bool wasHost = IsHost;
+        Stop();
+        NetLog.Info(wasHost ? "You left the world: hosting stopped, the next player takes over." : "You left the world: disconnected.", toast: true);
     }
 
     void RemovePlayer(int id)
@@ -630,8 +873,11 @@ public class Plugin : BaseUnityPlugin, ITransportListener
             switch (type)
             {
                 case MsgType.Welcome: if (!IsHost) OnWelcome(reader); break;
-                case MsgType.PlayerLeft: if (!IsHost) { int id = reader.GetInt(); RemovePlayer(id); NetLog.Warn($"P{id + 1} left"); } break;
+                case MsgType.PlayerLeft: if (!IsHost) { int id = reader.GetInt(); RemovePlayer(id); TeamBuffs.Forget(id); NetLog.Warn($"P{id + 1} left"); } break;
                 case MsgType.AreaOwners: if (!IsHost) OnAreaOwners(reader); break;
+                case MsgType.Roster: if (!IsHost) OnRoster(reader); break;
+                case MsgType.Identity: if (IsHost) OnIdentity(reader, from); break;
+                case MsgType.Kicked: if (!IsHost) OnKicked(reader); break;
                 case MsgType.PlayerState:
                     if (IsHost) Relay(reader, peer, method);
                     { int id = reader.GetInt(); ReadPlayerState(reader, IsHost ? from : id); }
@@ -681,6 +927,16 @@ public class Plugin : BaseUnityPlugin, ITransportListener
                         if (LocalPlayer.Scene == scene && LocalPlayer.Area == area) Dispatch(Inner(reader), from);
                     }
                     break;
+                case MsgType.ToAll:
+                    if (IsHost && from > 0)
+                    {
+                        var w = new NetDataWriter();
+                        w.Put((byte)MsgType.FromPlayer); w.Put(from);
+                        w.Put(reader.RawData, reader.Position, reader.AvailableBytes);
+                        SendToAllClients(w, method, except: peer);
+                        Dispatch(Inner(reader), from);
+                    }
+                    break;
                 case MsgType.FromPlayer:
                     if (!IsHost) { int sender = reader.GetInt(); Dispatch(Inner(reader), sender); }
                     break;
@@ -728,6 +984,9 @@ public class Plugin : BaseUnityPlugin, ITransportListener
             case MsgType.DropRemoved: if (!owner) DropSync.OnRemoved(reader); break;
             case MsgType.DropTakenBy: DropSync.OnTakenBy(reader); break;
             case MsgType.SessionSettings: if (!IsHost) Session.OnSettings(reader); break;
+            case MsgType.TimeSync: if (!IsHost) TimeSync.OnTime(reader); break;
+            case MsgType.SleepReady: if (IsHost) TimeSync.OnSleepReady(reader, from); break;
+            case MsgType.SleepState: if (!IsHost) TimeSync.OnSleepState(reader); break;
             case MsgType.ChestState: if (!owner) ChestSync.OnState(reader); break;
             case MsgType.GatherDamaged: if (!owner) GatherSync.OnDamaged(reader); break;
             case MsgType.GatherState: if (!owner) GatherSync.OnState(reader); break;
@@ -737,6 +996,29 @@ public class Plugin : BaseUnityPlugin, ITransportListener
             case MsgType.DoorSnapshot: if (!owner) DoorSync.OnSnapshot(reader); break;
             case MsgType.ProjectileFx: FxSync.OnProjectileFx(reader); break;
             case MsgType.AttackFx: AttackFx.OnAttackFx(reader); break;
+            case MsgType.PlayerHurt: PlayerFeel.OnHurt(reader, from); break;
+            case MsgType.PlayerEffect: PlayerFeel.OnEffect(reader, from); break;
+            case MsgType.TeamBuff: TeamBuffs.OnBuff(reader, from); break;
+            case MsgType.TeamSkill: TeamBuffs.OnSkill(reader, from); break;
+            case MsgType.TradeInvite: Trade.OnInvite(from); break;   // trading: between the two players only
+            case MsgType.TradeAnswer: Trade.OnAnswer(reader, from); break;
+            case MsgType.TradeOffer: Trade.OnOffer(reader, from); break;
+            case MsgType.TradeLock: Trade.OnLock(reader, from); break;
+            case MsgType.TradeCancel: Trade.OnCancel(reader, from); break;
+            case MsgType.Ping: Pings.OnPing(reader, from); break;
+            case MsgType.PathDraw: Pings.OnPath(reader, from); break;
+            case MsgType.ChestTake: if (owner) ChestSync.OnTake(reader, from); break;   // shared chests: the area owner's are real
+            case MsgType.ChestShared: if (!owner) ChestSync.OnShared(reader); break;
+            case MsgType.ChestShort: ChestSync.OnShort(reader); break;
+            case MsgType.StationEnqueue: if (owner) StationSync.OnEnqueue(reader, from); break;   // stations: the area owner's copy cooks
+            case MsgType.StationCollect: if (owner) StationSync.OnCollect(reader, from); break;
+            case MsgType.StationGive: StationSync.OnGive(reader); break;
+            case MsgType.StationState: if (!owner) StationSync.OnState(reader); break;
+            case MsgType.StationXp: StationSync.OnXp(reader); break;
+            case MsgType.SoilState: FarmSync.OnState(reader); break;   // farm plots: whoever farms sends the plot
+            case MsgType.PlaceChange: PlaceSync.OnChange(reader); break;   // building: whoever builds sends it
+            case MsgType.EstateUnlock: if (from == 0) DebugPanel.UnlockEstate(); break;   // the host's call
+            case MsgType.StoryFlag: StorySync.OnFlag(reader, from); break;   // story progress: anyone's counts for all
             case MsgType.EggSpawn: BossSync.OnEggSpawn(reader, from); break;   // eggs: whoever's boss laid it owns it
             case MsgType.EggHit: BossSync.OnEggHit(reader, from); break;
             case MsgType.EggDamaged: BossSync.OnEggDamaged(reader); break;
@@ -764,6 +1046,13 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         bool flip = reader.GetBool();
         int health = reader.GetInt();
         int maxHealth = reader.GetInt();
+        float kymia = reader.GetFloat();
+        float maxKymia = reader.GetFloat();
+        bool inWilds = reader.GetBool();
+        byte petKind = reader.GetByte();
+        int petLevel = reader.GetByte();
+        string petName = reader.GetString();
+        var petColor = new Color32(reader.GetByte(), reader.GetByte(), reader.GetByte(), 255);
         var status = (PlayerStatus)reader.GetByte();
         var anim = AnimSync.Read(reader);
         if (id == MyId || id < 0) return;
@@ -773,6 +1062,13 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         p.Flip = flip;
         p.Health = health;
         p.MaxHealth = maxHealth;
+        p.Kymia = kymia;
+        p.MaxKymia = maxKymia;
+        p.InWilds = inWilds;
+        p.PetKind = petKind;
+        p.PetLevel = petLevel;
+        p.PetName = petName;
+        p.PetColor = petColor;
         p.Anim = anim;
 
         // A new scene or area means a teleport: don't blend from the old position.
@@ -825,11 +1121,28 @@ internal enum MsgType : byte
     DropRemoved = 55,  // owner -> puppets: drop id is gone (picked up)
     DropTakenBy = 56,  // owner -> everyone in the area (or an arriving player): instanced drop id, player who took their copy
     SessionSettings = 13, // host -> clients (on joining and on change): shared XP, instanced loot
+    TimeSync = 14,     // host -> clients, sequenced, every second: day, time of day (hours)
+    Roster = 15,       // host -> clients, on every join / leave: host port, count x (player id, address as the host sees it) (host migration)
+    ToAll = 16,        // client -> host: envelope, deliver to everyone (host relays as FromPlayer)
+    EstateUnlock = 17, // host -> everyone: turn on estate building + repairs (story flags the demo never sets)
+    StoryFlag = 18,    // player -> everyone (ToAll), reliable: BoolID, value (story progress is shared)
+    SleepReady = 19,   // client -> host: ready to sleep or not (/sleep)
+    SleepState = 20,   // host -> clients: who, ready, ready count, players, everyone slept (the clock skipped to 6:00)
+    Identity = 21,     // client -> host after Welcome: player ID (random, kept in its config; bans follow it)
+    Kicked = 22,       // host -> client: banned?, reason (the connection closes right after)
+    TradeInvite = 23,  // player -> player: want to trade?
+    TradeAnswer = 24,  // player -> player: yes/no, reason ("busy")
+    TradeOffer = 25,   // player -> player: their whole offer (JSON, the game's SavedItem list)
+    TradeLock = 26,    // player -> player: ready = the hash of the offer they accept ("" = not ready)
+    TradeCancel = 27,  // player -> player: reason
     ChestOpen = 60,    // puppet -> owner, reliable: chest id (path hash). May I open it?
     ChestContents = 61,// owner -> requester: chest id, items (key, amount, values, slot). It's locked to you; these are the real contents
     ChestDenied = 62,  // owner -> requester: chest id, player id who has it open
     ChestClose = 63,   // puppet -> owner: chest id, final items. The owner takes them and unlocks
     ChestState = 64,   // owner -> puppets: chest id, items (after every close, so whoever runs the area next has them)
+    ChestTake = 65,    // puppet -> area owner, reliable: chest id (string), count x (item key, amount) taken from a shared chest without opening it
+    ChestShared = 66,  // area owner -> area / newcomer, reliable: chest id (string), items (a shared chest's contents)
+    ChestShort = 67,   // area owner -> taker, reliable: item key, how many were already gone (they pay from their bag)
     GatherHit = 70,    // puppet -> owner, reliable: rock/tree id (path hash). One swing of our gather animation
     GatherDamaged = 71,// owner -> puppets, reliable: id, health before, gather type, who swung (replayed: shake, break, tree fall; XP only for the swinger)
     GatherState = 72,  // owner -> one arriving player: count, [id, health, gather type] of rocks/trees already hit here
@@ -837,10 +1150,23 @@ internal enum MsgType : byte
     SwitchChange = 81, // whoever used it / the owner's scripts -> everyone in the area: lever/switch id, state (On/Off/Disabled)
     DoorSnapshot = 82, // owner -> one arriving player: [door id, state]..., [switch id, state]... (applied without animation or events)
     ProjectileFx = 90, // shooter's copy (owner for creatures, the player for theirs) -> everyone in the area, reliable unordered: prefab name, position, direction, range (harmless copy)
-    AttackFx = 91,     // creature's runner -> area, reliable unordered: id, kind (hit/buildup/cancel), ends buildup, count x (prefab, x, y, angle, scale x, trigger) (harmless copies)
+    AttackFx = 91,     // attacker's copy (creature runner / player) -> area, reliable: from player?, id, kind (hit/buildup/cancel/release), ends buildup, aim, count x (prefab, x, y, angle, scale x, trigger, hold id) (harmless copies)
+    PlayerHurt = 92,   // victim -> area, reliable unordered: health lost, result (numbers + flash on their stand-in)
+    PlayerEffect = 93, // player -> area, reliable: on/off, effect name, raw effect name (burning, poisoned... under their name)
+    TeamBuff = 94,     // caster -> area, reliable: attack name, skill level (its self-buffs, for teammates nearby)
+    TeamSkill = 95,    // caster -> area, reliable: skill name, on/off, skill level, x, y (its stat modifiers, for teammates nearby)
+    Ping = 96,         // player -> area, reliable unordered: x, y (middle-click marker)
+    PathDraw = 97,     // player -> area, reliable: count x (x, y) (a line drawn on the ground)
     EggSpawn = 100,    // boss runner -> area, reliable: egg id (owner << 24 | n), x, y
     EggHit = 101,      // player -> egg owner, reliable: id, amount, hit type, knockback
     EggDamaged = 102,  // egg owner -> area, reliable: id, amount, hit type, knockback, health before, hitter
     EggDestroy = 103,  // egg owner -> area, reliable: id, index (0 = broken, >0 = hatch that many spiders)
     PlayerTrapped = 104, // trapped player -> area, reliable: on, x, y (the boss's runner reacts like for its own player)
+    StationEnqueue = 110, // puppet -> area owner, reliable: station key, recipe id, crafting time (ingredients already paid)
+    StationCollect = 111, // puppet -> area owner, reliable: station key, item index (-1 = all)
+    StationGive = 112,    // area owner -> collector, reliable: station key, items (JSON, the game's SavedItem)
+    StationState = 113,   // area owner -> area / newcomer, reliable: station key, SavedCraftingStation JSON
+    StationXp = 114,      // area owner -> whoever queued it, reliable: recipe id, life skill, xp
+    SoilState = 120,      // farmer -> area / owner -> newcomer, reliable: plot save id, SavedSoilState JSON
+    PlaceChange = 121, // builder -> everyone (ToAll), reliable: op (place / remove object / remove tile), scene, then placeable id, x, y, direction, GUID | id, x, y | layer, x, y, z
 }

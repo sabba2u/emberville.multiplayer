@@ -59,6 +59,8 @@ internal static class DebugPanel
         if (ImGui.Button(SeedTest.Running ? "Map seed test (running...)" : "Map seed test")) SeedTest.Run().Forget();
         if (SeedTest.Result.Length > 0) { ImGui.SameLine(); ImGui.TextWrapped(SeedTest.Result); }
         Session.DrawSettings();
+        DrawEstate(plugin);
+        Pet.DrawMenu();
 
         string perf = $"Player packet {plugin.StateBytes} bytes.  Mod ms/frame:";
         foreach (var pair in Perf.Ms) perf += $"  {pair.Key} {pair.Value:0.0}";
@@ -85,6 +87,79 @@ internal static class DebugPanel
     /// Next to a teammate (same scene), with the game's own teleport: fade out, switch to their GameArea if it's another
     /// one, place us, camera, fade in (GameManager.TeleportPlayerFade).
     /// </summary>
+    /// <summary>
+    /// The estate (your farm in Town: plots, build mode, repairing buildings) is behind two story flags the demo
+    /// never sets (BoolID.PlaceablesActive / RepairablesActive). Turning them on opens build mode on the estate.
+    /// Connected: the host decides, and everyone gets the flags (EstateUnlock).
+    /// </summary>
+    static void DrawEstate(Plugin plugin)
+    {
+        ImGui.Separator();
+
+        // The game's own developer tools (DevMode): on in every scene while ticked.
+        bool dev = DevMode.On;
+        if (ImGui.Checkbox("Dev mode (the game's developer tools)", ref dev)) DevMode.Toggle();
+        if (DevMode.On)
+        {
+            ImGui.SameLine();
+            if (ImGui.SmallButton("Open dev panel")) DevMode.TogglePanel();
+            ImGui.TextDisabled("    Ctrl+Shift+Numpad7: dev panel, Numpad1: test arenas; Ctrl+Shift + Numpad+ XP, Numpad- hurt yourself");
+        }
+
+        // Test arenas in this scene (the dev panel's own button loads a scene the demo doesn't ship).
+        if (LocalPlayer.Get())
+        {
+            var arenas = DevMode.ArenasHere();
+            if (arenas.Count == 0) ImGui.TextDisabled("No test arena in this scene.");
+            else
+            {
+                ImGui.Text("Test arenas here:");
+                foreach (var arena in arenas)
+                {
+                    ImGui.SameLine();
+                    if (ImGui.SmallButton($"{(string.IsNullOrEmpty(arena.ArenaName) ? arena.name : arena.ArenaName)}##{arena.GetInstanceID()}")) DevMode.GoTo(arena);
+                }
+            }
+        }
+
+        if (!GameData.HasWorldData) return;
+        // The estate (your farm and house in Town): building + repairs, story flags the demo never sets.
+        bool on = GameData.gameBools.IsTrue(BoolID.PlaceablesActive) && GameData.gameBools.IsTrue(BoolID.RepairablesActive);
+        bool allowed = !plugin.Connected || plugin.IsHost;
+        if (!allowed) ImGui.BeginDisabled();
+        if (ImGui.Checkbox("Estate: building + repairs (your farm and house in Town)", ref on))
+        {
+            SetEstate(on);
+            if (on && plugin.Connected) SendEstateUnlock(plugin);   // (off reaches everyone as story flags)
+        }
+        if (!allowed) { ImGui.EndDisabled(); ImGui.SameLine(); ImGui.TextDisabled("(the host decides)"); }
+        ImGui.SameLine();
+        if (ImGui.SmallButton("Go to Town") && Singleton<SceneLoader>.HasMain && LocalPlayer.Get())
+            Singleton<SceneLoader>.main.CallScene("Town", null).Forget();
+    }
+
+    static void SetEstate(bool on)
+    {
+        if (on) { UnlockEstate(); return; }
+        GameData.gameBools[BoolID.PlaceablesActive] = false;
+        GameData.gameBools[BoolID.RepairablesActive] = false;
+        NetLog.Info("Estate building and repairs locked again", toast: true);
+    }
+
+    internal static void UnlockEstate()
+    {
+        GameData.gameBools[BoolID.PlaceablesActive] = true;
+        GameData.gameBools[BoolID.RepairablesActive] = true;
+        NetLog.Info("Estate building and repairs unlocked: walk onto your estate in Town to build", toast: true);
+    }
+
+    internal static void SendEstateUnlock(Plugin plugin)
+    {
+        var w = new LiteNetLib.Utils.NetDataWriter();
+        w.Put((byte)MsgType.EstateUnlock);
+        plugin.SendToAll(w, LiteNetLib.DeliveryMethod.ReliableOrdered);
+    }
+
     static void TeleportTo(RemotePlayer p)
     {
         var me = LocalPlayer.Get();

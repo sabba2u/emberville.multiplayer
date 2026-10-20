@@ -69,6 +69,7 @@ internal static class ImGuiUnity
         fontTexture.LoadRawTextureData(pixels, w * h * 4);
         fontTexture.Apply(false, true);
         UnityEngine.Object.DontDestroyOnLoad(fontTexture);
+        io.Fonts.SetTexID(FontId);
 
         // UI/Default: texture * vertex colour, alpha blended, no culling or depth. Shipped with every uGUI game.
         var shader = Shader.Find("UI/Default");
@@ -114,7 +115,7 @@ internal static class ImGuiUnity
     static void FeedInput(ImGuiIOPtr io, Keyboard kb)
     {
         var mouse = Mouse.current;
-        if (!(IsOpen || JoinWindow.Visible || HostWindow.Visible) || mouse == null)   // those windows are clickable without the menu
+        if (!(IsOpen || JoinWindow.Visible || HostWindow.Visible || OnlinePlayers.Visible || Trade.Visible) || mouse == null)   // those windows are clickable without the menu
         {
             // HUD only: no hover, no clicks.
             io.AddMousePosEvent(-float.MaxValue, -float.MaxValue);
@@ -150,6 +151,30 @@ internal static class ImGuiUnity
         (Key.Space, ImGuiKey.Space), (Key.A, ImGuiKey.A), (Key.C, ImGuiKey.C), (Key.V, ImGuiKey.V),
         (Key.X, ImGuiKey.X), (Key.Z, ImGuiKey.Z),
     };
+
+    // ---- other textures in ImGui (ImGui.Image / AddImage): id 1 is the font, ours start at 2 ----
+
+    static readonly IntPtr FontId = (IntPtr)1;
+    static readonly Dictionary<IntPtr, Texture> textures = new Dictionary<IntPtr, Texture>();
+    static readonly Dictionary<Texture, IntPtr> textureIds = new Dictionary<Texture, IntPtr>();
+    static MaterialPropertyBlock textureProps;
+
+    /// <summary>The id to draw this texture with in ImGui (a RenderTexture is upside down: flip the V of its UVs).</summary>
+    public static IntPtr TextureId(Texture texture)
+    {
+        if (textureIds.TryGetValue(texture, out var id)) return id;
+        id = (IntPtr)(textures.Count + 2);
+        textures[id] = texture;
+        textureIds[texture] = id;
+        return id;
+    }
+
+    public static void ForgetTexture(Texture texture)
+    {
+        if (!textureIds.TryGetValue(texture, out var id)) return;
+        textureIds.Remove(texture);
+        textures[id] = null;   // ids aren't reused
+    }
 
     /// <summary>Draw the last built frame (call from OnGUI; only acts on Repaint).</summary>
     public static unsafe void Render()
@@ -192,7 +217,14 @@ internal static class ImGuiUnity
                 var c = cmd.ClipRect;   // x1, y1, x2, y2, top-left origin
                 // Scissor rect is bottom-left origin.
                 commands.EnableScissorRect(new Rect(c.x, sh - c.w, c.z - c.x, c.w - c.y));
-                commands.DrawMesh(mesh, Matrix4x4.identity, material, i);
+                if (cmd.TextureId != FontId && textures.TryGetValue(cmd.TextureId, out var tex))
+                {
+                    if (!tex) continue;
+                    if (textureProps == null) textureProps = new MaterialPropertyBlock();
+                    textureProps.SetTexture("_MainTex", tex);
+                    commands.DrawMesh(mesh, Matrix4x4.identity, material, i, 0, textureProps);
+                }
+                else commands.DrawMesh(mesh, Matrix4x4.identity, material, i);
             }
         }
         commands.DisableScissorRect();

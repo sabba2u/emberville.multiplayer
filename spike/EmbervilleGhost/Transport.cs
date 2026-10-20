@@ -15,6 +15,10 @@ internal abstract class Conn
     public abstract void Send(NetDataWriter data, DeliveryMethod method);
     public abstract int Ping { get; }
     public abstract string Label { get; }
+    /// <summary>The other side's address as we see it (IP), for "connect to them instead" (host migration).</summary>
+    public abstract string Address { get; }
+    /// <summary>Close this connection (host: kick).</summary>
+    public abstract void Disconnect();
     public override string ToString() => Label;
 }
 
@@ -51,6 +55,8 @@ internal sealed class LiteNetTransport : ITransport, INetEventListener
         public override void Send(NetDataWriter data, DeliveryMethod method) => Peer.Send(data, method);
         public override int Ping => Peer.Ping;
         public override string Label => Peer.ToString();
+        public override string Address => Peer.Address.ToString();
+        public override void Disconnect() => Peer.Disconnect();
     }
 
     const string ConnectionKey = "emberville-ghost-spike";

@@ -35,7 +35,12 @@ internal static class PlayerHits
 {
     public static Plugin Plugin;
 
-    static bool replaying;   // resolving a creature's hit its runner sent us (OnPlayerHit): the aggressor is our copy of it
+    static bool replaying;
+
+    // The hit CombatSystem.Resolve is working on right now: its attack and skill level (the DamageData handed to
+    // ApplyDamage no longer has them, and EnemySync needs them to make the attack's custom effects on other copies).
+    internal static Attack ResolvingAttack;
+    internal static int[] ResolvingLevel;   // resolving a creature's hit its runner sent us (OnPlayerHit): the aggressor is our copy of it
 
     static Dictionary<string, Attack> attacksByName;
 
@@ -44,6 +49,14 @@ internal static class PlayerHits
     static bool BeforeResolve(DamageData damageData, out DamageData attackDamage, ref DamageData __result)
     {
         attackDamage = default;
+        ResolvingAttack = damageData.Attack;
+        ResolvingLevel = damageData.Level;
+        // A copy of another player's spell / skill object (AttackFx): their own copy does the real hits.
+        if (!replaying && damageData.Aggressor is RemoteHitter && Plugin != null && Plugin.Connected)
+        {
+            __result = default;
+            return false;
+        }
         // A creature someone else runs (its copy here: a mirrored attack object, AttackFx): its real hits come from
         // its runner as PlayerHit, so here it hurts nobody.
         if (!replaying && damageData.Aggressor is Enemy puppet && Plugin != null && Plugin.Connected && !EnemySync.Runs(puppet))
@@ -74,8 +87,17 @@ internal static class PlayerHits
         w.Put((byte)damageData.KnockBackForce);
         w.Put(damageData.NoStagger);
         w.Put(damageData.Attack ? damageData.Attack.name : "");
+        CombatNet.PutEffects(w, damageData.Effects);   // the attacker's own effects (a spider's poison...), rolled by the victim
         Plugin.SendTo(target.PlayerId, w);
         return false;
+    }
+
+    [HarmonyPatch(typeof(CombatSystem), nameof(CombatSystem.Resolve), new[] { typeof(DamageData), typeof(DamageData) }, new[] { ArgumentType.Normal, ArgumentType.Out })]
+    [HarmonyFinalizer]
+    static void AfterResolve()
+    {
+        ResolvingAttack = null;
+        ResolvingLevel = null;
     }
 
     /// <summary>Victim: a creature (or, PvP, a player) hit our stand-in on their screen; take it on our real player.</summary>
@@ -90,6 +112,7 @@ internal static class PlayerHits
         var knock = (KnockBack)r.GetByte();
         bool noStagger = r.GetBool();
         string attackName = r.GetString();
+        var baseEffects = CombatNet.GetEffects(r);
 
         var me = LocalPlayer.Get();
         if (!me || me.IsDead) return;
@@ -104,6 +127,7 @@ internal static class PlayerHits
             Attack = FindAttack(enemy, attackName),
             BaseCriticalChance = crit,
             BaseEffectsChance = effects,
+            Effects = baseEffects,
         };
         DamageData counter;
         replaying = true;
@@ -114,7 +138,7 @@ internal static class PlayerHits
     }
 
     /// <summary>The creature's Attack asset by name: from that creature's own attacks/skills, else any loaded Attack.</summary>
-    static Attack FindAttack(Enemy enemy, string name)
+    internal static Attack FindAttack(Enemy enemy, string name)
     {
         if (string.IsNullOrEmpty(name)) return null;
         if (enemy)

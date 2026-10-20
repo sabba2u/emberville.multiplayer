@@ -40,6 +40,20 @@ internal static class Hud
     {
         if (!p.SamePlace(LocalPlayer.Scene, LocalPlayer.Area)) return;
         var world = p.Avatar != null && p.Avatar.Visible ? p.Avatar.Root.transform.position : p.LastPosition;
+        string name = string.IsNullOrEmpty(p.CharacterName) ? p.Tag : p.CharacterName;
+        EdgeArrow(cam, myPos, world, RoleColor(p.Id == 0), name);
+    }
+
+    /// <summary>An edge arrow towards any world point (a teammate, a ping), unless it's on screen.</summary>
+    public static void EdgeArrowTo(UnityEngine.Vector3 world, Vector4 colour, string label)
+    {
+        var cam = UnityEngine.Camera.main;
+        var me = LocalPlayer.Get();
+        if (cam && me) EdgeArrow(cam, me.transform.position, world, colour, label);
+    }
+
+    static void EdgeArrow(UnityEngine.Camera cam, UnityEngine.Vector3 myPos, UnityEngine.Vector3 world, Vector4 colour, string name)
+    {
         var s = cam.WorldToScreenPoint(world);
         float sw = UnityEngine.Screen.width, sh = UnityEngine.Screen.height;
         float x = s.x, y = sh - s.y;                                // ImGui is top-left
@@ -59,7 +73,7 @@ internal static class Hud
         float px = -uy, py = ux;                                   // sideways
 
         var dl = ImGui.GetBackgroundDrawList();
-        uint color = ImGui.ColorConvertFloat4ToU32(RoleColor(p.Id == 0));
+        uint color = ImGui.ColorConvertFloat4ToU32(colour);
         uint shadow = ImGui.ColorConvertFloat4ToU32(new Vector4(0, 0, 0, 0.7f));
         const float size = 16f;
         var tip = new Vector2(ax + ux * size, ay + uy * size);
@@ -69,7 +83,6 @@ internal static class Hud
         dl.AddTriangleFilled(tip, left, right, color);
 
         // Name + distance, a little inward from the arrow so it stays on screen.
-        string name = string.IsNullOrEmpty(p.CharacterName) ? p.Tag : p.CharacterName;
         string label = $"{name}  {UnityEngine.Vector2.Distance(myPos, world):0}m";
         var ts = ImGui.CalcTextSize(label);
         float lx = UnityEngine.Mathf.Clamp(ax - ux * 30f - ts.x / 2, 4f, sw - ts.x - 4f);
@@ -145,13 +158,54 @@ internal static class Hud
             var min = new Vector2(hx - w / 2, hy);
             dl.AddRectFilled(new Vector2(min.x - 1, min.y - 1), new Vector2(min.x + w + 1, min.y + h + 1), ImGui.ColorConvertFloat4ToU32(new Vector4(0, 0, 0, 0.7f)));
             dl.AddRectFilled(min, new Vector2(min.x + w * frac, min.y + h), ImGui.ColorConvertFloat4ToU32(new Vector4(0.25f, 0.85f, 0.35f, 1f)));
+
+            // Kymia (skills / spells) right under it, thinner, only for players who have any.
+            if (p.MaxKymia > 0f)
+            {
+                const float kh = 4f;
+                float kfrac = UnityEngine.Mathf.Clamp01(p.Kymia / p.MaxKymia);
+                var kmin = new Vector2(min.x, min.y + h + 2f);
+                dl.AddRectFilled(new Vector2(kmin.x - 1, kmin.y - 1), new Vector2(kmin.x + w + 1, kmin.y + kh + 1), ImGui.ColorConvertFloat4ToU32(new Vector4(0, 0, 0, 0.7f)));
+                dl.AddRectFilled(kmin, new Vector2(kmin.x + w * kfrac, kmin.y + kh), ImGui.ColorConvertFloat4ToU32(new Vector4(0.35f, 0.6f, 1f, 1f)));
+            }
         }
 
+        DrawBubble(cam, p);
+
         string status = PlayerStatusUtil.Label(p.Status);   // so you know why they're standing still
-        float y = Place(UnderFeet(cam, avatar.Root.transform.position, out float x), x, status.Length > 0 ? 3 : 2);
+        string effects = p.Effects.Count > 0 ? string.Join(", ", p.Effects) : "";
+        float y = Place(UnderFeet(cam, avatar.Root.transform.position, out float x), x, 2 + (status.Length > 0 ? 1 : 0) + (effects.Length > 0 ? 1 : 0));
         y = Tag(x, y, p.Id == 0 ? "[host]" : "[client]", RoleColor(p.Id == 0), Plugin.OwnerOf(p) == p.Id);
         y = Tag(x, y, p.Name, White);
-        if (status.Length > 0) Tag(x, y, status, Orange);
+        if (status.Length > 0) y = Tag(x, y, status, Orange);
+        if (effects.Length > 0) Tag(x, y, effects, Purple);
+    }
+
+    static readonly Vector4 Purple = new Vector4(0.8f, 0.55f, 1f, 1f);
+    const float SaidSeconds = 6f;
+
+    /// <summary>
+    /// A speech bubble over their head (above the health bar): "..." while they're typing, then what they said for a
+    /// few seconds.
+    /// </summary>
+    static void DrawBubble(UnityEngine.Camera cam, RemotePlayer p)
+    {
+        string text;
+        if (p.Status == PlayerStatus.Chatting) text = "...";
+        else if (!string.IsNullOrEmpty(p.Said) && UnityEngine.Time.unscaledTime - p.SaidAt < SaidSeconds)
+            text = p.Said.Length > 60 ? p.Said.Substring(0, 57) + "..." : p.Said;
+        else return;
+
+        var head = cam.WorldToScreenPoint(p.Avatar.HeadPosition);
+        float x = head.x, bottom = UnityEngine.Screen.height - head.y - 6f;   // just above the health bar
+        var dl = ImGui.GetBackgroundDrawList();
+        var size = ImGui.CalcTextSize(text);
+        var min = new Vector2(x - size.x / 2 - 8, bottom - size.y - 10);
+        var max = new Vector2(x + size.x / 2 + 8, bottom);
+        uint fill = ImGui.ColorConvertFloat4ToU32(new Vector4(1f, 1f, 1f, 0.92f));
+        dl.AddRectFilled(min, max, fill, 8f);
+        dl.AddTriangleFilled(new Vector2(x - 6, max.y - 1), new Vector2(x + 6, max.y - 1), new Vector2(x, max.y + 7), fill);   // the tail
+        dl.AddText(new Vector2(min.x + 8, min.y + 5), ImGui.ColorConvertFloat4ToU32(new Vector4(0.1f, 0.1f, 0.12f, 1f)), text);
     }
 
     public static void Draw()
@@ -188,11 +242,14 @@ internal static class Hud
         }
 
         // Menus, the journal, dialogue, cutscenes: the game covers the world, so no name tags / labels on top of it.
-        if (!PlayerStatusUtil.LocalBusy) DrawTeammates();
+        if (!PlayerStatusUtil.LocalBusy) { DrawTeammates(); Pet.DrawLabels(); Pings.Draw(); TeamHud.Draw(); }
+        MapMates.Draw();   // the world map is a menu: not hidden with the rest
         Chat.Draw();
         MenuBanner.Draw();
         JoinWindow.Draw();
         HostWindow.Draw();
+        OnlinePlayers.Draw();
+        Trade.Draw();
         Toasts.Draw();
         if (ImGuiUnity.IsOpen) DebugPanel.Draw();
     }

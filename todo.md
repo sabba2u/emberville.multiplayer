@@ -323,6 +323,97 @@ Today: IP only (LAN, or internet by IP with the host forwarding UDP 9060). Plan:
 - [ ] Teammate health/status, pings + paths, minimap that tracks everyone, off-screen teammate arrows (details in
       Duckov roadmap #12), chat.
 - [ ] Disconnects / rejoin, more than 2 players, join codes, maybe a Colyseus room server.
+- [ ] **Built for v0.1.3, all untested (test tonight):** combat gaps 1-6 (status effects ride with hits, player
+      spells/skill objects mirrored incl. held beams, creature base effects on PlayerHit, gore matches, hurt numbers +
+      red flash on stand-ins, status effect names under tags), heal "+N" popups, Kymia bar, chat bubble, shared chests
+      (ChestShare take tracking, live contents, retake after close, saved-id chest ids), host migration (#10: leaving to
+      the menu stops; the first-joined client hosts in place, others reconnect, no reload; roster of addresses),
+      building/removing placeables + tiles (PlaceSync, to everyone, applied on entering that scene), estate unlock
+      (/estate, Insert menu), story flags shared (#5, StorySync), /sleep vote (#7), boss handed to the player she webs
+      (#9), team buffs (attack self-buffs + skill stat modifiers like Swift Foot, host option "Share buffs", 8 m),
+      /devmode + /devpanel (the game's own dev tools), /help.
+      Then: pings + drawing (middle mouse), shared-chest race (later taker pays from bag), Kymia "+N", minimap
+      marker tint, 10 review fixes, X at a chest = put in what it already has (the chest screen's "send common").
+      Online Players screen (O or /online; Tab and P are the game's): who's connected, place, HP, ping, status;
+      mute (this PC, by name); host: kick / ban (2nd click confirms; bans follow a player ID from the config, unban list).
+      Party strip (top: portraits via per-player cameras, HP/Kymia; HeadHeight/HeadSize in config), teammates on the
+      M world map (when in the wilds), trading (Online Players > Trade or /trade P2: bag grid, 8 offer slots, drag,
+      tooltips, Ready = lock on their offer's hash, any change unticks both; key items / equipped gear excluded),
+      the game's own bordered boxes (GameUi: GeneralPrompt for "kicked/banned", ConfirmationPrompt for trade invites).
+- [ ] **Pet chicken: BUILT, untested** (Pet.cs): /pet befriends (needs any chicken loaded once: prefab or one in the
+      scene) / calls / sends home, /pet name X. Stripped Mob_Chicken copy (no AI, no colliders: immune to everyone),
+      follows behind, pecks enemies within 3.5 m of us via CombatSystem.Resolve with our player as aggressor (counts as
+      our hit, kills give us XP), pet XP (+1 per peck, +10 per kill, 15 x level per level, damage 2 + level), name tag
+      with XP bar, others see it follow our stand-in (pet kind / level / name in PlayerState). Check tonight: the
+      animator params (Speed, DirFactor, Attack), the flip, whether it pulls mobs too eagerly.
+- [ ] **Pet / companion** (asked 2026-10-19): no dog or cat in the demo's art (checked all 478 sprite sheets in
+      `<game>\extracted`). Candidates: the chicken (`Mob_Chicken`, full animation set: walk, idle, peck, hurt; the
+      best), the Lilshrooms (pink / green / gray mushroom critters), Little Thics, the Magic Wisp, the Glowbat, the crow.
+      Plan: befriend = interact (F) with one while holding food (or a /pet command); it becomes a follower: a copy of
+      the creature prefab with its AI and hurtbox stripped (like our player stand-ins), walking after us with the
+      game's own animator (walk / idle by speed), keeping ~1.5 m behind, teleporting along if far. Saved in our config
+      (kind + name). Others see it: it's just "player X's pet of kind K" in our player state; each copy runs its own
+      follower behind that player's stand-in (no extra traffic).
+- [ ] **Priorities after v0.1.2 (sabba, 2026-10-19):**
+  - Built, untested: mid-fight creatures stay with their runner (InFight); one clock (TimeSync: host's day + time
+    every second; the demo has no weather, seasons or sleep); crafting stations, all 16 types (cooking pot, campfire,
+    anvil, forge, furnace, sawmill, tanning, workbench...: StationSync, the area owner cooks, collect = request);
+    farm plots (FarmSync: the farmer sends the plot's save state).
+  - Next: building / placing / removing placeables (PlaceableController.PlaceObject / RemoveSelectedObject; apply
+    = dataBase.Get(id).Place(pos, dir, hostGuid, placeablesParent) + SaveData; tiles via TilesetDrawerManager).
+  - #5 story progress: "unlock for everyone" (chosen over sharing key items): a door / gate / quest flag one player
+    opens is open in everyone's world. In-session doors already sync; to persist it, sync GameData.gameBools
+    (BoolID...) + door states into the guest's own saves too.
+  - #7 everyone goes to bed: the demo has NO sleeping (no bed, the day rolls over at 24:00). Later: a mod "ready to
+    sleep" vote that skips to morning on the host's clock, or the full game's own bed.
+  - #8 buffs / status effects visible + team buffs (below). #9 the boss's own attacks aim only at its runner's player.
+  - #10 host leaving: when the host quits to the menu, the clients stayed connected to the host's menu (Rory "held"
+    the room). Wanted: the host leaving ends their part; the next player becomes host and the others connect to them,
+    not to the old host. With LiteNetLib + IP that needs the new host reachable (port forward); with Steam relay
+    (next version) it's easy. Step 1: host stops hosting on quit-to-menu and tells everyone (HostLeft); with 2 players
+    the client just carries on solo in the guest world.
+- [ ] **Pings + drawing (like Duckov's `Pings.cs`):** middle-click (or a key) drops a ping on the ground where the
+      mouse is: a pulsing ring + the player's colour + name, seen by everyone in the area (and as an edge arrow when
+      off screen), fades after a few seconds. Hold to draw: a trail of points following the mouse on the ground,
+      sent as a polyline, fading after ~10 s (draw a path, circle a chest, arrow to the boss door). ImGui background
+      draw list in world -> screen space, like the name tags. Watch the button: left/right are attacks, the game
+      aims with the mouse.
+- [x] Chat bubble over a teammate's head: "..." while they type, then their line for 6 s (Hud.DrawBubble).
+- [ ] **Auto magnet (hands-free F)** (asked 2026-10-19). What F does: it's the game's `Interaction` action
+      (`<Keyboard>/f`, gamepad South). On a dropped item (`ItemDropObject : IInteractable`) it calls
+      `OnInteract(player)` -> `OnPickup` (`Inventory.AddItem`; anything that doesn't fit drops back at your feet) + the
+      collect VFX/sound. `CanRepeat` = true with `repeatInterval`, so holding F keeps picking up whatever is in reach
+      (items join the player's `InteractablesHandler` through their trigger).
+      Plan:
+      - Every ~0.2 s, find `ItemDropObject`s within the magnet range of the player (circle overlap or scan of active
+        drops) whose item passes the filter, and pick up the nearest one through the same `OnInteract(player)` the F
+        key uses. That way it goes through DropSync's dupe-proof pickup (a puppet's pickup is a request to the area
+        owner; instanced loot stays per player). Optional: pull them toward the player first (lerp over ~0.3 s) so it
+        looks like a magnet, then pick up on arrival.
+      - Filter UI (ImGui window, a key or /magnet; also a tab in the Insert menu): master on/off; range slider
+        (1-8 m); checkboxes per `ItemCategory` (Material, Consumable, Weapon, Armor, Gear, Placeable, Other) plus
+        coins and key items; per-item exceptions ("never wood", "always ore") from a searchable list of items seen
+        so far (addressKey + name). Saved in the config.
+      - Rules: never while a menu / dialogue / cutscene is up, while dead, or while the bag is full (skip what
+        wouldn't fit, check `Inventory` space first, so things don't bounce at your feet). Respect instanced loot
+        (only your copy). Maybe "don't steal": skip items that dropped from another player's kill for N seconds unless
+        loot is shared.
+- [ ] **Auto potion** (asked 2026-10-19): if you carry potions or healing food, one gets used automatically before
+      you die. How the game uses an item: `InventoryUI.UseItem` -> `item.itemObject.OnUse(player.characterStats)`
+      (the item's actions: heals go to `PlayerMaster.RestoreHealth`, some are regen effects), then
+      `Inventory.UpdateEquippedList` / `SetInventoryChanged`; items can have a cooldown (`Inventory.SetItemCooldown`,
+      `cooldownManager` by addressKey).
+      Plan:
+      - Two triggers: (1) a prefix on `PlayerMaster.ApplyDamage` for our own player: if this hit would kill us
+        (`CurrentHealthPoints - amount <= 0`, after block / parry: check `damageData.Result`) and a heal is ready, use
+        the heal first, then let the hit land; (2) every frame, health under a threshold (default 25%) -> use one.
+      - Which item: consumables (belt first, then bag) whose use actions heal health; the smallest one that brings us
+        back over the threshold (don't waste the big potion on a scratch); skip ones on cooldown; never Kymia-only
+        items for health. Optional: the same for Kymia at a separate threshold.
+      - Settings (Insert menu tab / /autopotion): on/off, threshold %, "belt items only", per-item allow list (never
+        eat the rare cake), a short note in chat when it fires ("Auto potion: Small Health Potion, +30").
+      - Never while dead, in cutscenes / dialogue, or when the hit is from our own PvP opt-out. Purely local, nothing to
+        sync (the heal shows to others through PlayerFeel's "+N" and the health bar).
 - [ ] **Team buffs** (asked during online play with Rory, 2026-10-19: "was I affected by his Swift Foot buff?" No.)
       The game is single-player at heart: no allies/party anywhere in its code, so buffs like Swift Foot (toggled
       movement buff) only ever touch the caster, and the mod doesn't sync buffs/status effects at all yet (a remote
