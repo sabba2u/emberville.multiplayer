@@ -26,7 +26,7 @@ namespace EmbervilleGhost;
 [BepInPlugin("spike.embervilleghost", "EmbervilleGhost", Version)]
 public class Plugin : BaseUnityPlugin, ITransportListener
 {
-    internal const string Version = "0.1.4";
+    internal const string Version = "0.1.5";
     internal const string ModName = "Sabba's Emberville Multiplayer Mod";
     internal static string Title => $"{ModName} v{Version}";
 
@@ -98,6 +98,7 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         PlaceSync.Plugin = this;
         GroundSync.Plugin = this;
         InteractSync.Plugin = this;
+        CutsceneSync.Plugin = this;
         StorySync.Plugin = this;
         TeamBuffs.Plugin = this;
         Pings.Plugin = this;
@@ -123,6 +124,8 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         Pet.Bind(Config);
         Hud.ShowStatus = Config.Bind("Hud", "ShowStatus", false, "The status line top-left (version, connection, fps); Delete shows / hides it");
         DemoEnd.Bind(Config);
+        Magnet.Bind(Config);
+        MouseWalk.Bind(Config);
         Pet.Plugin = this;
         TeamHud.Plugin = this;
         MapMates.Plugin = this;
@@ -168,6 +171,8 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         DemoEnd.Tick();
         Stockpile.Tick();
         GroundSync.Tick();
+        Magnet.Tick();
+        MouseWalk.Tick();
         SteamLobby.Tick();
         CheckLeftWorld();
         DevMode.Tick();
@@ -201,7 +206,7 @@ public class Plugin : BaseUnityPlugin, ITransportListener
 
     void NetTick()
     {
-        if (LocalPlayer.Scene != lastScene) { lastScene = LocalPlayer.Scene; SceneIds.Clear(); EnemySync.SceneChanged(); FxSync.Clear(); AttackFx.Clear(); BossSync.Clear(); StationSync.Clear(); FarmSync.Clear(); Pings.Clear(); GroundSync.Clear(); InteractSync.Clear(); }   // ids belong to a scene
+        if (LocalPlayer.Scene != lastScene) { lastScene = LocalPlayer.Scene; SceneIds.Clear(); EnemySync.SceneChanged(); FxSync.Clear(); AttackFx.Clear(); BossSync.Clear(); StationSync.Clear(); FarmSync.Clear(); Pings.Clear(); GroundSync.Clear(); InteractSync.Clear(); CutsceneSync.Clear(); }   // ids belong to a scene
 
         Perf.Begin("1 receive"); transport.Poll(); Perf.End("1 receive");
 
@@ -260,6 +265,7 @@ public class Plugin : BaseUnityPlugin, ITransportListener
             GatherSync.SendSnapshot(p.Id);
             DoorSync.SendSnapshot(p.Id);
             InteractSync.SendSnapshot(p.Id);
+            CutsceneSync.SendSnapshot(p.Id);
             StationSync.SendSnapshot(p.Id);
             FarmSync.SendSnapshot(p.Id);
         }
@@ -1097,6 +1103,8 @@ public class Plugin : BaseUnityPlugin, ITransportListener
             case MsgType.SoilState: FarmSync.OnState(reader); break;   // farm plots: whoever farms sends the plot
             case MsgType.PlaceChange: PlaceSync.OnChange(reader); break;   // building: whoever builds sends it
             case MsgType.GroundPress: GroundSync.OnPress(reader, from); break;
+            case MsgType.CutsceneStart: CutsceneSync.OnStart(reader, from); break;   // story cutscenes: everyone in the area watches
+            case MsgType.CutsceneSnapshot: if (!owner) CutsceneSync.OnSnapshot(reader); break;   // story cutscenes: everyone in the area watches
             case MsgType.ItemUnlocked: InteractSync.OnItemUnlocked(reader); break;   // key altars: whoever has the item opens it for all
             case MsgType.Repaired: InteractSync.OnRepaired(reader); break;   // repairs: the repairer pays, everyone sees it
             case MsgType.InteractSnapshot: if (!owner) InteractSync.OnSnapshot(reader); break;   // floor buttons: down while anyone stands on one   // building: whoever builds sends it
@@ -1256,6 +1264,8 @@ internal enum MsgType : byte
     ItemUnlocked = 123, // user -> their place, reliable: item lock (ItemRequester) id; it opens on every copy
     Repaired = 124,     // repairer -> their place, reliable: kind (building / portal), id
     InteractSnapshot = 125, // area owner -> arriving player: repaired buildings, portals, opened item locks
+    CutsceneSnapshot = 127, // area owner -> arriving player: cutscenes already played here (index, id), skipped to their end
+    CutsceneStart = 126, // whoever set it off -> their place, reliable: entry index, cutscene id; everyone there plays it
     GroundPress = 122, // anyone -> their place, reliable: floor button id, down (repeated every 2 s while standing on it)
     PlaceChange = 121, // builder -> everyone (ToAll), reliable: op (place / remove object / remove tile), scene, then placeable id, x, y, direction, GUID | id, x, y | layer, x, y, z
 }

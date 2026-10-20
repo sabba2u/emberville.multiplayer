@@ -69,6 +69,8 @@ internal static class DebugPanel
         if (SeedTest.Result.Length > 0) { ImGui.SameLine(); ImGui.TextWrapped(SeedTest.Result); }
         Session.DrawSettings();
         DrawEstate(plugin);
+        MouseWalk.DrawMenu();
+        Magnet.DrawMenu();
         Pet.DrawMenu();
 
         string perf = $"Player packet {plugin.StateBytes} bytes.  Mod ms/frame:";

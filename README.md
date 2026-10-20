@@ -23,12 +23,18 @@ Work in progress. Player downloads are on the [Releases](../../releases) page; n
   immunity, the spider queen's eggs and hatchlings, webbed players), attacks and spells everyone can see, status effects
   on hits (burning, poison...), matching gory deaths, drops (dupe-proof), chests, breakables, rocks / ore / trees,
   doors and levers, key altars / item locks (whoever has the item opens it for everyone), floor buttons (down while
-  anyone stands on one), town repairs, the clock (day and time), story progress (a door one player opens is open for everyone), every
+  anyone stands on one), town repairs, the clock (day and time), story progress (a door one player opens is open for everyone), story cutscenes (whoever sets one off,
+  everyone in the area watches it; someone arriving later skips to how it left the world), every
   crafting station (cooking pot, campfire, anvil, forge, furnace, sawmill...: the food cooks once, collecting is
   dupe-proof), chests that stations and farming pull from, farm plots, building and removing on the estate.
 - **Chat** (Enter), death announcements, pings and drawing on the ground (middle mouse).
 
 ## Quality of life
+- **Mouse walking:** hold the mouse side (thumb) button and your character walks toward the mouse (closer = slower,
+  rings show it); a quick click walks to that spot. Walls still block, WASD / pad always win. Insert menu: on / off,
+  which button (Back, Forward, or Middle).
+- **Magnet:** Insert menu > Magnet picks up items near you by themselves (range 1-8, per category: materials, food,
+  coins, weapons, armour, gear, placeables, key items, other), only what fits in your bag. Off to start with.
 - **X at a chest:** walk up to a chest (its arrow shows) and press X: everything in your bag that the chest already
   holds goes in (onto its stacks, then free slots while there's room), and each item shows in the game's list on the
   right ("Stored Carrot (12)"). It's the chest screen's own "send common" button without opening the screen, and works
@@ -95,6 +101,7 @@ Pets start **off**: `/pet on` (or the Insert menu checkbox) turns them on. Then 
 | F8 / F9 / F10 | host (IP or Steam) / join / disconnect | | Tab | inventory + character |
 | Insert | mod menu | | I / C / P / K / J | inventory, character, classes, masteries, quests |
 | Delete | status line (top left) on / off | | | |
+| Mouse side button | hold: walk toward the mouse; click: walk there | | | |
 | Right-click a party card | teleport / trade / mute | | | |
 | Enter | chat | | M | world map |
 | O | Online Players | | F | interact / pick up |

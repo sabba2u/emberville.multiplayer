@@ -253,6 +253,7 @@ internal static class Hud
 
         // Menus, the journal, dialogue, cutscenes: the game covers the world, so no name tags / labels on top of it.
         if (!PlayerStatusUtil.LocalBusy) { DrawTeammates(); Pet.DrawLabels(); Pings.Draw(); TeamHud.Draw(); }
+        MouseWalk.Draw();
         MapMates.Draw();   // the world map is a menu: not hidden with the rest
         Chat.Draw();
         MenuBanner.Draw();
