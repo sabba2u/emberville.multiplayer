@@ -39,6 +39,67 @@ internal static class TeamHud
 
     static readonly Dictionary<int, Portrait> portraits = new Dictionary<int, Portrait>();
 
+    // ---- right-click a card: teleport / trade / mute ----
+    // The cards drawn this frame (screen rects, ImGui's top-left coordinates), which one the mouse is over, the menu.
+    static readonly List<(int id, float x0, float y0, float x1, float y1)> cards = new List<(int, float, float, float, float)>();
+    static int hovered = -1, menuFor = -1;
+    static Vector2 menuAt;
+
+    /// <summary>ImGui needs the mouse: over the strip, or our menu is up.</summary>
+    public static bool WantsMouse => hovered >= 0 || menuFor >= 0;
+
+    /// <summary>
+    /// Every frame (Update): is the mouse over a card? While it is, the game's controls are paused (right-click is the
+    /// game's secondary attack: no swing when you right-click a teammate). A right-click on a teammate opens the menu.
+    /// </summary>
+    public static void Tick()
+    {
+        var mouse = UnityEngine.InputSystem.Mouse.current;
+        hovered = -1;
+        if (mouse != null && Application.isFocused && Plugin != null && Plugin.Connected)
+        {
+            var p = mouse.position.ReadValue();
+            float mx = p.x, my = Screen.height - p.y;
+            foreach (var c in cards)
+                if (mx >= c.x0 && mx <= c.x1 && my >= c.y0 && my <= c.y1) { hovered = c.id; break; }
+            if (hovered >= 0 && hovered != Plugin.MyId && mouse.rightButton.wasPressedThisFrame)
+            {
+                menuFor = hovered;
+                menuAt = new Vector2(mx, my);
+            }
+        }
+        if (menuFor >= 0 && (Plugin == null || !Plugin.Connected)) menuFor = -1;
+        if (hovered >= 0 || menuFor >= 0) GameInput.Block("strip"); else GameInput.Unblock("strip");
+    }
+
+    static void Menu()
+    {
+        if (menuFor < 0) return;
+        RemotePlayer p = null;
+        foreach (var rp in Plugin.Players) if (rp.Id == menuFor) { p = rp; break; }
+        if (p == null) { menuFor = -1; return; }
+
+        ImGui.SetNextWindowPos(menuAt, ImGuiCond.Always);
+        const ImGuiWindowFlags flags = ImGuiWindowFlags.NoTitleBar | ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoMove |
+                                       ImGuiWindowFlags.AlwaysAutoResize | ImGuiWindowFlags.NoSavedSettings;
+        if (!ImGui.Begin("##stripmenu", flags)) { ImGui.End(); return; }
+        string name = string.IsNullOrEmpty(p.CharacterName) ? p.Tag : p.CharacterName;
+        ImGui.TextDisabled(p.Name);
+        ImGui.Separator();
+        bool here = p.HaveState && p.Scene == LocalPlayer.Scene;
+        if (!here) ImGui.BeginDisabled();
+        if (ImGui.Selectable($"Teleport to {name}" + (here ? "" : "  (another scene)"))) { DebugPanel.TeleportTo(p); menuFor = -1; }
+        if (!here) ImGui.EndDisabled();
+        if (ImGui.Selectable($"Trade with {name}")) { Trade.Invite(p.Id); menuFor = -1; }
+        bool muted = OnlinePlayers.IsMuted(p.Name);
+        if (ImGui.Selectable(muted ? $"Unmute {name}" : $"Mute {name}")) { OnlinePlayers.SetMuted(p.Name, !muted); menuFor = -1; }
+        // A click anywhere else, or Esc, closes it.
+        bool outside = (ImGui.IsMouseClicked(ImGuiMouseButton.Left) || ImGui.IsMouseClicked(ImGuiMouseButton.Right)) &&
+                       !ImGui.IsWindowHovered() && hovered != menuFor;
+        if (outside || ImGui.IsKeyPressed(ImGuiKey.Escape)) menuFor = -1;
+        ImGui.End();
+    }
+
     public static void Bind(ConfigFile config)
     {
         show = config.Bind("PartyStrip", "Show", true, "The party strip at the top of the screen while connected");
@@ -58,6 +119,7 @@ internal static class TeamHud
         foreach (var p in Plugin.Players) ids.Add(p.Id);
         ids.Sort();
 
+        cards.Clear();
         float total = Mathf.Min(ids.Count, PerRow) * (CardW + Gap) - Gap;
         float left = (Screen.width - total) / 2f;
         var dl = ImGui.GetBackgroundDrawList();
@@ -67,6 +129,7 @@ internal static class TeamHud
             int id = ids[i];
             alive.Add(id);
             float x = left + (i % PerRow) * (CardW + Gap), y = Top + (i / PerRow) * (CardH + Gap);
+            cards.Add((id, x, y, x + CardW, y + CardH));
             if (id == Plugin.MyId) Card(dl, x, y, id, Me(me), me.transform);
             else
             {
@@ -79,6 +142,7 @@ internal static class TeamHud
         var gone = new List<int>();
         foreach (int id in portraits.Keys) if (!alive.Contains(id)) gone.Add(id);
         foreach (int id in gone) Drop(id);
+        Menu();
     }
 
     struct Info
@@ -123,7 +187,8 @@ internal static class TeamHud
 
     static void Card(ImDrawListPtr dl, float x, float y, int id, Info info, Transform target)
     {
-        var bg = ImGui.ColorConvertFloat4ToU32(new Vector4(0f, 0f, 0f, 0.55f));
+        bool lit = id == hovered && id != Plugin.MyId;   // hover: a lighter card says "right-click me"
+        var bg = ImGui.ColorConvertFloat4ToU32(new Vector4(lit ? 0.15f : 0f, lit ? 0.15f : 0f, lit ? 0.2f : 0f, lit ? 0.75f : 0.55f));
         dl.AddRectFilled(new Vector2(x, y), new Vector2(x + CardW, y + CardH), bg, 6f);
 
         // Portrait
@@ -234,6 +299,8 @@ internal static class TeamHud
     /// <summary>Not showing: cameras off (their pictures stay for later).</summary>
     static void Sleep()
     {
+        cards.Clear();
+        menuFor = -1;
         foreach (var p in portraits.Values) if (p.Cam) p.Cam.enabled = false;
         if (Plugin != null && !Plugin.Connected && portraits.Count > 0)
             foreach (int id in new List<int>(portraits.Keys)) Drop(id);

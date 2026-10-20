@@ -156,6 +156,7 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         ChestSync.QuickTick();   // X at a chest: put in what it already has
         OnlinePlayers.Tick();
         Trade.Tick();
+        TeamHud.Tick();   // right-click a party card: teleport / trade / mute
         Pet.Tick();
         TickKicks();
         TickMigration();

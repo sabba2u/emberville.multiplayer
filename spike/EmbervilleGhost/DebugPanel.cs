@@ -160,7 +160,7 @@ internal static class DebugPanel
         plugin.SendToAll(w, LiteNetLib.DeliveryMethod.ReliableOrdered);
     }
 
-    static void TeleportTo(RemotePlayer p)
+    internal static void TeleportTo(RemotePlayer p)
     {
         var me = LocalPlayer.Get();
         if (!me || !Singleton<GameManager>.HasMain) return;

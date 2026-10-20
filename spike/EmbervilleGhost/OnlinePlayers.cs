@@ -46,7 +46,7 @@ internal static class OnlinePlayers
 
     public static bool IsMuted(string name) => !string.IsNullOrEmpty(name) && MutedSet().Contains(name);
 
-    static void SetMuted(string name, bool on)
+    internal static void SetMuted(string name, bool on)
     {
         var s = MutedSet();
         if (on) s.Add(name); else s.Remove(name);
