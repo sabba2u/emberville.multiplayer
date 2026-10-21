@@ -64,6 +64,13 @@ internal static class Integrations
         BetterNPCsAndQuests.Hooks.OthersNear = NpcSync.OthersNear;
         BetterNPCsAndQuests.Hooks.FilesChanged = NpcSync.SendFilesToAll;
         BetterNPCsAndQuests.Hooks.DrawsLabels = true;   // (their names drawn like Rory's: Hud → DrawHud → DrawLabels)
+        // our own chat commands an NPC can run too ("command respec": Ellie); the rest as before
+        var others = BetterNPCsAndQuests.Hooks.Command;
+        BetterNPCsAndQuests.Hooks.Command = cmd =>
+        {
+            if (string.Equals(cmd?.Trim(), "respec", System.StringComparison.OrdinalIgnoreCase)) { Respec.Run(); return true; }
+            return others(cmd);
+        };
     }
 
     /// <summary>Better NPCs and Quests' Insert tab.</summary>

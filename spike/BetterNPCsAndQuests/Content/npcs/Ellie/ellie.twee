@@ -27,6 +27,7 @@ I'm fixing up my little workshop, but I've run out of wood. Could you bring me 1
 [[Of course!|Accept]]
 [[Not right now.|Later]]
 [[Got anything for me?|Gifts]]
+[[I want to RESPEC myself.|Respec]]
 
 :: Accept [NPC:Ellie]
 (trigger: "start ellie_errands")
@@ -39,6 +40,7 @@ No worries. I'll be right here if you change your mind.
 Any luck with the wood? I still need 10 softwood logs.
 [[I'll keep looking.|Bye]]
 [[Got anything for me?|Gifts]]
+[[I want to RESPEC myself.|Respec]]
 
 :: WoodReady [NPC:Ellie]
 Are those softwood logs? You found them!
@@ -64,6 +66,7 @@ Hmm, that's not quite what I asked for. I've put it all back in your bag.
 Found a sword yet? Any kind will do, really.
 [[Still looking.|Bye]]
 [[Got anything for me?|Gifts]]
+[[I want to RESPEC myself.|Respec]]
 
 :: SwordReady [NPC:Ellie]
 Is that a sword? Could I have it?
@@ -82,6 +85,7 @@ It's perfect! Here, this is for you. You've been a real help, {PlayerName}.
 :: Thanks [NPC:Ellie]
 My workshop is coming along nicely, thanks to you, {PlayerName}!
 [[Got anything for me?|Gifts]]
+[[I want to RESPEC myself.|Respec]]
 [[Bye!|Bye]]
 
 :: Gifts [NPC:Ellie]
@@ -107,7 +111,7 @@ Oh, all right. Come here, little one... I'll take good care of it. You can alway
 
 :: GiftClucking [NPC:Ellie]
 (trigger: "command clucking")
-The Staff of Clucking! Every swing calls up a battle chicken. Don't ask where they come from.
+The Staff of Clucking! Right-click calls up a battle chicken. Don't ask where they come from.
 [[Anything else?|Gifts]]
 [[Thanks, Ellie!|Bye]]
 
@@ -115,6 +119,16 @@ The Staff of Clucking! Every swing calls up a battle chicken. Don't ask where th
 (trigger: "command risen")
 The Staff of the Risen. Creatures that fall near you will get back up and fight for you. Spooky, isn't it?
 [[Anything else?|Gifts]]
+[[Thanks, Ellie!|Bye]]
+
+:: Respec [NPC:Ellie]
+Start over? I can loosen up everything you've learned, and every point you've put into your stats will be yours to spend again. Are you sure?
+[[Yes, RESPEC me.|RespecDone]]
+[[No, never mind.|Bye]]
+
+:: RespecDone [NPC:Ellie]
+(trigger: "command respec")
+There! Shake it out... feel lighter? Open your character screen and spend your points however you like.
 [[Thanks, Ellie!|Bye]]
 
 :: Bye [NPC:Ellie]
