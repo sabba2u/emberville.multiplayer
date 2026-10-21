@@ -63,19 +63,49 @@ internal static class Dungeon
     static int regionPick;
 
     public static bool Active => current.HasValue && root;
+
+    static float nextMeshCheck;
+
+    /// <summary>
+    /// Every second in a generated place: a creature off the navigation mesh (put back where it was last saved after a
+    /// death, or spawned at the edge) goes onto the nearest walkable spot, or stands down if there's none near; else
+    /// its AI asks the mesh every frame and Unity logs "GetRemainingDistance can only be called on an active agent".
+    /// </summary>
+    public static void Tick()
+    {
+        if (Active) Wake();
+        if (!(Active || Arena.Active) || busy || Time.unscaledTime < nextMeshCheck) return;
+        nextMeshCheck = Time.unscaledTime + 1f;
+        int moved = 0, removed = 0;
+        foreach (var e in EnemiesManager.AllEnemies)
+        {
+            if (!e || e.IsDead || !e.gameObject.activeInHierarchy) continue;
+            var agent = e.GetComponent<UnityEngine.AI.NavMeshAgent>();
+            if (!agent || agent.enabled && agent.isOnNavMesh) continue;
+            if (!agent.enabled) agent.enabled = true;   // (an older build switched some off: its AI still asks it)
+            var p = e.transform.position;
+            if (UnityEngine.AI.NavMesh.SamplePosition(p, out var hit, 12f, UnityEngine.AI.NavMesh.AllAreas) && agent.Warp(hit.position)) { moved++; continue; }
+            // nowhere to walk near it (put back somewhere off this place after a death): out of the fight, back to its pool
+            e.gameObject.SetActive(false);
+            removed++;
+        }
+        if (moved + removed > 0) NetLog.Info($"Creatures off the walking map: {moved} put back on it, {removed} taken out", toast: false);
+    }
+
     public static int Floor => Active ? current.Value.Floor : 0;
     public static Where? Current => current;
     public static GameObject Root => root;
 
     // the region's floor cells (walkable, world cells) and bounds: for the descent's stairs and the creature scaling
     internal static HashSet<Vector3Int> floorCells = new HashSet<Vector3Int>();
+    internal static HashSet<Vector3Int> wallCells = new HashSet<Vector3Int>();
     internal static Vector3 cellSize = Vector3.one;
     internal static Bounds bounds;
     public static bool Busy => busy;
 
     public static void Init()
     {
-        SceneManager.sceneLoaded += (_, _) => { current = null; parents.Clear(); root = null; area = null; spawned.Clear(); busy = false; };
+        SceneManager.sceneLoaded += (_, _) => { current = null; parents.Clear(); root = null; area = null; spawned.Clear(); sleeping.Clear(); busy = false; };
     }
 
     // ---- settings ----
@@ -211,6 +241,8 @@ internal static class Dungeon
             if (oldRoot && oldRoot != root) Cleanup(oldRoot);
             SpawnCreatures(biome, where);
             DebugWalls.Refresh();
+            Pings.PingHere();   // where you are, on arrival
+            DungeonMap.Built();   // the minimap: this floor, explored as you go
             if (where.Floor > 0) Delve.AfterSpawn(where, biome);   // a floor boss every few floors
             status = "";
             if (where.Floor > 0) NetLog.Success($"Floor {where.Floor} ({settings.name}): creatures {Delve.HealthMul(where.Floor):0.##}x health, {Delve.DamageMul(where.Floor):0.##}x damage. Find the stairs down", toast: true);
@@ -407,14 +439,21 @@ internal static class Dungeon
                 if (render.BorderPrefabs.TryGetValue(pos, out var border)) Place(border, pos);
         }
 
-        // collision + navigation from the rooms' own tiles
-        var sources = chunks.SelectMany(c => c.Tilemaps ?? new List<TilemapData>())
-            .Concat(chunks.SelectMany(c => c.Points.Where(p => p.UseOptions && p.Options != null && p.ToUseOption < p.Options.Length)
-                .SelectMany(p => p.Options[p.ToUseOption].Tilemaps ?? new List<TilemapData>())))
-            .Concat(barriers.SelectMany(b => b.Tilemaps ?? new List<TilemapData>()))
-            .Where(t => t.Tilemap).ToList();
+        // the rooms' tiles merged into one set of layers the way the game does it (DungeonRegionRenderer.MergeTilemaps:
+        // each tile at (its room's slot + the layer's override) x room size + its own cell; where the layer object sits
+        // in the room doesn't count), then collision + navigation from those
+        var sources = new List<(TilemapData t, Vector2Int at)>();
+        foreach (var c in chunks)
+        {
+            if (c.Tilemaps != null) foreach (var t in c.Tilemaps) if (t.Tilemap) sources.Add((t, c.Position));
+            foreach (var p in c.Points)
+                if (p.UseOptions && p.Options != null && p.ToUseOption < p.Options.Length && p.Options[p.ToUseOption].Tilemaps != null)
+                    foreach (var t in p.Options[p.ToUseOption].Tilemaps) if (t.Tilemap) sources.Add((t, c.Position + p.Position));
+        }
+        foreach (var b in barriers)
+            if (b && b.Tilemaps != null) foreach (var t in b.Tilemaps) if (t.Tilemap) sources.Add((t, b.Position));
         barriers.Clear();
-        var bounds = BuildCollision(sources, out var walkable, out var blocked);
+        var bounds = BuildCollision(sources, chunkSize, out var walkable, out var blocked);
         await UniTask.Yield();
 
         // the camera box
@@ -442,6 +481,9 @@ internal static class Dungeon
         return result;
     }
 
+    /// <summary>The last built place's solid cells by the layer they came from (wall / wall top / water), for /walls.</summary>
+    internal static readonly Dictionary<string, HashSet<Vector3Int>> DebugLayers = new Dictionary<string, HashSet<Vector3Int>>();
+
     static readonly List<DungeonBarrierVariation> barriers = new List<DungeonBarrierVariation>();
     static Tile blockTile;
 
@@ -450,48 +492,118 @@ internal static class Dungeon
     /// plus water, minus the "remove water" tiles (bridges); and the ground cells for the navigation mesh.
     /// Returns the region's bounds in the world.
     /// </summary>
-    static Bounds BuildCollision(List<TilemapData> sources, out Tilemap walkable, out Tilemap blocked)
+    static Bounds BuildCollision(List<(TilemapData t, Vector2Int at)> sources, Vector2Int chunkSize, out Tilemap walkable, out Tilemap blocked)
     {
         var walls = new HashSet<Vector3Int>();
         var noWall = new HashSet<Vector3Int>();
         var water = new HashSet<Vector3Int>();
         var noWater = new HashSet<Vector3Int>();
         var ground = new HashSet<Vector3Int>();
+        var covers = new HashSet<Vector3Int>();
         Vector3 cell = Vector3.one;
-        foreach (var t in sources)
+        var originCell = new Vector3Int(Mathf.RoundToInt(Origin.x), Mathf.RoundToInt(Origin.y), 0);
+
+        // the drawn layers, merged (floor, walls, wall tops, water, fences); the rooms' own copies switched off
+        var merged = new Dictionary<TilemapMergeLayer, Tilemap>();
+        var mergedGrid = new GameObject("MergedTiles");
+        mergedGrid.transform.SetParent(root.transform, false);
+        mergedGrid.transform.position = Vector3.zero;
+        mergedGrid.AddComponent<Grid>();
+        var tiles = new Dictionary<TilemapMergeLayer, (List<Vector3Int> at, List<TileBase> tile, List<Matrix4x4> m, List<Color> col)>();
+
+        foreach (var (t, at) in sources)
         {
-            var grid = t.Tilemap.GetComponentInParent<Grid>(true);   // (layoutGrid is null while the floor is switched off)
+            var tm = t.Tilemap;
+            var grid = tm.GetComponentInParent<Grid>(true);   // (layoutGrid is null while the floor is switched off)
             if (grid) cell = grid.cellSize;
             HashSet<Vector3Int> into = t.Layer switch
             {
-                TilemapMergeLayer.Wall or TilemapMergeLayer.WallCover or TilemapMergeLayer.Collision => walls,
+                // (a room's own "Collision" layer is NOT solid: the game's renderer switches it off and makes the
+                // walls from the wall tiles)
+                TilemapMergeLayer.Wall => walls,
+                TilemapMergeLayer.WallCover => covers,
                 TilemapMergeLayer.RemoveCollision => noWall,
                 TilemapMergeLayer.Water or TilemapMergeLayer.WaterCollision => water,
                 TilemapMergeLayer.RemoveWater => noWater,
                 TilemapMergeLayer.Ground0 or TilemapMergeLayer.Ground1 or TilemapMergeLayer.Ground2 => ground,
                 _ => null
             };
-            if (into == null) continue;
-            var tm = t.Tilemap;
-            tm.CompressBounds();
-            foreach (var c in tm.cellBounds.allPositionsWithin)
+            bool draw = t.Layer is TilemapMergeLayer.Ground0 or TilemapMergeLayer.Ground1 or TilemapMergeLayer.Ground2
+                        or TilemapMergeLayer.Wall or TilemapMergeLayer.WallCover or TilemapMergeLayer.Water or TilemapMergeLayer.Fence;
+            var slot = at + (t.OverridePosition ?? Vector2Int.zero);
+            var baseCell = originCell + new Vector3Int(slot.x * chunkSize.x, slot.y * chunkSize.y, 0);
+            if (into != null || draw)
             {
-                if (!tm.HasTile(c)) continue;
-                var w = CellCenter(tm, c);
-                into.Add(new Vector3Int(Mathf.FloorToInt(w.x / cell.x), Mathf.FloorToInt(w.y / cell.y), 0));
+                tm.CompressBounds();
+                if (draw && !merged.ContainsKey(t.Layer)) merged[t.Layer] = MergedLayer(mergedGrid.transform, tm, t.Layer);
+                if (draw && !tiles.ContainsKey(t.Layer)) tiles[t.Layer] = (new List<Vector3Int>(), new List<TileBase>(), new List<Matrix4x4>(), new List<Color>());
+                foreach (var c in tm.cellBounds.allPositionsWithin)
+                {
+                    var tile = tm.GetTile(c);
+                    if (!tile) continue;
+                    var to = baseCell + new Vector3Int(c.x, c.y, 0);
+                    into?.Add(to);
+                    if (!draw) continue;
+                    var list = tiles[t.Layer];
+                    list.at.Add(to); list.tile.Add(tile); list.m.Add(tm.GetTransformMatrix(c)); list.col.Add(tm.GetColor(c));
+                }
             }
-            // the room's collision layer is ours now (some rooms ship one, disabled in the game's renderer too)
-            if (t.Layer == TilemapMergeLayer.Collision || t.Layer == TilemapMergeLayer.RemoveCollision ||
-                t.Layer == TilemapMergeLayer.RemoveWater || t.Layer == TilemapMergeLayer.WaterCollision)
+            // the room's own copy goes (drawn merged now), as do the helper layers
+            if (draw || t.Layer is TilemapMergeLayer.Collision or TilemapMergeLayer.RemoveCollision or TilemapMergeLayer.RemoveWater or TilemapMergeLayer.WaterCollision)
                 tm.gameObject.SetActive(false);
         }
+        // water isn't drawn under walls / where a bridge takes it away (DungeonRegionRenderer.SetupLayers)
+        var hideWater = new HashSet<Vector3Int>(walls); hideWater.UnionWith(covers); hideWater.UnionWith(noWater);
+        foreach (var pair in tiles)
+        {
+            var tm = merged[pair.Key];
+            var (at, tile, m, col) = pair.Value;
+            for (int i = 0; i < at.Count; i++)
+            {
+                if (pair.Key == TilemapMergeLayer.Water && hideWater.Contains(at[i])) continue;
+                tm.SetTile(at[i], tile[i]);
+                tm.SetTileFlags(at[i], TileFlags.None);
+                tm.SetTransformMatrix(at[i], m[i]);
+                tm.SetColor(at[i], col[i]);
+            }
+        }
+
+        // for /walls: which layer made each solid cell
+        DebugLayers.Clear();
+        DebugLayers["wall"] = new HashSet<Vector3Int>(walls);
+        DebugLayers["wall top"] = new HashSet<Vector3Int>(covers);
+        DebugLayers["water"] = new HashSet<Vector3Int>(water);
+        // bridges placed as objects over the water (no "remove water" layer of their own): the water under the deck
+        // goes (its railings keep their own colliders)
+        int bridges = 0;
+        foreach (var t in root.GetComponentsInChildren<Transform>(true))
+        {
+            if (!t || t.name.IndexOf("bridge", System.StringComparison.OrdinalIgnoreCase) < 0) continue;
+            if (t.parent && t.parent.name.IndexOf("bridge", System.StringComparison.OrdinalIgnoreCase) >= 0) continue;   // counted with its parent
+            var rs = t.GetComponentsInChildren<SpriteRenderer>(true);
+            if (rs.Length == 0) continue;
+            var deck = rs[0].bounds;
+            foreach (var r in rs) if (r.bounds.size.sqrMagnitude > 0f) deck.Encapsulate(r.bounds);
+            bridges++;
+            for (int x = Mathf.FloorToInt(deck.min.x / cell.x); x <= Mathf.FloorToInt(deck.max.x / cell.x); x++)
+                for (int y = Mathf.FloorToInt(deck.min.y / cell.y); y <= Mathf.FloorToInt(deck.max.y / cell.y); y++)
+                {
+                    var c = new Vector3Int(x, y, 0);
+                    var centre = new Vector3((x + 0.5f) * cell.x, (y + 0.5f) * cell.y, deck.center.z);
+                    if (deck.Contains(centre)) { noWater.Add(c); if (water.Contains(c)) ground.Add(c); }   // walkable deck
+                }
+        }
+        if (bridges > 0) NetLog.Info($"Dungeon: {bridges} bridges over water made walkable", toast: false);
+        walls.UnionWith(covers);
         walls.ExceptWith(noWall);
         water.ExceptWith(noWater);
         int wallOnly = walls.Count;
-        // water that covers most of the floor is a layer drawn under it, not a lake: then it isn't solid
+        // water is solid (the lakes; it has a lake-bed floor tile under it, so that doesn't make it walkable), except
+        // where a bridge's "remove water" layer takes it away (subtracted above): with the tiles placed like the game
+        // places them, those land on the bridge decks
         int groundUnderWater = ground.Count(c => water.Contains(c));
-        bool waterSolid = ground.Count == 0 || groundUnderWater < ground.Count * 0.4f;
-        if (waterSolid) walls.UnionWith(water);
+        bool waterSolid = true;
+        walls.UnionWith(water);
         floorCells = new HashSet<Vector3Int>(ground);
         floorCells.ExceptWith(walls);
         if (ground.Count > 0 && floorCells.Count < Mathf.Max(30, ground.Count * 0.03f))   // corridors are mostly wall (86% here): only a floor of almost nothing is wrong
@@ -503,8 +615,9 @@ internal static class Dungeon
         }
         cellSize = cell;
         NetLog.Info($"Dungeon tiles: ground {ground.Count}, walls {wallOnly} (minus {noWall.Count} openings), water {water.Count} (minus {noWater.Count}, {groundUnderWater} under the floor, solid: {waterSolid}), walkable {floorCells.Count}, cell {cell}, from {sources.Count} tilemaps: " +
-                    string.Join(", ", sources.GroupBy(t => t.Layer).Select(g => $"{g.Key} x{g.Count()}")), toast: false);
+                    string.Join(", ", sources.GroupBy(s => s.t.Layer).Select(g => $"{g.Key} x{g.Count()}")), toast: false);
 
+        wallCells = new HashSet<Vector3Int>(walls);   // (the minimap draws them)
         NavLayers(root.transform, cell, ground, walls, out walkable, out blocked);
 
         var all = new HashSet<Vector3Int>(ground); all.UnionWith(walls);
@@ -554,6 +667,29 @@ internal static class Dungeon
         composite.geometryType = CompositeCollider2D.GeometryType.Polygons;
         col.usedByComposite = true;
 
+    }
+
+    /// <summary>One merged layer, drawn like the rooms' own (sorting, material, mode, anchor, tint of the first of its kind).</summary>
+    static Tilemap MergedLayer(Transform parent, Tilemap like, TilemapMergeLayer layer)
+    {
+        var go = new GameObject("Merged_" + layer);
+        go.transform.SetParent(parent, false);
+        go.layer = like.gameObject.layer;
+        var tm = go.AddComponent<Tilemap>();
+        tm.tileAnchor = like.tileAnchor;
+        tm.color = like.color;
+        tm.orientation = like.orientation;
+        var r = go.AddComponent<TilemapRenderer>();
+        var lr = like.GetComponent<TilemapRenderer>();
+        if (lr)
+        {
+            r.sortingLayerID = lr.sortingLayerID;
+            r.sortingOrder = lr.sortingOrder;
+            r.sharedMaterial = lr.sharedMaterial;
+            r.mode = lr.mode;
+            r.sortOrder = lr.sortOrder;
+        }
+        return tm;
     }
 
     /// <summary>
@@ -620,52 +756,103 @@ internal static class Dungeon
 
     /// <summary>The biome's creatures in the rooms' spawn areas (the game's GameManager.SetupScene does the same in the dungeon scene).
     /// Connected: only whoever runs the area spawns; the others get them through the creature sync.</summary>
+    /// <summary>
+    /// The floor's creatures, Diablo-style: every spawn area gets its groups now (which creatures, from the floor's
+    /// seed), but they only appear when a player comes near (Wake); at most MaxEnemies alive at once. So a big floor
+    /// is full without hundreds of creatures running at the same time.
+    /// Connected: only whoever runs the area spawns; the others get them through the creature sync.
+    /// </summary>
     static void SpawnCreatures(BiomeSettings biome, Where where)
     {
+        sleeping.Clear();
         if (!biome || !root) return;
         if (Plugin.Connected && !Plugin.IOwnHere) return;
-        var oldState = UnityEngine.Random.state;
         int genSeed = Delve.SeedOf(where);
-        UnityEngine.Random.InitState(genSeed ^ (where.Region * 7919));
         var rng = new System.Random(genSeed ^ where.Region);
-        int count = 0;
-        try
+        int groups = 0;
+        foreach (var spawnArea in root.GetComponentsInChildren<EnemySpawnArea>(true))
         {
-            foreach (var spawnArea in root.GetComponentsInChildren<EnemySpawnArea>(true))
+            if (rng.NextDouble() >= spawnArea.Chance + Delve.ExtraChance(where.Floor)) continue;
+            var shape = spawnArea.GetComponent<PolygonCollider2D>();
+            var collection = spawnArea.Type switch
             {
-                if (rng.NextDouble() >= spawnArea.Chance + Delve.ExtraChance(where.Floor)) continue;
-                var shape = spawnArea.GetComponent<PolygonCollider2D>();
-                var collection = spawnArea.Type switch
-                {
-                    SpawnAreaType.Big => biome.BigSpawnCollection,
-                    SpawnAreaType.Small => biome.SmallSpawnCollection,
-                    SpawnAreaType.Medium => biome.MediumSpawnCollection,
-                    SpawnAreaType.Custom => spawnArea.CustomGroups,
-                    _ => null
-                };
-                if (!shape || !collection || collection.Groups == null || collection.Groups.Count == 0) continue;
-                for (int g = 0; g < Delve.GroupsPerArea(where.Floor); g++)
-                {
+                SpawnAreaType.Big => biome.BigSpawnCollection,
+                SpawnAreaType.Small => biome.SmallSpawnCollection,
+                SpawnAreaType.Medium => biome.MediumSpawnCollection,
+                SpawnAreaType.Custom => spawnArea.CustomGroups,
+                _ => null
+            };
+            if (!shape || !collection || collection.Groups == null || collection.Groups.Count == 0) continue;
+            var list = new List<Enemy>();
+            int n = Delve.GroupsFor(where.Floor, rng);
+            for (int g = 0; g < n; g++)
+            {
                 var group = collection.Groups[rng.Next(collection.Groups.Count)];
-                if (!group || group.Enemies == null) continue;
-                foreach (var enemy in group.Enemies)
+                if (group && group.Enemies != null) foreach (var e in group.Enemies) if (e) list.Add(e);
+            }
+            if (list.Count == 0) continue;
+            sleeping.Add((shape, list, rng.Next()));
+            groups++;
+        }
+        sleepingCreatures = sleeping.Sum(x => x.creatures.Count);
+        NetLog.Info($"Dungeon: {groups} spawn areas, {sleepingCreatures} creatures waiting (they appear as you come near; at most {Delve.MaxEnemies} at once)", toast: false);
+        nextWake = 0f;
+    }
+
+    static readonly List<(PolygonCollider2D shape, List<Enemy> creatures, int seed)> sleeping = new List<(PolygonCollider2D, List<Enemy>, int)>();
+    static int sleepingCreatures;
+    static float nextWake;
+    const float WakeRange = 28f;
+
+    /// <summary>Twice a second: spawn areas a player has come near fill up (while there's room under the limit).</summary>
+    static void Wake()
+    {
+        if (sleeping.Count == 0 || Time.unscaledTime < nextWake || busy) return;
+        nextWake = Time.unscaledTime + 0.5f;
+        if (Plugin.Connected && !Plugin.IOwnHere) return;
+        var near = new List<Vector3>();
+        var me = LocalPlayer.Get();
+        if (me) near.Add(me.transform.position);
+        if (Plugin.Connected)
+            foreach (var p in Plugin.Players)
+                if (p.SamePlace(LocalPlayer.Scene, LocalPlayer.Area)) near.Add(p.LastPosition);
+        if (near.Count == 0) return;
+        int alive = 0;
+        foreach (var go in spawned) if (go && go.activeInHierarchy && go.GetComponent<Enemy>() is Enemy e && !e.IsDead) alive++;
+        int max = Delve.MaxEnemies > 0 ? Delve.MaxEnemies : int.MaxValue;
+        for (int i = sleeping.Count - 1; i >= 0 && alive < max; i--)
+        {
+            var (shape, creatures, seed) = sleeping[i];
+            if (!shape) { sleeping.RemoveAt(i); continue; }
+            var c = shape.bounds.center;
+            bool close = false;
+            foreach (var p in near) if (((Vector2)(p - c)).sqrMagnitude < WakeRange * WakeRange) { close = true; break; }
+            if (!close) continue;
+            sleeping.RemoveAt(i);
+            var oldState = UnityEngine.Random.state;
+            UnityEngine.Random.InitState(seed);
+            int woke = 0;
+            try
+            {
+                foreach (var enemy in creatures)
                 {
-                    if (!enemy) continue;
-                    if (Delve.MaxEnemies > 0 && count >= Delve.MaxEnemies) break;   // the floor's limit
+                    if (alive >= max) break;
+                    woke++;
                     PoolManager.CreatePool(enemy.gameObject, enemy.ID, 5, disableFirst: true);
                     var go = PoolManager.Get(enemy.gameObject);
                     go.transform.position = Utils.RandomInsidePolygon(shape);
                     go.GetComponent<Enemy>().ForceAlive();
                     go.SetActive(true);
                     spawned.Add(go);
-                    count++;
-                }
+                    alive++;
                 }
             }
+            catch (Exception e) { NetLog.Warn($"Dungeon: creatures: {e.Message}", toast: false); }
+            finally { UnityEngine.Random.state = oldState; }
+            // the limit was reached halfway through this area's group: the rest stay asleep there, and come once
+            // there's room again (they were simply lost before, so busy floors ran dry)
+            if (woke < creatures.Count) sleeping.Add((shape, creatures.GetRange(woke, creatures.Count - woke), seed + woke));
         }
-        catch (Exception e) { NetLog.Warn($"Dungeon: creatures: {e.Message}", toast: false); }
-        finally { UnityEngine.Random.state = oldState; }
-        NetLog.Info($"Dungeon: {count} creatures", toast: false);
     }
 
     // ---- doorways inside a dungeon (the game would load its missing DungeonScene) ----
@@ -797,9 +984,80 @@ internal static class Dungeon
         int seed = r.GetInt(), region = r.GetInt(), floor = r.AvailableBytes >= 4 ? r.GetInt() : 0;
         Delve.ReadRules(r);
         invite = (from, scene, new Where(settings, seed, region, floor));
+        inviteArena = false;
         if (!(current.HasValue && current.Value.Equals(invite.Value.where)))
-            NetLog.Info(floor > 0 ? $"{Plugin.NameOf(from)} went down to floor {floor}: Insert menu to follow"
-                                  : $"{Plugin.NameOf(from)} is in a generated dungeon ({settings}, region {region}): Insert menu to join", toast: true);
+        {
+            inviteAt = Time.unscaledTime;   // the invite card (DungeonInvite) shows it, with Join / Not now
+            Chat.System(InviteText(), new ImGuiNET.Vector4(1f, 0.75f, 0.4f, 1f));
+        }
+    }
+
+    // ---- the invite card's side (DungeonInvite draws it) ----
+
+    static float inviteAt = -999f;
+    const float InviteSeconds = 45f;
+
+    // the boss arena's invites share the card: the newest invite of either kind is the one shown
+    static bool inviteArena, arenaRush;
+    static int arenaFrom;
+    static string arenaScene = "";
+
+    /// <summary>We went into the boss arena (or started a boss rush there): everyone hears, and can come too.</summary>
+    public static void AnnounceArena(bool rush)
+    {
+        if (Plugin == null || !Plugin.Connected) return;
+        var w = new NetDataWriter();
+        w.Put((byte)MsgType.ArenaOpen);
+        w.Put(LocalPlayer.Scene);
+        w.Put(rush);
+        Plugin.SendToAll(w, DeliveryMethod.ReliableOrdered);
+    }
+
+    public static void OnArena(NetDataReader r, int from)
+    {
+        arenaScene = r.GetString();
+        arenaRush = r.GetBool();
+        arenaFrom = from;
+        inviteArena = true;
+        if (Arena.Active) return;   // we're there already
+        inviteAt = Time.unscaledTime;
+        Chat.System(InviteText(), new ImGuiNET.Vector4(1f, 0.75f, 0.4f, 1f));
+    }
+
+    /// <summary>A live invite to show: someone else's dungeon (or the arena) we're not in, from the last 45 s, not waved away.</summary>
+    public static bool HasInvite => Time.unscaledTime - inviteAt < InviteSeconds &&
+                                    (inviteArena ? !Arena.Active
+                                                 : invite.HasValue && !(current.HasValue && current.Value.Equals(invite.Value.where)));
+
+    public static bool CanJoinInvite => HasInvite && !busy &&
+                                        (inviteArena ? arenaScene == LocalPlayer.Scene && !Active : invite.Value.scene == LocalPlayer.Scene);
+
+    public static string InviteText()
+    {
+        if (inviteArena)
+        {
+            string a = arenaRush ? $"{Plugin.NameOf(arenaFrom)} started a BOSS RUSH in the arena" : $"{Plugin.NameOf(arenaFrom)} went into the boss arena";
+            if (arenaScene != LocalPlayer.Scene) return $"{a} from {arenaScene}: go there to join";
+            return Active ? $"{a}: leave the dungeon to join" : a;
+        }
+        if (!invite.HasValue) return "";
+        var inv = invite.Value;
+        string who = Plugin.NameOf(inv.from);
+        string what = inv.where.Floor > 0 ? $"{who} went down to floor {inv.where.Floor} of the descent" : $"{who} went into a dungeon ({inv.where.Settings})";
+        return inv.scene == LocalPlayer.Scene ? what : $"{what} from {inv.scene}: go there to join";
+    }
+
+    public static void DismissInvite() => inviteAt = -999f;
+
+    /// <summary>Go where the invite says (the same generated place: same settings, seed, region, floor).</summary>
+    public static void JoinInvite()
+    {
+        if (!CanJoinInvite) return;
+        inviteAt = -999f;
+        if (inviteArena) { Arena.Enter(); return; }
+        var inv = invite.Value;
+        if (inv.where.Floor > 0) Delve.Follow(inv.where);
+        Enter(inv.where.Settings, inv.where.Seed, inv.where.Region, announce: false, floor: inv.where.Floor);
     }
 
     // ---- the Insert menu ----
@@ -841,8 +1099,8 @@ internal static class Dungeon
             else if (ImGuiNET.ImGui.SmallButton(inv.where.Floor > 0 ? $"Follow {Plugin.NameOf(inv.from)} to floor {inv.where.Floor}"
                                                                    : $"Join {Plugin.NameOf(inv.from)}'s dungeon ({inv.where.Settings}, region {inv.where.Region})"))
             {
-                if (inv.where.Floor > 0) Delve.Follow(inv.where);
-                Enter(inv.where.Settings, inv.where.Seed, inv.where.Region, announce: false, floor: inv.where.Floor);
+                inviteAt = Time.unscaledTime;
+                JoinInvite();
             }
         }
 

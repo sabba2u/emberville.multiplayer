@@ -43,6 +43,11 @@ USE
 Walk up to a chest (its arrow shows) and press X: everything in your bag that the chest already holds goes in,
 onto its stacks and then into free slots while there's room. Each item shows in the game's list on the right
 ("Stored Carrot (12)"). It's the chest screen's own "send common" button, without opening the screen.
+- Shift+X: the same into every chest nearby.
+- V at a chest: its name, colour and what it takes (weapons only, materials only...).
+- Search boxes over the chest and your bag while a chest is open.
+- F over an item in your inventory or a chest: a favourite (a heart in its corner). Favourites never go into a
+  chest by themselves (X, Shift+X, the chest screen's send buttons); F again to undo.
 Settings: BepInEx\config\spike.emberville.betterchests.cfg ([QuickStack] Key = X).
 
 UNINSTALL

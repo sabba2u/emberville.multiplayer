@@ -74,23 +74,53 @@ internal static class OnlinePlayers
     // ---- the window ----
 
     public static void Toggle() => SetVisible(!Visible);
+    public static void Close() => SetVisible(false);
+
+    // ---- for the game-look window (OnlinePlayersWindow) ----
+    internal static string ConfirmKey => confirm == "" || UnityEngine.Time.unscaledTime - confirmAt >= 3f ? "" : confirm;
+    internal static bool Armed(string key) => confirm == key && UnityEngine.Time.unscaledTime - confirmAt < 3f;
+    /// <summary>A button needing a second click within 3 s: true on that second click.</summary>
+    internal static bool Arm(string key)
+    {
+        if (Armed(key)) { confirm = ""; return true; }
+        confirm = key;
+        confirmAt = UnityEngine.Time.unscaledTime;
+        return false;
+    }
+    internal static List<(string id, string name)> BanList() => Bans();
+    internal static void Unban(string id)
+    {
+        var bans = Bans();
+        var b = bans.FirstOrDefault(x => x.id == id);
+        SaveBans(bans.Where(x => x.id != id).ToList());
+        NetLog.Info($"Unbanned {b.name}", toast: true);
+    }
 
     static void SetVisible(bool on)
     {
         if (on == Visible) return;
         Visible = on;
         confirm = "";
+        OnlinePlayersWindow.Show(on);   // the game-look window (if it can't be built, Draw shows the old one)
         if (on)
         {
             // The game's controls off while it's up (a click on a button would also swing the weapon).
             savedMaps = new List<(UnityEngine.InputSystem.InputActionMap, bool)>();
-            foreach (var map in MainInput.Actions.asset.actionMaps) { savedMaps.Add((map, map.enabled)); map.Disable(); }
+            foreach (var map in MainInput.Actions.asset.actionMaps)
+            {
+                savedMaps.Add((map, map.enabled));
+                // the game-look window's buttons need the game's UI actions (its EventSystem reads them); its Esc
+                // (UI.Cancel opens the pause menu) stays off: our own Esc closes the window
+                if (map.name == "UI" && OnlinePlayersWindow.Active) { map.Enable(); MainInput.Actions.UI.Cancel.Disable(); }
+                else map.Disable();
+            }
             UnityEngine.Cursor.visible = true;
             UnityEngine.Cursor.lockState = UnityEngine.CursorLockMode.None;
         }
         else
         {
-            if (savedMaps != null) foreach (var (map, was) in savedMaps) if (was) map.Enable();
+            MainInput.Actions.UI.Cancel.Enable();
+            if (savedMaps != null) foreach (var (map, was) in savedMaps) { if (was) map.Enable(); else map.Disable(); }
             savedMaps = null;
         }
     }
@@ -102,11 +132,12 @@ internal static class OnlinePlayers
         if (kb == null || !UnityEngine.Application.isFocused || Chat.IsOpen || ImGuiUnity.Typing) return;
         if (kb[keyEntry.Value].wasPressedThisFrame && (Visible || !PlayerStatusUtil.LocalBusy)) Toggle();
         else if (Visible && kb.escapeKey.wasPressedThisFrame) SetVisible(false);
+        OnlinePlayersWindow.Tick();
     }
 
     public static void Draw()
     {
-        if (!Visible || Plugin == null) return;
+        if (!Visible || Plugin == null || OnlinePlayersWindow.Active) return;   // (the game-look window is up instead)
         var vp = ImGui.GetMainViewport();
         ImGui.SetNextWindowPos(new Vector2(vp.WorkPos.x + vp.WorkSize.x * 0.5f, vp.WorkPos.y + vp.WorkSize.y * 0.3f), ImGuiCond.Appearing, new Vector2(0.5f, 0.5f));
         ImGui.SetNextWindowSize(new Vector2(560, 0), ImGuiCond.Always);
@@ -172,6 +203,16 @@ internal static class OnlinePlayers
         {
             ImGui.Indent(70);
             bool isMuted = IsMuted(name);
+            var them = Plugin.Players.FirstOrDefault(x => x.Id == id);
+            bool sameScene = them != null && them.HaveState && them.Scene == LocalPlayer.Scene;
+            if (!sameScene) ImGui.BeginDisabled();
+            if (ImGui.SmallButton("Teleport to")) { DebugPanel.TeleportTo(them); SetVisible(false); }
+            if (!sameScene)
+            {
+                ImGui.EndDisabled();
+                if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) ImGui.SetTooltip(them == null || !them.HaveState ? "Not heard from them yet" : "They're in another scene (go through the same door first)");
+            }
+            ImGui.SameLine();
             if (ImGui.SmallButton("Trade")) { Trade.Invite(id); SetVisible(false); }
             ImGui.SameLine();
             if (ImGui.SmallButton(isMuted ? "Unmute" : "Mute")) SetMuted(name, !isMuted);

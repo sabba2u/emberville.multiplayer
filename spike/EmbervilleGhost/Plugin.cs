@@ -25,9 +25,13 @@ namespace EmbervilleGhost;
 
 [BepInPlugin("spike.embervilleghost", "EmbervilleGhost", Version)]
 [BepInDependency("spike.emberville.betterchests", BepInDependency.DependencyFlags.SoftDependency)]   // loads first if installed
+[BepInDependency(Integrations.CombatGuid, BepInDependency.DependencyFlags.SoftDependency)]   // the split-out mods too (Integrations)
+[BepInDependency(Integrations.LootingGuid, BepInDependency.DependencyFlags.SoftDependency)]
+[BepInDependency(Integrations.PetsGuid, BepInDependency.DependencyFlags.SoftDependency)]
+[BepInDependency(Integrations.NpcsGuid, BepInDependency.DependencyFlags.SoftDependency)]
 public class Plugin : BaseUnityPlugin, ITransportListener
 {
-    internal const string Version = "0.1.8";
+    internal const string Version = "0.1.9";
     internal const string ModName = "Sabba's Emberville Multiplayer Mod";
     internal static string Title => $"{ModName} v{Version}";
 
@@ -111,11 +115,17 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         StorySync.Plugin = this;
         TeamBuffs.Plugin = this;
         Pings.Plugin = this;
+        HookNet.Plugin = this;
+        SummonSync.Plugin = this;
+        RemotePets.Plugin = this;
+        ArenaTraps.Plugin = this;
         BossSync.Plugin = this;
         DropSync.Plugin = this;
         PropSync.Plugin = this;
         ChestSync.Plugin = this;
+        NpcSync.Plugin = this;
         Chat.Plugin = this;
+        HookSounds.Init(Config);
         Chat.Lift = Config.Bind("Chat", "HeightAboveBottom", 0.25f, "Chat's bottom edge, as a fraction of the window height from the bottom (clears the game's health bar and hotbar)");
         PlayerHits.Plugin = this;
         GatherSync.Plugin = this;
@@ -129,19 +139,16 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         HostWindow.Plugin = this;
         Session.Bind(Config);
         OnlinePlayers.Bind(Config);
+        Bestiary.Bind(Config);
+        BuildMode.Bind(Config);
         TeamHud.Bind(Config);
-        Pet.Bind(Config);
         Hud.ShowStatus = Config.Bind("Hud", "ShowStatus", false, "The status line top-left (version, connection, fps); Delete shows / hides it");
         DemoEnd.Bind(Config);
-        Magnet.Bind(Config);
         MouseWalk.Bind(Config);
         Diag.Bind(Config);
         DesyncCheck.Bind(Config);
         Delve.Bind(Config);
-        BowAssist.Bind(Config);
-        MoveAttack.Bind(Config);
-        LootArrows.Bind(Config);
-        Pet.Plugin = this;
+        Integrations.Init();   // Better Combat / Looting / Pets and Summons, if installed
         TeamHud.Plugin = this;
         MapMates.Plugin = this;
         Trade.Plugin = this;
@@ -164,6 +171,8 @@ public class Plugin : BaseUnityPlugin, ITransportListener
     internal float ModMs { get; private set; }
     internal int StateBytes { get; private set; }
 
+    void FixedUpdate() => HunterHook.FixedTick();   // the hook's pull on us (physics steps)
+
     void Update()
     {
         modWatch.Restart();
@@ -178,6 +187,11 @@ public class Plugin : BaseUnityPlugin, ITransportListener
             if (kb.f9Key.wasPressedThisFrame) HostWindow.Show();   // pick the session rules, then HOST NOW
             if (kb.f10Key.wasPressedThisFrame) { if (Connected) Stop(); else Join(); }   // join, or leave when connected
             if (kb.deleteKey.wasPressedThisFrame && !ImGuiUnity.Typing && !Chat.IsOpen) Hud.ShowStatus.Value = !Hud.ShowStatus.Value;   // the status line top-left
+            if (Hud.ShowStatus.Value && !ImGuiUnity.Typing && !Chat.IsOpen)   // with it up: Home / End copy where you stand / where the mouse points
+            {
+                if (kb.homeKey.wasPressedThisFrame) Hud.CopySpot(mouse: false);
+                if (kb.endKey.wasPressedThisFrame) Hud.CopySpot(mouse: true);
+            }
         }
 
         SteamBoot.Tick();
@@ -185,24 +199,36 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         DemoEnd.Tick();
         Stockpile.Tick();
         GroundSync.Tick();
-        Magnet.Tick();
         MouseWalk.Tick();
         Diag.Tick();
         DesyncCheck.Tick();
+        DungeonInvite.Tick();   // a teammate's dungeon: the Join / Not now card
         Delve.Tick();   // the descent: entrance pad, stronger creatures on deeper floors
         MiniBoss.Tick();   // our mini-bosses: health, colour, the boss bar, loot
         Arena.Tick();
+        ArenaTraps.Tick();   // the arena's traps: in step with whoever switched them
         Rory.Tick();
-        LootArrows.Tick();   // green arrows over better weapons on the ground
+        Dungeon.Tick();      // creatures off the navigation mesh put back on it
+        DungeonMap.Tick();   // the dungeon minimap (top left; ~ hides it)
+        NoClip.Tick();       // /noclip stays on through deaths and respawns
+        HunterHook.Tick();   // the Hunter's Hook: the throw, the rope, the drag
+        HookNet.Tick();      // teammates' hooks: their ropes
+        Integrations.Tick();   // teammates' pets, chickens and risen (Better Pets and Summons)
+        if (Integrations.HasNpcs) NpcSync.Tick();   // Better NPCs and Quests: the host's files and story for everyone
         SteamLobby.Tick();
         CheckLeftWorld();
         DevMode.Tick();
         Pings.Tick();
         OnlinePlayers.Tick();
+        Bestiary.Tick();   // N: the Bestiary
+        if (BuildMode.Enabled)
+        {
+            BuildMode.Tick();   // B: build mode anywhere
+            BuildSave.Tick();   // what B built: saved per world, put back per scene
+        }
         Trade.Tick();
         TeamHud.Tick();   // right-click a party card: teleport / trade / mute
         TeamHud.RenderPortraits();
-        Pet.Tick();
         TickKicks();
         TickMigration();
         CoopDeath.Tick();   // before the game's frame logic: last frame's death reset (if any) is over
@@ -226,7 +252,7 @@ public class Plugin : BaseUnityPlugin, ITransportListener
 
     void NetTick()
     {
-        if (LocalPlayer.Scene != lastScene) { lastScene = LocalPlayer.Scene; SceneIds.Clear(); EnemySync.SceneChanged(); FxSync.Clear(); AttackFx.Clear(); BossSync.Clear(); StationSync.Clear(); FarmSync.Clear(); Pings.Clear(); GroundSync.Clear(); InteractSync.Clear(); CutsceneSync.Clear(); }   // ids belong to a scene
+        if (LocalPlayer.Scene != lastScene) { lastScene = LocalPlayer.Scene; SceneIds.Clear(); EnemySync.SceneChanged(); FxSync.Clear(); AttackFx.Clear(); BossSync.Clear(); StationSync.Clear(); FarmSync.Clear(); Pings.Clear(); HookNet.Clear(); Integrations.ForgetTeammates(); GroundSync.Clear(); InteractSync.Clear(); CutsceneSync.Clear(); }   // ids belong to a scene
 
         Perf.Begin("1 receive"); transport.Poll(); Perf.End("1 receive");
 
@@ -279,9 +305,11 @@ public class Plugin : BaseUnityPlugin, ITransportListener
             if (!there) { snapshotSentFor.Remove(p.Id); continue; }
             if (!snapshotSentFor.Add(p.Id)) continue;
             EnemySync.SendSnapshot(p.Id);
+            MiniBoss.SendSnapshot(p.Id);   // bosses' names, colours, sizes
             DropSync.SendSnapshot(p.Id);
             PropSync.SendSnapshot(p.Id);
             ChestSync.SendSnapshot(p.Id);
+            ChestSync.SendLooksSnapshot(p.Id);   // chest names and colours (Better Chests)
             GatherSync.SendSnapshot(p.Id);
             DoorSync.SendSnapshot(p.Id);
             InteractSync.SendSnapshot(p.Id);
@@ -296,6 +324,7 @@ public class Plugin : BaseUnityPlugin, ITransportListener
     void OnApplicationQuit()
     {
         CharacterSafety.Release();
+        HookOutfit.Undress();   // (the clothes back to your colour)
         Stop();
         SteamBoot.Shutdown();
     }
@@ -411,7 +440,7 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         PlaceSync.Clear();
         TeamBuffs.ForgetAll();
         TimeSync.Clear();
-        Pet.ForgetAll();
+        Integrations.ForgetTeammates();
         SceneIds.Clear();
     }
 
@@ -625,10 +654,10 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         writer.Put(me.characterStats ? me.MaxKymiaPoints : 0f);
         writer.Put(MapMates.InWilds);   // in the generated wilds: our spot goes on everyone's world map
         writer.Put(me.currentWeaponItem?.data != null ? me.currentWeaponItem.data.addressKey ?? "" : "");   // the party strip shows it
-        writer.Put(Pet.KindByte);   // our pet (0 none, else which kind), so theirs follows our stand-in
-        writer.Put((byte)Mathf.Min(Pet.Level, 255));
-        writer.Put(Pet.Out ? Pet.Name : "");
-        Color32 petTint = Pet.Tint;
+        writer.Put(Integrations.PetKindByte);   // our pet (0 none, else which kind), so theirs follows our stand-in
+        writer.Put((byte)Mathf.Min(Integrations.PetLevel, 255));
+        writer.Put(Integrations.PetName);
+        Color32 petTint = Integrations.PetTint;
         writer.Put(petTint.r); writer.Put(petTint.g); writer.Put(petTint.b);
         writer.Put((byte)PlayerStatusUtil.Local());
         AnimSync.Write(writer, LocalPlayer.Animators(me));
@@ -722,6 +751,7 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         w.Put(id);
         peer.Send(w, DeliveryMethod.ReliableOrdered);
         Session.SendTo(id);   // the host's rules (shared XP, instanced loot)
+        PlaceSync.SendBuiltTo(id);   // what's been built anywhere (B)
         SendRoster();
         ownersSig = "";       // re-send who runs which area, now including them
 
@@ -1111,6 +1141,11 @@ public class Plugin : BaseUnityPlugin, ITransportListener
             case MsgType.TradeLock: Trade.OnLock(reader, from); break;
             case MsgType.TradeCancel: Trade.OnCancel(reader, from); break;
             case MsgType.Ping: Pings.OnPing(reader, from); break;
+            case MsgType.HookRope: HookNet.OnRope(reader, from); break;
+            case MsgType.HookThrow: HookNet.OnThrow(reader, from); break;
+            case MsgType.HookText: HookNet.OnText(reader, from); break;
+            case MsgType.HookPull: HookNet.OnPull(reader, from); break;
+            case MsgType.Summons: if (Integrations.HasPets) SummonSync.OnSummons(reader, from); break;
             case MsgType.PathDraw: Pings.OnPath(reader, from); break;
             case MsgType.ChestTake: if (owner) ChestSync.OnTake(reader, from); break;   // shared chests: the area owner's are real
             case MsgType.ChestShared: if (!owner) ChestSync.OnShared(reader); break;
@@ -1122,10 +1157,18 @@ public class Plugin : BaseUnityPlugin, ITransportListener
             case MsgType.StationXp: StationSync.OnXp(reader); break;
             case MsgType.SoilState: FarmSync.OnState(reader); break;   // farm plots: whoever farms sends the plot
             case MsgType.PlaceChange: PlaceSync.OnChange(reader); break;   // building: whoever builds sends it
+            case MsgType.BuiltList: if (!IsHost) PlaceSync.OnBuiltList(reader); break;   // the host's list of what's built anywhere
             case MsgType.GroundPress: GroundSync.OnPress(reader, from); break;
             case MsgType.LogBatch: if (IsHost) Diag.OnBatch(reader, from); break;   // diagnostics: everyone's lines in one log
             case MsgType.StateDigest: DesyncCheck.OnDigest(reader, from); break;   // diagnostics: the mismatch checker
             case MsgType.DungeonOpen: Dungeon.OnOpen(reader, from); break;
+            case MsgType.ArenaOpen: Dungeon.OnArena(reader, from); break;
+            case MsgType.ArenaTraps: ArenaTraps.OnState(reader); break;
+            case MsgType.ChestLook: ChestSync.OnLook(reader); break;
+            case MsgType.NpcFiles: if (Integrations.HasNpcs && !IsHost) NpcSync.OnFiles(reader); break;
+            case MsgType.NpcBook: if (Integrations.HasNpcs && !IsHost) NpcSync.OnBook(reader); break;
+            case MsgType.NpcAsk: if (Integrations.HasNpcs && IsHost) NpcSync.OnAsk(reader); break;
+            case MsgType.NpcWander: if (Integrations.HasNpcs) NpcSync.OnWander(reader); break;
             case MsgType.BossLook: MiniBoss.OnLook(reader); break;   // a mini-boss's size, colour, name, toughness   // generated dungeons: someone went in, the others may join
             case MsgType.CutsceneStart: CutsceneSync.OnStart(reader, from); break;   // story cutscenes: everyone in the area watches
             case MsgType.CutsceneSnapshot: if (!owner) CutsceneSync.OnSnapshot(reader); break;   // story cutscenes: everyone in the area watches
@@ -1290,10 +1333,23 @@ internal enum MsgType : byte
     InteractSnapshot = 125, // area owner -> arriving player: repaired buildings, portals, opened item locks
     LogBatch = 128,     // client -> host, reliable: dropped count, lines (kind, text) for the host's session log
     StateDigest = 129,  // player -> area owner, every 3 s: scene, area, (category, id, value) of what their game sees
+    HookRope = 140,     // thrower -> their place: out?, then (unreliable ~20 Hz) the hook head's x, y; when it's gone (reliable) just false
+    HookText = 142,     // thrower -> their place, reliable unordered: text, x, y, kind (the hook's pop-up words)
+    HookPull = 143,     // thrower -> the player it caught (PvP), reliable: seconds (their copy drags them to the thrower)
+    Summons = 144,      // summoner -> their place, ~10 Hz unreliable (empty list: reliable): count x (id, risen?, creature, x, y, size, health 0-255, attack count)
+    ArenaOpen = 145,    // player -> everyone (ToAll), reliable: scene, boss rush? (they went into the boss arena / started a rush)
+    ArenaTraps = 146,   // whoever switched them -> their place, reliable (again every 3 s): spikes on, arrows on (the boss arena's traps)
+    NpcFiles = 148,     // host -> a player who joined (and everyone after a reload), reliable: Better NPCs and Quests' files (packed: count, path + bytes)
+    NpcBook = 149,      // host -> everyone, reliable: the story (flags + quest progress, its saved text as UTF-8 bytes)
+    NpcAsk = 150,       // guest -> host, reliable: an action ("start q", "set $x to 1"), "handed q step" (turned in from their own bag, for that step), "event kill Mob_Glowbat"
+    NpcWander = 151,    // host -> their place, reliable: npc id, x, y (where that NPC walks to next / stops)
+    BuiltList = 152,    // host -> a player who joined, reliable: everything built anywhere (B), BuildList's saved text
+    ChestLook = 147,    // editor -> everyone (ToAll) / area owner -> arriving player, reliable: chest id, name, colour hex, what it takes (ItemCategory bits) (Better Chests' V)
+    HookThrow = 141,    // thrower -> their place, reliable unordered: shouts? (the hook's sound at their stand-in)
     BossLook = 131,     // boss spawner -> their place, reliable: creature id, name, base, tint rgb, scale, health x, damage x
     DungeonOpen = 130,  // player -> everyone (ToAll), reliable: scene, dungeon settings name, seed, region (they went into a generated dungeon)
     CutsceneSnapshot = 127, // area owner -> arriving player: cutscenes already played here (index, id), skipped to their end
     CutsceneStart = 126, // whoever set it off -> their place, reliable: entry index, cutscene id; everyone there plays it
     GroundPress = 122, // anyone -> their place, reliable: floor button id, down (repeated every 2 s while standing on it)
-    PlaceChange = 121, // builder -> everyone (ToAll), reliable: op (place / remove object / remove tile), scene, then placeable id, x, y, direction, GUID | id, x, y | layer, x, y, z
+    PlaceChange = 121, // builder -> everyone (ToAll), reliable: op (place / remove object / remove tile), scene, then placeable id, x, y, direction, GUID, built anywhere? | id, x, y | layer, x, y, z
 }

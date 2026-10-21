@@ -49,6 +49,7 @@
     <Reference Include="UnityEngine.TextRenderingModule"><HintPath>$(Managed)\UnityEngine.TextRenderingModule.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="Unity.TextMeshPro"><HintPath>$(Managed)\Unity.TextMeshPro.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine.ParticleSystemModule"><HintPath>$(Managed)\UnityEngine.ParticleSystemModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="AK.Wwise.Unity.API"><HintPath>$(Managed)\AK.Wwise.Unity.API.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="AK.Wwise.Unity.API.WwiseTypes"><HintPath>$(Managed)\AK.Wwise.Unity.API.WwiseTypes.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="Unity.Localization"><HintPath>$(Managed)\Unity.Localization.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine.UIElementsModule"><HintPath>$(Managed)\UnityEngine.UIElementsModule.dll</HintPath><Private>false</Private></Reference>
@@ -70,6 +71,7 @@
 
   <ItemGroup>
     <None Include="Assets\Fonts\**\*" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Assets\Images\**\*" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\libs\OverlayDearImGui\System.Runtime.CompilerServices.Unsafe.dll" Link="System.Runtime.CompilerServices.Unsafe.dll" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\libs\OverlayDearImGui\cimgui.dll" Link="cimgui.dll" CopyToOutputDirectory="PreserveNewest" />
     <!-- Steam (friends list joining): Steamworks.NET (MIT) + Valve's redistributable steam_api64.dll, shipped with the
@@ -89,5 +91,14 @@
     <Copy SourceFiles="@(DeployFiles)" DestinationFolder="$(GamePath)\BepInEx\plugins\EmbervilleGhost" SkipUnchangedFiles="true" />
     <Copy SourceFiles="@(DeployAssets)" DestinationFolder="$(GamePath)\BepInEx\plugins\EmbervilleGhost\Assets\%(RecursiveDir)" SkipUnchangedFiles="true" />
   </Target>
+
+
+  <!-- The split-out mods: used when they're installed (Integrations.cs checks), never shipped in this mod's folder. -->
+  <ItemGroup>
+    <ProjectReference Include="..\BetterCombat\BetterCombat.csproj"><Private>false</Private></ProjectReference>
+    <ProjectReference Include="..\BetterLooting\BetterLooting.csproj"><Private>false</Private></ProjectReference>
+    <ProjectReference Include="..\BetterPetsAndSummons\BetterPetsAndSummons.csproj"><Private>false</Private></ProjectReference>
+    <ProjectReference Include="..\BetterNPCsAndQuests\BetterNPCsAndQuests.csproj"><Private>false</Private></ProjectReference>
+  </ItemGroup>
 
 </Project>

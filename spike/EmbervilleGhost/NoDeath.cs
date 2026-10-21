@@ -41,9 +41,11 @@ internal static class NoDeath
     /// <summary>From Hud.Draw: a reminder that it's on.</summary>
     public static void Draw()
     {
-        if (!On && !OneHitKill.On) return;
-        if (!On) { DrawText("ONE-HIT KILL"); return; }
-        DrawText(OneHitKill.On ? "NO DEATH + ONE-HIT KILL" : "NO DEATH");
+        var parts = new System.Collections.Generic.List<string>();
+        if (On) parts.Add("NO DEATH");
+        if (OneHitKill.On) parts.Add("ONE-HIT KILL");
+        if (NoClip.On) parts.Add("NO CLIP");
+        if (parts.Count > 0) DrawText(string.Join(" + ", parts));
     }
 
     static void DrawText(string text)
@@ -79,5 +81,44 @@ internal static class OneHitKill
             if (damageData.Result == DamageResult.Parry) return;   // a dodge stays a dodge
             damageData.Amount = Damage;
         }
+    }
+}
+
+/// <summary>/noclip: for testing, walk through walls, water and props: our character's solid colliders are switched off
+/// (its triggers stay: picking things up, interacting, being hit still work). Not saved.</summary>
+internal static class NoClip
+{
+    public static bool On { get; private set; }
+    // a new scene has a new character: it starts solid again
+    static NoClip() => UnityEngine.SceneManagement.SceneManager.sceneLoaded += (_, _) => off.Clear();   // (stays on: Tick switches the new character's off too)
+    static readonly System.Collections.Generic.List<UnityEngine.Collider2D> off = new System.Collections.Generic.List<UnityEngine.Collider2D>();
+
+    /// <summary>Every frame while on: the game turns collisions back on (respawning after a death...): off again.</summary>
+    public static void Tick()
+    {
+        if (!On) return;
+        var me = LocalPlayer.Get();
+        if (!me) return;
+        foreach (var c in me.GetComponentsInChildren<UnityEngine.Collider2D>(true))
+            if (c && c.enabled && !c.isTrigger) { c.enabled = false; if (!off.Contains(c)) off.Add(c); }
+    }
+
+    public static void Toggle()
+    {
+        var me = LocalPlayer.Get();
+        if (!me) { NetLog.Warn("Load a world first.", toast: true); return; }
+        On = !On;
+        if (On)
+        {
+            off.Clear();
+            foreach (var c in me.GetComponentsInChildren<UnityEngine.Collider2D>(true))
+                if (c && c.enabled && !c.isTrigger) { c.enabled = false; off.Add(c); }
+        }
+        else
+        {
+            foreach (var c in off) if (c) c.enabled = true;
+            off.Clear();
+        }
+        NetLog.Warn(On ? $"No clip: ON. You walk through walls ({off.Count} colliders off; /noclip again to turn it off)" : "No clip: off", toast: true);
     }
 }

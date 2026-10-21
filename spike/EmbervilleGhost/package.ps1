@@ -19,7 +19,7 @@ if ($LASTEXITCODE -ne 0) { throw "Build failed" }
 $out = Join-Path $here "bin\Release"
 
 if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
-New-Item -ItemType Directory -Force "$stage\BepInEx\config", "$stage\BepInEx\plugins\EmbervilleMultiplayer\Assets\Fonts" | Out-Null
+New-Item -ItemType Directory -Force "$stage\BepInEx\config", "$stage\BepInEx\plugins\EmbervilleMultiplayer\Assets\Fonts", "$stage\BepInEx\plugins\EmbervilleMultiplayer\Assets\Images" | Out-Null
 
 # BepInEx 5 (loader + core)
 foreach ($f in "winhttp.dll", "doorstop_config.ini", ".doorstop_version") { Copy-Item (Join-Path $GamePath $f) $stage }
@@ -34,6 +34,7 @@ Set-Content "$stage\BepInEx\config\BepInEx.cfg" $cfg -NoNewline
 $plugin = "$stage\BepInEx\plugins\EmbervilleMultiplayer"
 foreach ($f in "EmbervilleGhost.dll", "LiteNetLib.dll", "ImGui.NET.dll", "cimgui.dll", "System.Runtime.CompilerServices.Unsafe.dll", "com.rlabrecque.steamworks.net.dll", "steam_api64.dll") { Copy-Item (Join-Path $out $f) $plugin }
 Copy-Item (Join-Path $out "Assets\Fonts\*") "$plugin\Assets\Fonts\"
+Copy-Item (Join-Path $out "Assets\Images\*") "$plugin\Assets\Images\"
 
 # Read me
 @"

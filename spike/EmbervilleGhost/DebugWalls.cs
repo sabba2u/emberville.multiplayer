@@ -25,7 +25,7 @@ internal static class DebugWalls
         On = !On;
         Clear();
         if (On) Build();
-        NetLog.Info(On ? $"Walls view: on ({overlays.Count} solid layers tinted red, other colliders outlined in orange; /walls again to hide)" : "Walls view: off", toast: true);
+        NetLog.Info(On ? "Walls view: on. Solid tiles: red = wall, yellow = wall top, blue = water; orange boxes = other colliders (/walls again to hide)" : "Walls view: off", toast: true);
     }
 
     /// <summary>A new place was built: show its solid layer too.</summary>
@@ -47,7 +47,7 @@ internal static class DebugWalls
             tex.SetPixels(px); tex.Apply();
             red = ScriptableObject.CreateInstance<Tile>();
             red.sprite = Sprite.Create(tex, new Rect(0, 0, 4, 4), new UnityEngine.Vector2(0.5f, 0.5f), 4f);
-            red.color = new Color(1f, 0.15f, 0.1f, 0.38f);
+            red.color = Color.white;   // tinted per layer by its tilemap
             red.colliderType = Tile.ColliderType.None;
         }
         var me = LocalPlayer.Get();
@@ -55,19 +55,38 @@ internal static class DebugWalls
         foreach (var tm in Object.FindObjectsByType<Tilemap>(FindObjectsInactive.Include, FindObjectsSortMode.None))
         {
             if (!tm || tm.name != "Blocked" || !tm.transform.root.name.StartsWith("EG_")) continue;
-            var go = new GameObject("EG_WallsView");
-            go.transform.SetParent(tm.transform.parent, false);
-            var copy = go.AddComponent<Tilemap>();
-            var r = go.AddComponent<TilemapRenderer>();
-            if (like) { r.sortingLayerID = like.sortingLayerID; r.sortingOrder = 900; }
-            var cells = new List<Vector3Int>();
-            foreach (var c in tm.cellBounds.allPositionsWithin) if (tm.HasTile(c)) cells.Add(c);
-            var arr = cells.ToArray();
-            var tiles = new TileBase[arr.Length];
-            for (int i = 0; i < tiles.Length; i++) tiles[i] = red;
-            copy.SetTiles(arr, tiles);
-            overlays.Add(go);
+            // the solid cells, coloured by the layer that made them (wall red, wall top yellow, water blue); anything solid
+            // from none of them (the arena's ring) red
+            var solid = new HashSet<Vector3Int>();
+            foreach (var c in tm.cellBounds.allPositionsWithin) if (tm.HasTile(c)) solid.Add(c);
+            var colours = new (string layer, Color colour)[] { ("water", new Color(0.2f, 0.5f, 1f, 0.4f)), ("wall top", new Color(1f, 0.85f, 0.1f, 0.4f)), ("wall", new Color(1f, 0.15f, 0.1f, 0.38f)) };
+            var left = new HashSet<Vector3Int>(solid);
+            bool fromDungeon = tm.transform.root.name.StartsWith("EG_Dungeon");
+            foreach (var (layer, colour) in colours)
+            {
+                if (!fromDungeon || !Dungeon.DebugLayers.TryGetValue(layer, out var cells)) continue;
+                var mine = new List<Vector3Int>();
+                foreach (var c in cells) if (left.Remove(c)) mine.Add(c);
+                Overlay(tm, mine, colour, like);
+            }
+            Overlay(tm, new List<Vector3Int>(left), new Color(1f, 0.15f, 0.1f, 0.38f), like);
         }
+    }
+
+    static void Overlay(Tilemap under, List<Vector3Int> cells, Color colour, SpriteRenderer like)
+    {
+        if (cells.Count == 0) return;
+        var go = new GameObject("EG_WallsView");
+        go.transform.SetParent(under.transform.parent, false);
+        var copy = go.AddComponent<Tilemap>();
+        copy.color = colour;
+        var r = go.AddComponent<TilemapRenderer>();
+        if (like) { r.sortingLayerID = like.sortingLayerID; r.sortingOrder = 900; }
+        var arr = cells.ToArray();
+        var tiles = new TileBase[arr.Length];
+        for (int i = 0; i < tiles.Length; i++) tiles[i] = red;
+        copy.SetTiles(arr, tiles);
+        overlays.Add(go);
     }
 
     /// <summary>From Hud.Draw: orange outlines on the other solid colliders around you.</summary>

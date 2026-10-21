@@ -7,7 +7,8 @@ namespace EmbervilleFavorites;
 
 /// <summary>
 /// The F5-F8 bar, drawn by the game's own UI: four copies of the HUD's first belt slot (UISlot: frame, icon,
-/// highlight, click handling), in a row just above the belt, right-aligned with it, inside the same HUD group (so it
+/// highlight, click handling), in a row in the middle of the HUD just above the experience bar (or else above the
+/// menu buttons / the belt), inside the same HUD group (so it
 /// scales with the HUD and hides with it during cutscenes). Each shows its favourite's icon, highlighted while it's
 /// the weapon in hand, with "F5".."F8" under it; a click wields it. Rebuilt whenever the HUD is (new scene).
 /// Hovering a slot shows the game's own item tooltip (a copy of the inventory's ItemInfoWindow on the HUD): what the
@@ -119,6 +120,7 @@ internal static class FavoritesBar
         // always shown now (small, beside the Journal / Inventory buttons); Fade() is kept for a fading bar
         if (!show) HideTip();
         if (show && settles && Time.unscaledTime >= nextSettle) { nextSettle = Time.unscaledTime + 2f; Settle(); }
+        if (show && xpRect && Time.unscaledTime >= nextXpPlace) { nextXpPlace = Time.unscaledTime + 1f; PlaceOverXp(); }
         if (!show || Time.unscaledTime < nextRefresh) return;
         nextRefresh = Time.unscaledTime + 0.5f;
         for (int i = 0; i < Favorites.Slots; i++)
@@ -157,8 +159,16 @@ internal static class FavoritesBar
         var corners = new Vector3[4];   // 0 bottom-left, 1 top-left, 2 top-right, 3 bottom-right
         Vector3 anchor = Vector3.zero;
         settles = true;
-        var row = MenuButtons(ui, lastSkill);
-        if (row.HasValue)
+        var xp = ui.experienceHUD ? ui.experienceHUD.currentExpProgress : null;
+        var row = xp ? null : MenuButtons(ui, lastSkill);
+        if (xp)
+        {
+            xpRect = (RectTransform)xp.transform;
+            barWidth = width;
+            settles = false;
+            PlaceOverXp(log: true);
+        }
+        else if (row.HasValue)
         {
             // small (the menu buttons' size), on top of the row of menu buttons (Journal, Inventory... the game adds
             // more as you unlock them, growing left), right-aligned with the last one
@@ -237,6 +247,32 @@ internal static class FavoritesBar
     /// Clear of the HUD's other bits: from the spot above the skills, up past anything of the game's HUD the bar would
     /// cover (the "Journal" button...). The notification list and tooltips come and go, so they don't count.
     /// </summary>
+    static RectTransform xpRect;
+    static float barWidth, nextXpPlace;
+
+    /// <summary>
+    /// In the middle of the HUD, between the two skulls: centred on the experience bar, just above it, as wide as it at
+    /// most. Again every second: the HUD slides and grows in when it appears, so one look can catch it half-way (the bar
+    /// then sat off where the HUD was a moment before).
+    /// </summary>
+    static void PlaceOverXp(bool log = false)
+    {
+        if (!xpRect || !bar) return;
+        var rt = (RectTransform)bar.transform;
+        var parent = rt.parent;
+        var corners = new Vector3[4];
+        xpRect.GetWorldCorners(corners);
+        float cx = (corners[0].x + corners[2].x) / 2f, top = corners[1].y, room = corners[2].x - corners[0].x;
+        if (room <= 0f || parent.lossyScale.x <= 0f) return;
+        float scale = Mathf.Min(1f, room * 0.95f / (barWidth * parent.lossyScale.x));
+        rt.pivot = new Vector2(0.5f, 0f);
+        rt.localScale = new Vector3(scale, scale, 1f);
+        var at = parent.InverseTransformPoint(new Vector3(cx, top + (corners[1].y - corners[0].y) * 1.5f, 0f));
+        baseLocal = at;
+        rt.localPosition = at;
+        if (log) Plugin.Log.LogInfo($"Favourites bar: over the experience bar (centre {cx:0}, top {top:0}, {room:0} wide; scale {scale:0.00})");
+    }
+
     static void Settle()
     {
         var rt = (RectTransform)bar.transform;

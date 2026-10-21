@@ -10,7 +10,7 @@ namespace EmbervilleGhost;
 /// Both live in the game's UI; when there isn't one we can show (main menu, or the yes/no box sitting inside a closed
 /// panel), the caller falls back to our own window or a toast.
 /// </summary>
-internal static class GameUi
+internal static partial class GameUi
 {
     /// <summary>The game's title + message + OK box. False if it isn't available right now.</summary>
     public static bool Message(string title, string text)

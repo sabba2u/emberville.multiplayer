@@ -116,9 +116,7 @@ internal static class Chat
     static bool Command(string cmd)
     {
         if (cmd.StartsWith("trade")) { Trade.InviteByName(cmd.Substring(5)); return true; }
-        if (cmd == "moveattack" || cmd.StartsWith("moveattack ")) { MoveAttack.Command(cmd.Length > 10 ? cmd.Substring(11) : ""); return true; }
-        if (cmd.StartsWith("bowlock ") && float.TryParse(cmd.Substring(8).Trim().TrimEnd('°'), out float deg)) { BowAssist.SetAngle(deg); return true; }
-        if (cmd == "pet" || cmd.StartsWith("pet ")) { Pet.Command(cmd.Length > 3 ? cmd.Substring(4) : ""); return true; }
+        if (Integrations.Command(cmd)) return true;   // /bowlock, /moveattack, /pet, /clucking, /risen (the split-out mods)
         if (cmd == "resources" || cmd.StartsWith("resources ") || cmd == "mats" || cmd.StartsWith("mats "))
         {
             var arg = cmd.Contains(" ") ? cmd.Substring(cmd.IndexOf(' ') + 1).Trim() : "";
@@ -145,12 +143,16 @@ internal static class Chat
             case "dungeon": Dungeon.Command(); return true;
             case "nodeath": NoDeath.Toggle(); return true;   // testing: take no damage
             case "walls": DebugWalls.Toggle(); return true;   // debug: what is solid in a generated place
+            case "noclip": NoClip.Toggle(); return true;   // testing: walk through walls
+            case "hook": HunterHook.Give(); return true;   // a Hunter's Hook
+            case "hookshout": HookSounds.Shout(); return true;   // try the hook's shout sound
+            case "exitarrow": Delve.ToggleExitArrow(); return true;   // testing: an arrow to the stairs down
+            case "exitpath": Delve.ToggleExitPath(); return true;   // testing: a line along the floor to the stairs
             case "onehitkill": OneHitKill.Toggle(); return true;   // testing: 500 damage a hit
-            case "bowlock": BowAssist.Toggle(); return true;   // arrows curve onto the creature nearest your aim   // into the world map's generated dungeon, or back out
             case "help":
             case "?":
                 System("/sleep: ready to skip to morning (everyone must)   /estate: unlock building on your estate (host)");
-                System("/devmode: the game's developer tools on/off   /devpanel: open the developer panel   /arena: to this scene's test arena   /dungeon: into a generated dungeon (or out)   /walls: show what blocks you (debug)   /nodeath: take no damage   /onehitkill: 500 damage a hit (testing)   /bowlock: arrows home in (off to start; /bowlock 15 = 15° cone)   /moveattack: move while attacking (off to start)");
+                System("/devmode: the game's developer tools on/off   /devpanel: open the developer panel   /arena: to this scene's test arena   /dungeon: into a generated dungeon (or out)   /walls: show what blocks you (debug)   /noclip: walk through walls   /clucking: a Staff of Clucking   /risen: a Staff of the Risen   /hook: a Hunter's Hook   /exitarrow: arrow to the stairs down   /exitpath: a line to them   /nodeath: take no damage   /onehitkill: 500 damage a hit (testing)   /bowlock: arrows home in (off to start; /bowlock 15 = 15° cone)   /moveattack: move while attacking (off to start)");
                 System("/resources (or /resources 250): 100 of every material, and enough for the town's repairs   /repair: fix the nearest broken building");
                 System("/trade P2 (or a name): trade items with someone   /pet on (pets start off), /pet: befriend / call / send home, /pet list, /pet glowbat, /pet name ..., /pet color red");
                 System($"/online (or {OnlinePlayers.KeyName}): who's connected, mute; the host also kicks and bans   X at a chest (Better Chests mod): put in what it already has");
@@ -241,7 +243,7 @@ internal static class Chat
 
     public static void System(string text) => System(text, new Vector4(0.7f, 0.7f, 0.7f, 1f));
 
-    static void System(string text, Vector4 color)
+    internal static void System(string text, Vector4 color)
     {
         lines.Add(new Line { Time = Time.unscaledTime, Who = "", Text = text, Color = color });
         if (lines.Count > 50) lines.RemoveAt(0);

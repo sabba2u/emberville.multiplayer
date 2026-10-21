@@ -1,0 +1,121 @@
+:: StoryTitle
+Ellie
+
+(BetterNPCsAndQuests: the game skips the first two passages of every file, so keep these two at the top.
+ Write your conversation below the line.)
+
+:: StoryData
+(Don't remove this passage either. Never type two colons in a row anywhere in your lines:
+ the game reads them as the start of a new passage.)
+
+-------- start your edit below --------
+
+:: DialogStart [NPC:Ellie]
+(if: $just_gave and $quest_ellie_errands_done)[[x|Reward]]
+(if: $just_gave)[[x|WoodThanks]]
+(if: $give_failed)[[x|GiveFailed]]
+(if: $quest_ellie_errands_done)[[x|Thanks]]
+(if: $quest_ellie_errands_step is 2 and $has_any_sword)[[x|SwordReady]]
+(if: $quest_ellie_errands_step is 2)[[x|SwordWait]]
+(if: $quest_ellie_errands_step is 1 and $has_softwood_10)[[x|WoodReady]]
+(if: $quest_ellie_errands_step is 1)[[x|WoodWait]]
+[[x|Hello]]
+
+:: Hello [NPC:Ellie]
+Oh! A traveller. Hello, {PlayerName}! I'm Ellie.
+I'm fixing up my little workshop, but I've run out of wood. Could you bring me 10 softwood logs?
+[[Of course!|Accept]]
+[[Not right now.|Later]]
+[[Got anything for me?|Gifts]]
+
+:: Accept [NPC:Ellie]
+(trigger: "start ellie_errands")
+Wonderful! The trees around here give good softwood. Come back when you have 10 logs.
+
+:: Later [NPC:Ellie]
+No worries. I'll be right here if you change your mind.
+
+:: WoodWait [NPC:Ellie]
+Any luck with the wood? I still need 10 softwood logs.
+[[I'll keep looking.|Bye]]
+[[Got anything for me?|Gifts]]
+
+:: WoodReady [NPC:Ellie]
+Are those softwood logs? You found them!
+[[Here's your wood.|WoodGive]]
+[[Not yet, I need them.|Bye]]
+
+:: WoodGive [NPC:Ellie]
+(trigger: "give ellie_errands")
+Wonderful! Put them in my box, then press Give.
+[[Let me look...|END]]
+
+:: WoodThanks [NPC:Ellie]
+(set: $just_gave to false)
+Perfect, thank you! One more thing... my old blade snapped in half. Could you find me a sword? Any sword will do.
+[[I'll find one.|Bye]]
+
+:: GiveFailed [NPC:Ellie]
+(set: $give_failed to false)
+Hmm, that's not quite what I asked for. I've put it all back in your bag.
+[[Right.|Bye]]
+
+:: SwordWait [NPC:Ellie]
+Found a sword yet? Any kind will do, really.
+[[Still looking.|Bye]]
+[[Got anything for me?|Gifts]]
+
+:: SwordReady [NPC:Ellie]
+Is that a sword? Could I have it?
+[[Here, take it.|SwordGive]]
+[[Sorry, I need this one.|Bye]]
+
+:: SwordGive [NPC:Ellie]
+(trigger: "give ellie_errands")
+Oh, thank you! Put it in my box, then press Give.
+[[Let me look...|END]]
+
+:: Reward [NPC:Ellie]
+(set: $just_gave to false)
+It's perfect! Here, this is for you. You've been a real help, {PlayerName}.
+
+:: Thanks [NPC:Ellie]
+My workshop is coming along nicely, thanks to you, {PlayerName}!
+[[Got anything for me?|Gifts]]
+[[Bye!|Bye]]
+
+:: Gifts [NPC:Ellie]
+I've got a few odds and ends lying around the workshop. What would you like?
+[[A chicken to keep me company.|GiftChicken]]
+(if: $has_pet)[[I'd like to give my pet back.|ReturnPet]]
+[[The Staff of Clucking.|GiftClucking]]
+[[The Staff of the Risen.|GiftRisen]]
+[[Never mind.|Bye]]
+
+:: GiftChicken [NPC:Ellie]
+(trigger: "command pet on")
+(trigger: "command pet new chicken")
+Here, this one's the friendliest of the lot. Look after it!
+[[Anything else?|Gifts]]
+[[Thanks, Ellie!|Bye]]
+
+:: ReturnPet [NPC:Ellie]
+(trigger: "command pet release")
+Oh, all right. Come here, little one... I'll take good care of it. You can always come back for a chicken.
+[[Anything else?|Gifts]]
+[[Bye!|Bye]]
+
+:: GiftClucking [NPC:Ellie]
+(trigger: "command clucking")
+The Staff of Clucking! Every swing calls up a battle chicken. Don't ask where they come from.
+[[Anything else?|Gifts]]
+[[Thanks, Ellie!|Bye]]
+
+:: GiftRisen [NPC:Ellie]
+(trigger: "command risen")
+The Staff of the Risen. Creatures that fall near you will get back up and fight for you. Spooky, isn't it?
+[[Anything else?|Gifts]]
+[[Thanks, Ellie!|Bye]]
+
+:: Bye [NPC:Ellie]
+See you soon, {PlayerName}.

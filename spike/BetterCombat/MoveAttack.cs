@@ -3,7 +3,7 @@ using HarmonyLib;
 using ImGuiNET;
 using UnityEngine;
 
-namespace EmbervilleGhost;
+namespace BetterCombat;
 
 /// <summary>
 /// Moving while attacking. The game stops you for every attack (Attack.stopPlayer: speed to zero, facing locked, a
@@ -11,7 +11,7 @@ namespace EmbervilleGhost;
 /// state steers with WASD / the stick through the game's own Move (walls, stairs, speed buffs): melee and magic at full
 /// speed; bows and crossbows (and holding a charged shot, aiming) at BowAimSpeed. Only our own character.
 /// </summary>
-internal static class MoveAttack
+public static class MoveAttack
 {
     static ConfigEntry<bool> on;
     static ConfigEntry<float> bowSpeed;
@@ -31,18 +31,20 @@ internal static class MoveAttack
             on.Value = true;
         }
         else on.Value = !on.Value;
-        NetLog.Info(on.Value ? $"Move while attacking: on (bows at {bowSpeed.Value * 100f:0}% while aiming; /moveattack again to turn it off)" : "Move while attacking: off", toast: true);
+        Log.Info(on.Value ? $"Move while attacking: on (bows at {bowSpeed.Value * 100f:0}% while aiming; /moveattack again to turn it off)" : "Move while attacking: off", toast: true);
     }
 
     public static void DrawMenu()
     {
-        ImGui.Separator();
+        ImGui.SeparatorText("Move while attacking");
         bool v = on.Value;
-        if (ImGui.Checkbox("Move while attacking (melee and magic at full speed)", ref v)) on.Value = v;
-        if (!on.Value) return;
+        if (ImGui.Checkbox("Keep moving while you attack: melee and magic at full speed (/moveattack)", ref v)) on.Value = v;
+        if (!on.Value) ImGui.BeginDisabled();
         float s = bowSpeed.Value * 100f;
-        ImGui.SetNextItemWidth(160);
-        if (ImGui.SliderFloat("Speed while aiming a bow##moveattack", ref s, 20f, 100f, "%.0f%%")) bowSpeed.Value = s / 100f;
+        ImGui.SetNextItemWidth(280);
+        if (ImGui.SliderFloat("Bow speed##moveattack", ref s, 20f, 100f, "%.0f%%")) bowSpeed.Value = s / 100f;
+        ImGui.SameLine(); ImGui.TextDisabled("your speed while aiming a bow or crossbow");
+        if (!on.Value) ImGui.EndDisabled();
     }
 
     static bool Mine(PlayerMaster p) => on.Value && p && Singleton<GameManager>.HasMain && p == Singleton<GameManager>.main.player;

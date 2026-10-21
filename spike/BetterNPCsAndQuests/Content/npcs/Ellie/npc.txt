@@ -1,0 +1,12 @@
+# Ellie, the quest giver (Better NPCs and Quests' example NPC: copy this folder to make your own)
+name     = Ellie
+scene    = TutorialArea
+spot     = -38.8, 72.9
+facing   = down
+hair     = 2
+outfit   = light
+holding  = none
+color    = #e8a0c0
+dialogue = ellie.twee
+wander   = 3
+pause    = 3-8

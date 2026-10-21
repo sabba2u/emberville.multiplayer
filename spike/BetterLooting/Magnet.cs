@@ -3,16 +3,16 @@ using ImGuiNET;
 using UnityEngine;
 using Vector2 = UnityEngine.Vector2;
 
-namespace EmbervilleGhost;
+namespace BetterLooting;
 
 /// <summary>
 /// Auto magnet (hands-free F): items lying within range of our player are picked up by themselves, nearest first, one
-/// every few frames, through the same ItemDropObject.OnInteract the F key uses (so DropSync's dupe-proof pickup and
+/// every few frames, through the same ItemDropObject.OnInteract the F key uses (so the multiplayer mod's dupe-proof pickup and
 /// instanced loot apply). Filters per item category, coins and key items; only what fits in the bag (else it would
 /// bounce back out at our feet). Never while the game covers the screen (menus, dialogue, cutscenes) or we're dead.
 /// Settings: Insert menu > Magnet (saved in the config).
 /// </summary>
-internal static class Magnet
+public static class Magnet
 {
     static ConfigEntry<bool> on, materials, consumables, weapons, armor, gear, placeables, other, coins, keyItems;
     static ConfigEntry<float> range;
@@ -38,8 +38,10 @@ internal static class Magnet
     {
         if (on == null || !on.Value || Time.unscaledTime < next) return;
         next = Time.unscaledTime + Interval;
-        var me = LocalPlayer.Get();
-        if (!me || me.IsDead || !Singleton<Inventory>.HasMain || PlayerStatusUtil.LocalBusy || Chat.IsOpen) return;
+        var me = Singleton<GameManager>.HasMain ? Singleton<GameManager>.main.player : null;
+        // playing: not in a menu or a game screen, the controls on (chat and other mods' text boxes turn them off)
+        if (!me || me.IsDead || !Singleton<Inventory>.HasMain || Singleton<GameManager>.main.gameState != GameState.Playing ||
+            UIPanels.HasOpenedPanel || !MainInput.Actions.Player.enabled) return;
 
         Vector2 at = me.transform.position;
         float best = range.Value * range.Value;
@@ -86,16 +88,19 @@ internal static class Magnet
 
     public static void DrawMenu()
     {
-        ImGui.Separator();
+        ImGui.SeparatorText("Magnet");
         bool v = on.Value;
-        if (ImGui.Checkbox("Magnet: pick up items near you by themselves", ref v)) on.Value = v;
-        if (!on.Value) return;
+        if (ImGui.Checkbox("Pick up items near you by themselves (no F)", ref v)) on.Value = v;
+        if (!on.Value) ImGui.BeginDisabled();
         float r = range.Value;
-        ImGui.SetNextItemWidth(160);
-        if (ImGui.SliderFloat("Range##magnet", ref r, 1f, 8f, "%.1f")) range.Value = r;
-        Box("Materials", materials); ImGui.SameLine(); Box("Food / potions", consumables); ImGui.SameLine(); Box("Coins", coins);
-        Box("Weapons", weapons); ImGui.SameLine(); Box("Armour", armor); ImGui.SameLine(); Box("Gear", gear);
-        Box("Placeables", placeables); ImGui.SameLine(); Box("Key items", keyItems); ImGui.SameLine(); Box("Other", other);
+        ImGui.SetNextItemWidth(280);
+        if (ImGui.SliderFloat("Range##magnet", ref r, 1f, 8f, "%.1f steps")) range.Value = r;
+        ImGui.SameLine(); ImGui.TextDisabled("F reaches about 1");
+        ImGui.TextDisabled("What it picks up:");
+        Box("Materials", materials); ImGui.SameLine(140); Box("Food / potions", consumables); ImGui.SameLine(300); Box("Coins", coins);
+        Box("Weapons", weapons); ImGui.SameLine(140); Box("Armour", armor); ImGui.SameLine(300); Box("Gear", gear);
+        Box("Placeables", placeables); ImGui.SameLine(140); Box("Key items", keyItems); ImGui.SameLine(300); Box("Other", other);
+        if (!on.Value) ImGui.EndDisabled();
     }
 
     static void Box(string label, ConfigEntry<bool> e)

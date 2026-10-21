@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using HarmonyLib;
 using LiteNetLib;
@@ -67,11 +68,28 @@ internal static class PlaceSync
         if (!__state.Valid) return;
         var saved = __instance.saved;
         string guid = saved.Count > __state.Before ? saved[saved.Count - 1].instanceSaveID ?? "" : "";
+        SendPlaced(__state.Data.saveID, __state.Pos, __state.Dir, guid, BuildMode.On && !BuildMode.InEstate(__state.Pos));
+    }
+
+    /// <summary>Placed (by the game's build mode or our own placer). anywhere: built anywhere (B), our list, not the estate's.</summary>
+    public static void SendPlaced(string id, Vector3 pos, Direction dir, string guid, bool anywhere)
+    {
+        if (!Connected || applying > 0) return;
         var w = Message(Op.Place);
-        w.Put(__state.Data.saveID);
-        w.Put(__state.Pos.x); w.Put(__state.Pos.y);
-        w.Put((byte)__state.Dir);
-        w.Put(guid);
+        w.Put(id);
+        w.Put(pos.x); w.Put(pos.y);
+        w.Put((byte)dir);
+        w.Put(guid ?? "");
+        w.Put(anywhere);
+        Plugin.SendToAll(w, DeliveryMethod.ReliableOrdered);
+    }
+
+    public static void SendRemoved(string id, Vector3 pos)
+    {
+        if (!Connected || applying > 0) return;
+        var w = Message(Op.RemoveObject);
+        w.Put(id ?? "");
+        w.Put(pos.x); w.Put(pos.y);
         Plugin.SendToAll(w, DeliveryMethod.ReliableOrdered);
     }
 
@@ -84,12 +102,8 @@ internal static class PlaceSync
     [HarmonyPatch(typeof(PlacementObjectComponent), nameof(PlacementObjectComponent.OnRemove)), HarmonyPrefix]
     static void ObjectRemoved(PlacementObjectComponent __instance)
     {
-        if (removing == 0 || applying > 0 || !Connected) return;
-        var w = Message(Op.RemoveObject);
-        w.Put(__instance.RelatedPlaceableDataID ?? "");
-        var p = __instance.transform.position;
-        w.Put(p.x); w.Put(p.y);
-        Plugin.SendToAll(w, DeliveryMethod.ReliableOrdered);
+        if (removing == 0) return;
+        SendRemoved(__instance.RelatedPlaceableDataID, __instance.transform.position);
     }
 
     [HarmonyPatch]
@@ -117,6 +131,20 @@ internal static class PlaceSync
         return w;
     }
 
+    /// <summary>Host -> a player who just joined: everything built anywhere (B) in this world.</summary>
+    public static void SendBuiltTo(int id)
+    {
+        var w = new NetDataWriter();
+        w.Put((byte)MsgType.BuiltList);
+        w.Put(BuildSave.List.Save());
+        Plugin.SendTo(id, w, DeliveryMethod.ReliableOrdered);
+    }
+
+    public static void OnBuiltList(NetDataReader r)
+    {
+        BuildSave.TakeHosts(EmbervilleGhost.Core.BuildList.Load(r.GetString()));
+    }
+
     // ---- theirs ----
 
     public static void OnChange(NetDataReader r)
@@ -127,10 +155,36 @@ internal static class PlaceSync
         peek.GetByte();
         string scene = peek.GetString();
         if (Here(scene)) Apply(new NetDataReader(copy));
-        else later.Add((scene, copy));   // the estate isn't loaded here: when we get there
+        else if (!RecordElsewhere(copy, scene)) later.Add((scene, copy));   // the estate isn't loaded here: when we get there
     }
 
-    static bool Here(string scene) => LocalPlayer.Scene == scene && LocalPlayer.Get() && Singleton<PlaceableController>.HasMain;
+    /// <summary>Built anywhere (B) in a scene we're not in: into the list now (saved, handed to joiners), the object
+    /// appears when we walk in. False: an estate change, kept for when we get there.</summary>
+    static bool RecordElsewhere(byte[] msg, string scene)
+    {
+        var r = new NetDataReader(msg);
+        var op = (Op)r.GetByte();
+        r.GetString();
+        if (op == Op.Place)
+        {
+            string id = r.GetString();
+            var pos = new Vector3(r.GetFloat(), r.GetFloat(), 0f);
+            var dir = (Direction)r.GetByte();
+            string guid = r.GetString();
+            if (!(r.AvailableBytes > 0 && r.GetBool())) return false;
+            BuildSave.Record(scene, id, pos, dir, guid);
+            return true;
+        }
+        if (op == Op.RemoveObject)
+        {
+            string id = r.GetString();
+            return BuildSave.Unrecord(scene, id, new Vector3(r.GetFloat(), r.GetFloat(), 0f));
+        }
+        return false;
+    }
+
+    // (no build controller here: what was built anywhere still applies; Apply skips the estate's own changes)
+    static bool Here(string scene) => LocalPlayer.Scene == scene && LocalPlayer.Get();
 
     /// <summary>Every frame: changes made in a scene we've just walked into.</summary>
     public static void Tick()
@@ -148,7 +202,7 @@ internal static class PlaceSync
     {
         var op = (Op)r.GetByte();
         r.GetString();
-        var c = Singleton<PlaceableController>.main;
+        var c = BuildMode.Controller;
         applying++;
         try
         {
@@ -160,23 +214,27 @@ internal static class PlaceSync
                     var pos = new Vector3(r.GetFloat(), r.GetFloat(), 0f);
                     var dir = (Direction)r.GetByte();
                     string guid = r.GetString();
-                    var data = c.dataBase.Get(id);
+                    bool anywhere = r.AvailableBytes > 0 && r.GetBool();
+                    var data = BuildCatalog.Get(id);
                     if (data == null) { NetLog.Warn($"Can't place '{id}': unknown here"); return; }
-                    var (_, saveId) = data.Place(pos, dir, guid.Length > 0 ? guid : null, c.placeablesParent);
-                    data.SaveData(pos, dir, saveId);
-                    c.HandleVFX(pos, data.VfxPlacePrefab, data.vfxPlaceOffset).Forget();
+                    if (!c && (!anywhere || BuildCatalog.NeedsController(data))) { NetLog.Warn($"Can't place '{id}' without a build controller here"); return; }
+                    var (_, saveId) = data.Place(pos, dir, guid.Length > 0 ? guid : null, anywhere ? BuildSave.Parent : c.placeablesParent);
+                    if (anywhere) BuildSave.Adopt(c, data, pos, dir, saveId);
+                    else data.SaveData(pos, dir, saveId);
+                    if (c) c.HandleVFX(pos, data.VfxPlacePrefab, data.vfxPlaceOffset).Forget();
                     break;
                 }
                 case Op.RemoveObject:
                 {
                     string id = r.GetString();
                     var pos = new Vector3(r.GetFloat(), r.GetFloat(), 0f);
-                    foreach (var comp in c.placeablesParent.GetComponentsInChildren<PlacementObjectComponent>(true))
+                    var estate = c && c.placeablesParent ? c.placeablesParent.GetComponentsInChildren<PlacementObjectComponent>(true) : new PlacementObjectComponent[0];
+                    foreach (var comp in estate.Concat(BuildSave.Parent.GetComponentsInChildren<PlacementObjectComponent>(true)))   // (and what was built anywhere)
                     {
                         if (comp.RelatedPlaceableDataID != id || ((Vector2)comp.transform.position - (Vector2)pos).sqrMagnitude > 0.01f) continue;
-                        var data = c.dataBase.Get(id);
+                        var data = BuildCatalog.Get(id);
                         var at = comp.transform.position;
-                        if (data != null)
+                        if (data != null && c)
                         {
                             data.RemoveSavedData(at);
                             c.HandleVFX(at, data.VfxRemovePrefab, data.vfxRemoveOffset).Forget();
@@ -185,13 +243,14 @@ internal static class PlaceSync
                         Object.Destroy(comp.gameObject);
                         break;
                     }
+                    BuildSave.Unrecord(LocalPlayer.Scene, id, pos);   // (built anywhere but not put back yet: off the list all the same)
                     break;
                 }
                 case Op.RemoveTile:
                 {
                     var layer = (TilemapLayer)r.GetInt();
                     var pos = new Vector3(r.GetFloat(), r.GetFloat(), r.GetFloat());
-                    Singleton<TilesetDrawerManager>.main.RemoveTile(layer, pos);
+                    if (Singleton<TilesetDrawerManager>.HasMain) Singleton<TilesetDrawerManager>.main.RemoveTile(layer, pos);
                     break;
                 }
             }

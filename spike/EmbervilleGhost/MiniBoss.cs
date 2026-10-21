@@ -183,6 +183,7 @@ internal static class MiniBoss
     {
         var prefab = Find(look.Base);
         if (!prefab) { NetLog.Warn($"Boss: no creature called {look.Base}", toast: true); return null; }
+        if (Plugin != null && Plugin.Connected) EnemySync.ExpectSpawn(prefab.gameObject.name);   // ours to run and announce, even where someone else owns the area
         var go = Object.Instantiate(prefab.gameObject, at, Quaternion.identity, parent);
         var e = go.GetComponent<Enemy>();
         e.ForceAlive();
@@ -199,6 +200,7 @@ internal static class MiniBoss
     {
         var prefab = Find(baseId);
         if (!prefab) return null;
+        if (Plugin != null && Plugin.Connected) EnemySync.ExpectSpawn(prefab.gameObject.name);
         var go = Object.Instantiate(prefab.gameObject, at, Quaternion.identity, parent);
         var e = go.GetComponent<Enemy>();
         e.ForceAlive();
@@ -208,6 +210,7 @@ internal static class MiniBoss
 
     static void Apply(Enemy e, Look look)
     {
+        if (bosses.ContainsKey(e)) { bosses[e] = look; return; }   // already dressed (a repeat look): don't tint the tint
         bosses[e] = look;
         e.transform.localScale = Vector3.one * look.Scale;
         tinted[e] = e.GetComponentsInChildren<SpriteRenderer>(true).Select(sr => (sr, sr.color)).ToArray();
@@ -284,6 +287,8 @@ internal static class MiniBoss
     {
         NetLog.Success($"{look.Name} is defeated!", toast: true);
         if (!mine.Contains(e)) return;
+        Integrations.NpcEvent("boss_kill", Dungeon.Floor.ToString());   // Better NPCs and Quests' rules ("when boss_kill 5 -> ...")
+        if (Dungeon.Floor > 0) { Integrations.MaybeDrop(e.transform.position, Dungeon.Floor); HunterHook.MaybeDrop(e.transform.position, Dungeon.Floor); }   // now and then: a Staff of Clucking
         // its loot, on the ground (the drop sync shares it)
         var items = DungeonLoot.Roll(new System.Random(e.GetInstanceID() ^ (int)(Time.time * 1000)), Mathf.Max(1, look.LootFloor));
         if (items == null) { DungeonLoot.Preload(); return; }
@@ -320,7 +325,7 @@ internal static class MiniBoss
             if (!near) return;
             var look = bosses[near];
             barHp = barMax = -1;
-            Bus<UIBossEvent>.Invoke(new UIBossEvent { IsMiniBoss = true, EventType = UIBossEvent.Event_Type.InitalSetup, BossName = look.Name, BossFamily = Family(near), TotalHealth = (int)near.MaxHealth, CurrentHealth = (int)near.CurrentHealth });
+            Bus<UIBossEvent>.Invoke(new UIBossEvent { IsMiniBoss = true, EventType = UIBossEvent.Event_Type.InitalSetup, BossName = look.Name, BossFamily = Family(near, look), TotalHealth = (int)near.MaxHealth, CurrentHealth = (int)near.CurrentHealth });
             Bus<UIBossEvent>.Invoke(new UIBossEvent { IsMiniBoss = true, EventType = UIBossEvent.Event_Type.Show });
         }
         if (!barFor) return;
@@ -336,13 +341,46 @@ internal static class MiniBoss
         barFor = null; barHp = barMax = -1;
     }
 
-    static string Family(Enemy e) => e.enemyType switch
+    /// <summary>"Rodent Melee mini-boss": the creature it's made from, by its prefab's name. Not Enemy.enemyType: the
+    /// game's list of kinds has no rats, so they carry a leftover one (a rat boss would say "Spiderling").</summary>
+    static string Family(Enemy e, Look look)
     {
-        EnemyType.None => "Mini-boss",
-        var t => t.ToString().Replace("Aco_", "Acolyte ").Replace("Mob_", "").Replace("Sc_", "").Replace("Lil_", "") + " mini-boss"
-    };
+        var prefab = string.IsNullOrEmpty(look.Base) ? null : Find(look.Base);
+        string n = BaseName((prefab ? prefab.name : e.name).Replace("(Clone)", "").Trim());
+        if (n.StartsWith("Mob_")) n = n.Substring(4);
+        n = System.Text.RegularExpressions.Regex.Replace(n, "^Lil(?=[A-Za-z])", "Lil ");
+        n = n.Replace('_', ' ').Trim();
+        if (n.Length == 0) return "Mini-boss";
+        return char.ToUpperInvariant(n[0]) + n.Substring(1) + " mini-boss";
+    }
 
     // ---- co-op ----
+
+    /// <summary>A player who just arrived: the looks of the bosses here (their name, colour, size, bar), which were only
+    /// announced when they appeared.</summary>
+    public static void SendSnapshot(int playerId)
+    {
+        if (Plugin == null || !Plugin.Connected) return;
+        foreach (var kv in bosses)
+        {
+            var e = kv.Key;
+            if (!e || e.IsDead) continue;
+            uint id = EnemySync.NetId(e);
+            if (id == 0) continue;
+            Plugin.SendTo(playerId, LookMessage(id, kv.Value));
+        }
+    }
+
+    static NetDataWriter LookMessage(uint id, Look look)
+    {
+        var w = new NetDataWriter();
+        w.Put((byte)MsgType.BossLook);
+        w.Put(id);
+        w.Put(look.Name); w.Put(look.Base);
+        w.Put(look.Tint.r); w.Put(look.Tint.g); w.Put(look.Tint.b);
+        w.Put(look.Scale); w.Put(look.Health); w.Put(look.Damage);
+        return w;
+    }
 
     static bool SendLook(Enemy e, Look look)
     {

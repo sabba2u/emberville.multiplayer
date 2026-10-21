@@ -5,14 +5,14 @@ using UnityEngine;
 using Vector2 = UnityEngine.Vector2;
 using Vector3 = UnityEngine.Vector3;
 
-namespace EmbervilleGhost;
+namespace BetterLooting;
 
 /// <summary>
 /// A green up arrow, bobbing over a weapon on the ground when it hits harder than the one in your hand: the same
 /// numbers the inventory tooltip compares (CombatSystem.GetBaseDamage for you: min-max damage, here their average),
 /// against what you hold in that weapon's slot. Nothing in that slot: any weapon is an upgrade. Checked twice a second.
 /// </summary>
-internal static class LootArrows
+public static class LootArrows
 {
     static ConfigEntry<bool> on;
     static readonly Dictionary<ItemDropObject, GameObject> arrows = new Dictionary<ItemDropObject, GameObject>();
@@ -24,8 +24,9 @@ internal static class LootArrows
 
     public static void DrawMenu()
     {
+        ImGui.SeparatorText("Green arrows");
         bool v = on.Value;
-        if (ImGui.Checkbox("Green arrow over better weapons / armour / gear on the ground", ref v)) on.Value = v;
+        if (ImGui.Checkbox("A green arrow over items on the ground that are better than what you wear", ref v)) on.Value = v;
     }
 
     public static void Tick()

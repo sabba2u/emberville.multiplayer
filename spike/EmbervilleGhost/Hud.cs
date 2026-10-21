@@ -15,6 +15,10 @@ internal static class Hud
         ImGuiWindowFlags.NoFocusOnAppearing | ImGuiWindowFlags.NoNav | ImGuiWindowFlags.NoSavedSettings |
         ImGuiWindowFlags.NoBringToFrontOnFocus;
 
+    /// <summary>A screen or window is up (the game's own, or ours): the players' tags would show through it.</summary>
+    static bool PanelUp => UIPanels.HasOpenedPanel || ImGuiUnity.IsOpen || OnlinePlayers.Visible || Bestiary.Visible ||
+                           Trade.Visible || JoinWindow.Visible || HostWindow.Visible || Delve.SetupOpen;
+
     static void DrawTeammates()
     {
         var cam = UnityEngine.Camera.main;
@@ -232,6 +236,39 @@ internal static class Hud
     /// <summary>The status line top-left: off to start with, Delete shows it.</summary>
     public static BepInEx.Configuration.ConfigEntry<bool> ShowStatus;
 
+    /// <summary>The scene, where we stand and where the mouse points, in world units (for placing NPCs: spot = x, y).</summary>
+    static string WhereLine()
+    {
+        var me = LocalPlayer.Get();
+        if (!me) return LocalPlayer.Scene;
+        var p = me.transform.position;
+        string line = $"{LocalPlayer.Scene} | you {p.x:0.0}, {p.y:0.0}";
+        if (MouseWorld() is UnityEngine.Vector3 w) line += $" | mouse {w.x:0.0}, {w.y:0.0}";
+        return line + "   (Home / End: copy)";
+    }
+
+    static UnityEngine.Vector3? MouseWorld()
+    {
+        var cam = UnityEngine.Camera.main;
+        var mouse = UnityEngine.InputSystem.Mouse.current;
+        if (!cam || mouse == null) return null;
+        var mp = mouse.position.ReadValue();
+        return cam.ScreenToWorldPoint(new UnityEngine.Vector3(mp.x, mp.y, -cam.transform.position.z));
+    }
+
+    /// <summary>Home / End with the status line up: "scene = ..., spot = x, y" of where you stand / the mouse, to paste
+    /// into an NPC's npc.txt (or to tell someone "put her at x, y").</summary>
+    public static void CopySpot(bool mouse)
+    {
+        var me = LocalPlayer.Get();
+        UnityEngine.Vector3? at = mouse ? MouseWorld() : me ? me.transform.position : (UnityEngine.Vector3?)null;
+        if (at == null) return;
+        var ci = System.Globalization.CultureInfo.InvariantCulture;
+        string spot = at.Value.x.ToString("0.0", ci) + ", " + at.Value.y.ToString("0.0", ci);
+        UnityEngine.GUIUtility.systemCopyBuffer = $"scene = {LocalPlayer.Scene}\nspot = {spot}";
+        NetLog.Info($"Copied {(mouse ? "the mouse's" : "your")} spot: {LocalPlayer.Scene} {spot}", toast: true);
+    }
+
     public static void Draw()
     {
         if (Plugin == null) return;
@@ -248,6 +285,7 @@ internal static class Hud
             if (Plugin.Connected) line += $" | {Plugin.PlayerCount} players" + (Session.Pvp ? " | PvP ON" : "");
             line += $" | {Plugin.Fps:0} fps, mod {Plugin.ModMs:0.0} ms";
             ImGui.TextUnformatted(line);
+            ImGui.TextUnformatted(WhereLine());
             if (!ImGuiUnity.IsOpen) ImGui.TextDisabled($"{ImGuiUnity.MenuKey.Value}: menu   Delete: hide this");
             }
             ImGui.End();
@@ -270,7 +308,7 @@ internal static class Hud
 
         // Menus, the journal, dialogue, cutscenes: the game covers the world, so no name tags / labels on top of it.
         UpdateGameBubbles();
-        if (!PlayerStatusUtil.LocalBusy) { DrawTeammates(); Pet.DrawLabels(); Pings.Draw(); TeamHud.Draw(); Delve.Draw(); Rory.Draw(); }
+        if (!PlayerStatusUtil.LocalBusy) { if (!PanelUp) DrawTeammates(); Pings.Draw(); TeamHud.Draw(); Delve.Draw(); DungeonInvite.Draw(); Rory.Draw(); Integrations.DrawHud(); }
         MouseWalk.Draw();
         MapMates.Draw();   // the world map is a menu: not hidden with the rest
         Chat.Draw();
@@ -278,11 +316,14 @@ internal static class Hud
         JoinWindow.Draw();
         Delve.DrawSetup();   // the descent's setup box (clickable)
         NoDeath.Draw();
+        Delve.DrawTesting();   // /exitpath, /exitarrow: shown even while the game calls us busy
         DebugWalls.Draw();
         Dungeon.Loading.Draw();   // building a dungeon floor: what it's doing
         Arena.Draw();        // the boss arena's panel
         HostWindow.Draw();
         OnlinePlayers.Draw();
+        Bestiary.Draw();
+        FreeBuild.Draw();    // build mode's panel where the game has no build bar
         Trade.Draw();
         Toasts.Draw();
         if (ImGuiUnity.IsOpen) DebugPanel.Draw();

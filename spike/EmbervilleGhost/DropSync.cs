@@ -154,8 +154,13 @@ internal static class DropSync
             done(new ItemObject(data, amount) { randomValues = rv });
         }
         if (string.IsNullOrEmpty(key)) { Build(ItemByName(name)); return; }
+        // built AFTER the load's callback, not inside it: setting a drop up reads its translated name, a load of its
+        // own, and Addressables refuses one load inside another's callback ("Reentering the Update method")
         Addressables.LoadAssetAsync<ItemData>(key).Completed += h =>
-            Build(h.Status == AsyncOperationStatus.Succeeded && h.Result ? h.Result : ItemByName(name));
+        {
+            var data = h.Status == AsyncOperationStatus.Succeeded && h.Result ? h.Result : ItemByName(name);
+            Cysharp.Threading.Tasks.UniTask.Post(() => Build(data));
+        };
     }
 
     static Dictionary<string, ItemData> itemsByName;

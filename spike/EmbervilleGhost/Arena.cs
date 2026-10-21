@@ -46,6 +46,7 @@ internal static class Arena
             Build();
             gm.TeleportPlayerFade(Origin + new Vector3(W / 2f, 3f, 0f), Direction.Up, area, area.CameraConfiner).ContinueWith(() => busy = false).Forget();
             NetLog.Info("The boss arena: make a mini-boss in the panel on the right", toast: true);
+            Dungeon.AnnounceArena(rush: false);   // teammates get an invite card
         }
         catch (System.Exception e)
         {
@@ -273,6 +274,7 @@ internal static class Arena
         folded = true;   // out of the way while fighting
         rushWave = 1;
         rushPending = true;
+        Dungeon.AnnounceArena(rush: true);
     }
 
     static bool rushPending;

@@ -13,8 +13,7 @@ namespace EmbervilleGhost;
 /// Mouse walking (like our BDSP mod): hold the mouse side button and our character walks toward the mouse. The point
 /// under the mouse, relative to the player, becomes the move stick (PlayerMaster.GetInput reads Player.Move into
 /// `input` every Update; a postfix replaces it), so the game's own movement does the walking and walls still block.
-/// A small circle around the player is a dead zone; further out = faster, full speed at the outer ring (drawn while
-/// held). A quick click walks to that spot in a straight line (stops when there, stuck, or after a few seconds).
+/// A small circle around the player is a dead zone; further out = faster, full speed at the outer ring. A quick click walks to that spot in a straight line (stops when there, stuck, or after a few seconds).
 /// Keyboard / gamepad movement always wins. Settings: Insert menu.
 /// </summary>
 [HarmonyPatch]
@@ -36,7 +35,7 @@ internal static class MouseWalk
     public static void Bind(ConfigFile config)
     {
         on = config.Bind("MouseWalk", "Enabled", true, "Hold a mouse button to walk toward the mouse; a quick click walks to that spot");
-        button = config.Bind("MouseWalk", "Button", "Back", "Which mouse button: Back (side / thumb button), Forward (the other side button) or Middle");
+        button = config.Bind("MouseWalk", "Button", "Forward", "Which mouse button: Back (side / thumb button), Forward (the other side button) or Middle");
         deadZone = config.Bind("MouseWalk", "DeadZone", 0.4f, "No walking when the mouse is this close to your character (world units)");
         fullSpeed = config.Bind("MouseWalk", "FullSpeedDistance", 2.5f, "Full speed from this far out (world units); closer = slower");
     }
@@ -45,7 +44,8 @@ internal static class MouseWalk
     {
         "Forward" => m.forwardButton,
         "Middle" => m.middleButton,
-        _ => m.backButton,
+        "Back" => m.backButton,
+        _ => m.forwardButton,
     };
 
     static bool Blocked => PlayerStatusUtil.LocalBusy || Chat.IsOpen || ImGuiUnity.Typing || !Application.isFocused;
@@ -110,30 +110,17 @@ internal static class MouseWalk
         return offset / d * Mathf.Max(0.35f, speed);
     }
 
-    /// <summary>From Hud.Draw: the rings while held, a marker on a clicked spot.</summary>
+    /// <summary>From Hud.Draw: a marker on a clicked spot (nothing while held).</summary>
     public static void Draw()
     {
-        if (on == null || !on.Value || (!holding && !hasTarget)) return;
-        var me = LocalPlayer.Get();
+        if (on == null || !on.Value || holding || !hasTarget) return;
         var cam = Camera.main;
-        if (!me || !cam) return;
+        if (!cam) return;
         var dl = ImGui.GetBackgroundDrawList();
-        var c = ToScreen(cam, me.transform.position);
-        if (holding)
-        {
-            float px = Pixels(cam, me.transform.position);
-            dl.AddCircle(c, fullSpeed.Value * px, ImGui.ColorConvertFloat4ToU32(new ImGuiNET.Vector4(1f, 1f, 1f, 0.35f)), 48, 2f);
-            dl.AddCircle(c, deadZone.Value * px, ImGui.ColorConvertFloat4ToU32(new ImGuiNET.Vector4(1f, 1f, 1f, 0.25f)), 24, 1.5f);
-            var mp = Mouse.current.position.ReadValue();
-            dl.AddLine(c, new ImGuiNET.Vector2(mp.x, Screen.height - mp.y), ImGui.ColorConvertFloat4ToU32(new ImGuiNET.Vector4(1f, 0.85f, 0.4f, 0.6f)), 2f);
-        }
-        else
-        {
-            var t = ToScreen(cam, target);
-            uint col = ImGui.ColorConvertFloat4ToU32(new ImGuiNET.Vector4(1f, 0.85f, 0.4f, 0.8f));
-            dl.AddCircle(t, 8f, col, 16, 2f);
-            dl.AddCircleFilled(t, 3f, col);
-        }
+        var t = ToScreen(cam, target);
+        uint col = ImGui.ColorConvertFloat4ToU32(new ImGuiNET.Vector4(1f, 0.85f, 0.4f, 0.8f));
+        dl.AddCircle(t, 8f, col, 16, 2f);
+        dl.AddCircleFilled(t, 3f, col);
     }
 
     static ImGuiNET.Vector2 ToScreen(Camera cam, Vector3 world)
@@ -141,9 +128,6 @@ internal static class MouseWalk
         var s = cam.WorldToScreenPoint(world);
         return new ImGuiNET.Vector2(s.x, Screen.height - s.y);
     }
-
-    static float Pixels(Camera cam, Vector3 at) =>
-        Mathf.Abs(cam.WorldToScreenPoint(at + Vector3.right).x - cam.WorldToScreenPoint(at).x);
 
     public static void DrawMenu()
     {

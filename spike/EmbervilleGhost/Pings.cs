@@ -27,13 +27,14 @@ internal static class Pings
     public static Plugin Plugin;
 
     const float Lifetime = 3f;
+    const float OrderLifetime = 1f, OrderFade = 0.4f;   // an order to the risen / the flock: a quick mark
     const float PathLifetime = 10f, PathFade = 2f;
     const float PointSpacing = 0.3f;   // world units between recorded points
     const float DragStart = 0.5f;      // move this far while holding = drawing, not a ping
     const int MaxPoints = 256;
     const float Squash = 0.55f;        // rings: flatter than tall, lying on the ground
 
-    struct Ping { public V3 Position; public float Born; public int PlayerId; public string Name; }
+    struct Ping { public V3 Position; public float Born; public int PlayerId; public string Name; public bool Order; }
 
     class DrawnPath
     {
@@ -115,7 +116,15 @@ internal static class Pings
             SendPath(drawing);
             drawing = null;
         }
-        else SendPing(pressPoint);
+        else if (Integrations.HoldingStaff) { Add(pressPoint, MyId, "", order: true); Integrations.Rally(pressPoint); }   // an order to the risen / the flock: a red mark, just for us
+        else { SendPing(pressPoint); Integrations.Rally(pressPoint); }   // (and the Staff of Clucking's flock runs there)
+    }
+
+    /// <summary>A ping where we stand (arriving in a generated place: where you are), the same as a middle click there.</summary>
+    public static void PingHere()
+    {
+        var me = LocalPlayer.Get();
+        if (me) SendPing(me.transform.position);
     }
 
     static void SendPing(V3 point)
@@ -154,9 +163,9 @@ internal static class Pings
         if (paths.Count > 20) paths.RemoveAt(0);
     }
 
-    static void Add(V3 pos, int playerId, string name)
+    static void Add(V3 pos, int playerId, string name, bool order = false)
     {
-        active.Add(new Ping { Position = pos, Born = Time.unscaledTime, PlayerId = playerId, Name = name });
+        active.Add(new Ping { Position = pos, Born = Time.unscaledTime, PlayerId = playerId, Name = name, Order = order });
         if (active.Count > 20) active.RemoveAt(0);
     }
 
@@ -165,7 +174,7 @@ internal static class Pings
     {
         if (active.Count == 0 && paths.Count == 0) return;
         float now = Time.unscaledTime;
-        active.RemoveAll(p => now - p.Born > Lifetime);
+        active.RemoveAll(p => now - p.Born > (p.Order ? OrderLifetime : Lifetime));
         paths.RemoveAll(p => p != drawing && now - p.Born > PathLifetime);
         var cam = Camera.main;
         if (!cam) return;
@@ -176,8 +185,10 @@ internal static class Pings
         foreach (var p in active)
         {
             float age = now - p.Born;
-            float fade = 1f - Mathf.Clamp01((age - (Lifetime - 1f)) / 1f);   // full for 2 s, then fades over 1 s
-            var colour = ColourOf(p.PlayerId);
+            float fade = p.Order
+                ? 1f - Mathf.Clamp01((age - (OrderLifetime - OrderFade)) / OrderFade)   // an order: 1 s in all
+                : 1f - Mathf.Clamp01((age - (Lifetime - 1f)) / 1f);   // full for 2 s, then fades over 1 s
+            var colour = p.Order ? new Vector4(1f, 0.25f, 0.2f, 1f) : ColourOf(p.PlayerId);   // an order to the risen: red
 
             for (int ring = 0; ring < 3; ring++)   // three waves rippling out of the spot
             {
@@ -189,6 +200,7 @@ internal static class Pings
             uint solidU = ImGui.ColorConvertFloat4ToU32(solid);
             DrawGroundCircle(dl, cam, p.Position, 0.3f, solidU, 2.5f);
 
+            if (p.Order) continue;   // just the rings: no arrow, no name
             var top = Project(cam, p.Position + V3.up * 1.8f);
             float bounce = Mathf.Abs(Mathf.Sin(age * 6f)) * 10f;
             var tip = new Vector2(top.x, top.y + 26f - bounce);

@@ -56,6 +56,9 @@ internal static class Favorites
         __instance.description.text = (__instance.description.text.Length > 0 ? __instance.description.text + "\n" : "") +
                                       $"<color=#FFD24A>Favourite: F{slot + 5}</color> (press F{slot + 5} to wield it)";
         __instance.descriptionBox?.SetActive(true);
+        // (the game sized the tooltip for its own text: again with our line, or it's drawn over the stats)
+        if (__instance.descriptionBox) UnityEngine.UI.LayoutRebuilder.ForceRebuildLayoutImmediate((RectTransform)__instance.descriptionBox.transform);
+        if (__instance.infoBoxRect) UnityEngine.UI.LayoutRebuilder.ForceRebuildLayoutImmediate(__instance.infoBoxRect);
     }
 
     // ---- keys ----
@@ -143,7 +146,30 @@ internal static class Favorites
         return false;
     }
 
-    static string Fingerprint(ItemObject item) => item.data.addressKey + "|" + JsonUtility.ToJson(item.randomValues);
+    static string Fingerprint(ItemObject item) => item.data.addressKey + "|" + Steady(JsonUtility.ToJson(item.randomValues));
+
+    /// <summary>
+    /// The rolled values without counters that change as the weapon is used: number values under keys the game doesn't
+    /// have (another mod's, like the Staff of Clucking's clucks), so the key still finds it after it's been used.
+    /// </summary>
+    static string Steady(string json)
+    {
+        try
+        {
+            var v = JsonUtility.FromJson<ItemRandomValues>(json);
+            if (v?.strAttributes == null) return json;
+            int n = v.strAttributes.RemoveAll(a => a != null && !Enum.IsDefined(typeof(ItemRandomValues.Attr), a.Key) && int.TryParse(a.Value, out _));
+            return n == 0 ? json : JsonUtility.ToJson(v);
+        }
+        catch { return json; }
+    }
+
+    /// <summary>A saved key in today's form (keys saved before counters were left out had them in).</summary>
+    static string SteadyKey(string fp)
+    {
+        int bar = fp.IndexOf('|');
+        return bar < 0 ? fp : fp.Substring(0, bar + 1) + Steady(fp.Substring(bar + 1));
+    }
 
     static int SlotOf(string fp)
     {
@@ -187,7 +213,7 @@ internal static class Favorites
             foreach (var line in File.ReadAllLines(path))
             {
                 int tab = line.IndexOf('\t');
-                if (tab > 0 && int.TryParse(line.Substring(0, tab), out int i) && i >= 0 && i < Slots) keys[i] = line.Substring(tab + 1);
+                if (tab > 0 && int.TryParse(line.Substring(0, tab), out int i) && i >= 0 && i < Slots) keys[i] = SteadyKey(line.Substring(tab + 1));
             }
         }
         catch (Exception e) { Plugin.Log.LogWarning($"Favourites: {e.Message}"); }

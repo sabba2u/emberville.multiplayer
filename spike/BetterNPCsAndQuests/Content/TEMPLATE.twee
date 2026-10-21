@@ -1,0 +1,23 @@
+:: StoryTitle
+My NPC
+
+(BetterNPCsAndQuests: the game skips the first two passages of every file, so keep these two at the top.
+ Write your conversation below the line.)
+
+:: StoryData
+(Don't remove this passage either. Never type two colons in a row anywhere in your lines:
+ the game reads them as the start of a new passage.)
+
+-------- start your edit below --------
+
+:: DialogStart [NPC:MyNpc]
+Hello, {PlayerName}! Nice weather today.
+[[It sure is.|Agree]]
+[[Goodbye.|Bye]]
+
+:: Agree [NPC:MyNpc]
+(set: $talked_about_weather to true)
+Glad you think so too!
+
+:: Bye [NPC:MyNpc]
+See you around.

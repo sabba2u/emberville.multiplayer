@@ -23,7 +23,50 @@ internal static class ArenaTraps
     public static bool On
     {
         get => spikesOn || arrowsOn;
-        set { Set(spikeGroup, value); Set(shooterGroup, value); }
+        set { Set(spikeGroup, value); Set(shooterGroup, value); Changed(); }
+    }
+
+    // ---- co-op: everyone's copy of the arena has its own traps (each hurts its own player); whoever switched them
+    // last (the rush's wave, the panel's checkbox) tells the others which are awake, and again every few seconds for
+    // anyone who comes in later (ArenaTraps message) ----
+
+    public static Plugin Plugin;
+    static bool deciding;     // we switched them last: we keep everyone in step
+    static float nextResend;
+
+    static void Changed()
+    {
+        if (!Arena.Active) return;
+        deciding = true;
+        Send();
+    }
+
+    static void Send()
+    {
+        if (Plugin == null || !Plugin.Connected || Plugin.MyId < 0) return;
+        nextResend = Time.unscaledTime + 3f;
+        var w = new LiteNetLib.Utils.NetDataWriter();
+        w.Put((byte)MsgType.ArenaTraps);
+        w.Put(spikesOn);
+        w.Put(arrowsOn);
+        Plugin.SendToPlace(w, LiteNetLib.DeliveryMethod.ReliableOrdered);
+    }
+
+    public static void OnState(LiteNetLib.Utils.NetDataReader r)
+    {
+        bool spikes = r.GetBool(), arrows = r.GetBool();
+        if (!Arena.Active) return;
+        deciding = false;   // someone else is running them now
+        if (spikes && spikeGroup && !spikesOn) NetLog.Warn("The spike traps wake up!", toast: true);
+        if (arrows && shooterGroup && !arrowsOn) NetLog.Warn("The arrow shooters start firing!", toast: true);
+        Set(spikeGroup, spikes);
+        Set(shooterGroup, arrows);
+    }
+
+    public static void Tick()
+    {
+        if (deciding && Arena.Active && Time.unscaledTime >= nextResend) Send();
+        if (!Arena.Active) deciding = false;
     }
 
     static bool spikesOn, arrowsOn;
@@ -43,8 +86,10 @@ internal static class ArenaTraps
         bool spikes = wave >= SpikesFrom, arrows = wave >= ShootersFrom;
         if (spikes && spikeGroup && !spikesOn) NetLog.Warn("The spike traps wake up!", toast: true);
         if (arrows && shooterGroup && !arrowsOn) NetLog.Warn("The arrow shooters start firing!", toast: true);
+        bool changed = spikes != spikesOn || arrows != arrowsOn;
         Set(spikeGroup, spikes);
         Set(shooterGroup, arrows);
+        if (changed) Changed();
     }
 
     /// <summary>Into a freshly built arena (W x H tiles from <paramref name="origin"/>).</summary>
@@ -110,7 +155,7 @@ internal static class ArenaTraps
                 shooters++;
             }
         }
-        On = false;   // quiet until a rush reaches them (or the panel's checkbox)
+        Set(spikeGroup, false); Set(shooterGroup, false);   // quiet until a rush reaches them (or the panel's checkbox)
         NetLog.Info($"Arena traps: {spikes} spike traps, {shooters} arrow shooters" + (spike ? "" : " (no spike trap loaded here)") + (shooterList.Count > 0 ? "" : " (no arrow shooter loaded here)"), toast: false);
     }
 
@@ -131,7 +176,7 @@ internal static class ArenaTraps
         if (fx <= 0f) shift.x = WallEdge(new Vector3(origin.x - 0.5f, p.y), Side.Left, origin.x) - b.min.x - Into;
         else if (fx >= 1f) shift.x = WallEdge(new Vector3(origin.x + w + 0.5f, p.y), Side.Right, origin.x + w) - b.max.x + Into;
         if (fy <= 0f) shift.y = WallEdge(new Vector3(p.x, origin.y - 0.5f), Side.Bottom, origin.y) - b.min.y - Into;
-        else if (fy >= 1f) shift.y = WallEdge(new Vector3(p.x, origin.y + h + 0.5f), Side.Top, origin.y + h) - b.max.y + Into;
+        else if (fy >= 1f) shift.y = WallEdge(new Vector3(p.x, origin.y + h + 0.5f), Side.Top, origin.y + h) - b.max.y + Into + 1f;   // (a block higher: onto the wall face)
         t.transform.position += shift;
         NetLog.Info($"Arena shooter at wall ({fx:0.##},{fy:0.##}): art {b.min.x:0.##}..{b.max.x:0.##} x {b.min.y:0.##}..{b.max.y:0.##}, moved {shift.x:0.##},{shift.y:0.##}", toast: false);
     }

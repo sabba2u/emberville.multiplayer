@@ -141,7 +141,7 @@ internal static class ChestSync
                 {
                     var list = new List<InventoryItem>(n);
                     foreach (var it in result) if (it != null) list.Add(it);
-                    done(list);
+                    Cysharp.Threading.Tasks.UniTask.Post(() => done(list));   // outside the load's callback (the UI reads translated names: loads of their own)
                 }
             };
         }
@@ -234,10 +234,10 @@ internal static class ChestSync
             if (quickPending == id)
             {
                 // X on a chest: their contents, our matching items in, straight back (never opened on screen).
-                quickPending = 0;
                 SetContents(chest, items);
                 StackInto(chest);
                 SendClose(id, Singleton<ChestManager>.main.GetChestItems(chest.ID));
+                NextQuick();
                 return;
             }
             SetContents(chest, items);
@@ -263,11 +263,12 @@ internal static class ChestSync
 
     public static void OnDenied(NetDataReader r)
     {
-        if (quickPending == r.PeekUInt()) quickPending = 0;
+        bool wasQuick = quickPending == r.PeekUInt();
         r.GetUInt();
         int who = r.GetInt();
         pending = 0;
         NetLog.Warn($"{Plugin.NameOf(who)} {(who == Plugin.MyId ? "are" : "is")} using that chest");
+        if (wasQuick) NextQuick();
     }
 
     static void SendClose(uint id, List<InventoryItem> items)
@@ -547,6 +548,7 @@ internal static class ChestSync
     // and sends the new contents to everyone.
 
     static uint quickPending;   // puppet: asked the owner for this chest to quick-stack into
+    static readonly Queue<uint> quickQueue = new Queue<uint>();   // puppet: the next ones (Shift+X: every chest nearby)
     static System.Reflection.MethodInfo betterStackInto;
 
     /// <summary>From Plugin.Awake: hook Better Chests if it's installed (it loads first: soft dependency).</summary>
@@ -559,6 +561,86 @@ internal static class ChestSync
         harmony.Patch(run, prefix: new HarmonyMethod(typeof(ChestSync), nameof(BeforeQuickStack)),
                            postfix: new HarmonyMethod(typeof(ChestSync), nameof(AfterQuickStack)));
         NetLog.Info("Better Chests found: X at a chest works in multiplayer");
+        HookChestLooks();
+    }
+
+    // ---- V at a chest: Better Chests' names and colours (ChestLooks), for everyone ----
+    //
+    // Its edits are sent to everyone (ChestLook: chest id, name, colour); everyone applies them through its Set (no echo).
+    // A player arriving in an area gets every look the area's owner knows (with the other arrival snapshots).
+
+    static System.Reflection.MethodInfo looksSet, looksAll;
+
+    static void HookChestLooks()
+    {
+        var type = AccessTools.TypeByName("BetterChests.ChestLooks");
+        if (type == null) return;
+        looksSet = AccessTools.Method(type, "Set", new[] { typeof(string), typeof(string), typeof(string), typeof(int) });
+        looksAll = AccessTools.Method(type, "All");
+        var changed = AccessTools.Field(type, "Changed");
+        if (looksSet == null || changed == null) { looksSet = null; return; }
+        if (changed.FieldType != typeof(System.Action<string, string, string, int>)) { looksSet = null; NetLog.Warn("Better Chests is a different version: chest names aren't shared", toast: false); return; }
+        changed.SetValue(null, new System.Action<string, string, string, int>(SendLook));
+        NetLog.Info("Better Chests: chest names, colours and what they take are shared");
+    }
+
+    static NetDataWriter LookMessage(string id, string name, string hex, int takes)
+    {
+        var w = new NetDataWriter();
+        w.Put((byte)MsgType.ChestLook);
+        w.Put(id); w.Put(name ?? ""); w.Put(hex ?? ""); w.Put(takes);
+        return w;
+    }
+
+    static void SendLook(string id, string name, string hex, int takes)
+    {
+        if (Plugin == null || !Plugin.Connected || Plugin.MyId < 0) return;
+        Plugin.SendToAll(LookMessage(id, name, hex, takes), DeliveryMethod.ReliableOrdered);
+    }
+
+    public static void OnLook(NetDataReader r)
+    {
+        string id = r.GetString(), name = r.GetString(), hex = r.GetString();
+        int takes = r.AvailableBytes >= 4 ? r.GetInt() : 0;
+        if (hex.Length > 0 && !System.Text.RegularExpressions.Regex.IsMatch(hex, "^[0-9A-Fa-f]{6}$")) return;
+        if (name.Length > 32) name = name.Substring(0, 32);
+        try { looksSet?.Invoke(null, new object[] { id, name, hex, takes }); }
+        catch (System.Exception e) { NetLog.Warn($"Chest look: {e.Message}", toast: false); }
+    }
+
+    /// <summary>Owner: every chest look we know, for a player who just arrived.</summary>
+    public static void SendLooksSnapshot(int playerId)
+    {
+        if (looksAll == null) return;
+        try
+        {
+            if (!(looksAll.Invoke(null, null) is System.Collections.IEnumerable all)) return;
+            foreach (var o in all)
+            {
+                if (!(o is System.ValueTuple<string, string, string, int> t)) continue;
+                Plugin.SendTo(playerId, LookMessage(t.Item1, t.Item2, t.Item3, t.Item4));
+            }
+        }
+        catch (System.Exception e) { NetLog.Warn($"Chest looks: {e.Message}", toast: false); }
+    }
+
+    static void AskQuick(uint id)
+    {
+        quickPending = id;
+        var w = new NetDataWriter();
+        w.Put((byte)MsgType.ChestOpen); w.Put(id);
+        Plugin.SendToOwner(w, DeliveryMethod.ReliableOrdered);
+    }
+
+    /// <summary>Puppet: the last quick stack is done (or refused): the next queued chest.</summary>
+    static void NextQuick()
+    {
+        quickPending = 0;
+        while (quickQueue.Count > 0 && pending == 0)
+        {
+            uint next = quickQueue.Dequeue();
+            if (FindChest(next)) { AskQuick(next); return; }
+        }
     }
 
     static bool BeforeQuickStack(Chest chest, ref int __result, out bool __state)
@@ -570,11 +652,8 @@ internal static class ChestSync
         if (Puppet)
         {
             __result = 0;
-            if (quickPending != 0 || pending != 0) return false;
-            quickPending = id;
-            var w = new NetDataWriter();
-            w.Put((byte)MsgType.ChestOpen); w.Put(id);
-            Plugin.SendToOwner(w, DeliveryMethod.ReliableOrdered);
+            if (quickPending != 0 || pending != 0) { if (quickPending != id && !quickQueue.Contains(id)) quickQueue.Enqueue(id); return false; }
+            AskQuick(id);
             return false;
         }
         if (lockedBy.TryGetValue(id, out int who) && who != Plugin.MyId)

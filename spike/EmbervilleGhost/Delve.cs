@@ -25,6 +25,7 @@ internal static class Delve
     static ConfigEntry<float> padX, padY, healthGrowth, damageGrowth;
     static ConfigEntry<int> floors, maxEnemies, bossEvery, sprawl;
     static ConfigEntry<bool> sprawlGrows, bigFloors;
+    static ConfigEntry<float> density;
     const int FloorsPerBiome = 3;
 
     public static void Bind(ConfigFile config)
@@ -38,11 +39,13 @@ internal static class Delve
         healthGrowth = config.Bind("Descent", "HealthGrowth", 1.25f, "Creature health multiplier per floor down, compounding (1.25 = each floor 125% of the one above; 2 = 200%, doubling)");
         damageGrowth = config.Bind("Descent", "DamageGrowth", 1.15f, "Creature damage multiplier per floor down, compounding (1.15 = each floor 115% of the one above)");
         floors = config.Bind("Descent", "Floors", 10, "How many floors the descent has (0 = it never ends)");
-        maxEnemies = config.Bind("Descent", "MaxEnemies", 60, "The most creatures on one floor (0 = no limit)");
-        sprawl = config.Bind("Descent", "Sprawl", 1, "How much floors branch out: 0 = the game's own layouts, 1 branching, 2 sprawling, 3 a web, 4 a maze");
-        sprawlGrows = config.Bind("Descent", "SprawlGrowsDeeper", true, "Floors spread out more as you go down (+1 sprawl every 3 floors)");
-        bigFloors = config.Bind("Descent", "BigBossFloors", true, "Boss floors are a big open region of the world map's dungeon (slower to build)");
-        bossEvery = config.Bind("Descent", "BossEvery", 5, "A mini-boss guards the stairs every this many floors (0 = none)");
+        maxEnemies = config.Bind("Descent", "MaxEnemiesAlive", 60, "The most creatures alive at once on a floor (they keep appearing as you explore; 0 = no limit)");
+        density = config.Bind("Descent", "Density", 1.5f, "Creature groups per spawn area (0.5 - 3; they appear as you come near)");
+        // (new names: the old defaults made mazes; everyone starts from the game's own compact layouts)
+        sprawl = config.Bind("Descent", "Layout", 0, "How much floors branch out: 0 = compact (the game's own layouts), 1 a few side rooms, 2 branching, 3 sprawling, 4 a maze");
+        sprawlGrows = config.Bind("Descent", "LayoutGrowsDeeper", false, "Floors spread out more as you go down (+1 every 3 floors)");
+        bigFloors = config.Bind("Descent", "BigOpenBossFloors", false, "Boss floors are a big open region of the world map's dungeon (maze-like, slower to build)");
+        bossEvery = config.Bind("Descent", "GuardianEvery", 1, "A mini-boss guards the stairs every this many floors (1 = every floor, 0 = none)");
         SceneManager.sceneLoaded += (_, _) => { pads.Clear(); scaled.Clear(); worldPadChecked = false; MiniBoss.Clear(); };
     }
 
@@ -57,6 +60,13 @@ internal static class Delve
     public static int SprawlLevel(int floor) => Mathf.Clamp(sprawl.Value + (sprawlGrows.Value && floor > 0 ? (floor - 1) / 3 : 0), 0, 6);
     public static double ExtraChance(int floor) => floor <= 1 ? 0 : Mathf.Min(0.6f, 0.08f * (floor - 1));
     public static int GroupsPerArea(int floor) => floor <= 0 ? 1 : 1 + (floor - 1) / 4;
+    /// <summary>Groups for one spawn area: the floor's number, times the density (a fraction rounds up or down by chance).</summary>
+    public static int GroupsFor(int floor, System.Random rng)
+    {
+        float n = GroupsPerArea(floor) * (floor > 0 ? density.Value : 1f);
+        int whole = Mathf.FloorToInt(n);
+        return Mathf.Max(0, whole + (rng.NextDouble() < n - whole ? 1 : 0));
+    }
 
     /// <summary>A floor: the dungeon type from the seed and the floor's "biome tier"; Where.Seed is the descent's seed
     /// (the generator gets SeedOf), so whoever follows can work out the floors below too.</summary>
@@ -66,7 +76,7 @@ internal static class Delve
         // there's nothing else
         var all = Dungeon.AllSettings();
         // boss floors: a big open region of the world map's own dungeon
-        if (bigFloors.Value && IsBossFloor(floor) && Dungeon.MainSettings()) return new Dungeon.Where(Dungeon.MainSettings().name, baseSeed, -1, floor);
+        if (bigFloors.Value && floor % 5 == 0 && Dungeon.MainSettings()) return new Dungeon.Where(Dungeon.MainSettings().name, baseSeed, -1, floor);   // (every 5th: the big ones)
         var pool = all.Where(x => x != Dungeon.MainSettings()).ToList();
         if (pool.Count == 0) pool = all;
         int tier = (floor - 1) / FloorsPerBiome;
@@ -222,6 +232,7 @@ internal static class Delve
         bool last = floors.Value > 0 && where.Floor >= floors.Value;
         bossFloor = IsBossFloor(where.Floor);
         MiniBoss.Clear();
+        Integrations.NpcEvent("descent_floor", where.Floor.ToString());   // Better NPCs and Quests' rules
 
         Vector3 Center(Vector3Int c) => new Vector3((c.x + 0.5f) * cs.x, (c.y + 0.5f) * cs.y, 0f);
         var arrive = Center(start);
@@ -328,9 +339,46 @@ internal static class Delve
 
     const float Size = 2.2f;
     static readonly List<Pad> pads = new List<Pad>();
+    static readonly Dictionary<GameObject, float> labelHeight = new Dictionary<GameObject, float>();
+
+    /// <summary>The floor's pads, for the minimap: where, and whether it's the way down / the way home.</summary>
+    public static IEnumerable<(Vector3 at, bool down, bool home)> FloorPads()
+    {
+        foreach (var p in pads)
+            if (p && p.Kind != PadKind.Entrance && p.Kind != PadKind.Arena)
+                yield return (p.transform.position, p.Kind == PadKind.Down || p.Kind == PadKind.Finish, p.Kind == PadKind.Home);
+    }
     static Sprite ringSprite;
 
-    static void MakePad(Transform parent, Vector3 at, PadKind kind, bool armed, bool ring = true)
+    /// <summary>
+    /// In a fixed scene (town): the ring goes just over the flat art lying under it (floor, carpets, rugs: anything
+    /// without a collider), so a carpet doesn't cover it; what stands there (tables, chairs) still draws over it.
+    /// </summary>
+    static void OverFlatGround(SpriteRenderer sr, Vector3 at)
+    {
+        var area = new Bounds(new Vector3(at.x, at.y, 0f), new Vector3(Size * 2f, Size * 2f, 1000f));
+        int bestValue = SortingLayer.GetLayerValueFromID(sr.sortingLayerID), bestOrder = sr.sortingOrder, bestId = sr.sortingLayerID;
+        string over = null;
+        foreach (var r in Object.FindObjectsByType<Renderer>(FindObjectsSortMode.None))
+        {
+            if (!r || !r.enabled || !r.gameObject.activeInHierarchy) continue;
+            if (!(r is SpriteRenderer) && !(r is UnityEngine.Tilemaps.TilemapRenderer)) continue;
+            if (r.name.StartsWith("EG_") || r.transform.root.name.StartsWith("EG_")) continue;   // (our own pads and art)
+            if (r.GetComponentInParent<Collider2D>() || r.GetComponentInParent<PlayerMaster>() || r.GetComponentInParent<Enemy>()) continue;
+            var b = r.bounds;
+            b.center = new Vector3(b.center.x, b.center.y, 0f);
+            b.size = new Vector3(b.size.x, b.size.y, 1000f);
+            if (!b.Intersects(area)) continue;
+            int value = SortingLayer.GetLayerValueFromID(r.sortingLayerID);
+            if (value < bestValue || value == bestValue && r.sortingOrder < bestOrder) continue;
+            bestValue = value; bestOrder = r.sortingOrder; bestId = r.sortingLayerID; over = r.name;
+        }
+        if (over != null) Plugin.Log.LogInfo($"Pad ring at {at.x:0.0},{at.y:0.0}: drawn over {over} ({SortingLayer.IDToName(bestId)} {bestOrder})");
+        sr.sortingLayerID = bestId;
+        sr.sortingOrder = bestOrder + 1;
+    }
+
+    static void MakePad(Transform parent, Vector3 at, PadKind kind, bool armed, bool ring = true, bool portal = false)
     {
         var go = new GameObject($"EG_DelvePad_{kind}");
         if (parent) go.transform.SetParent(parent, true);
@@ -342,9 +390,19 @@ internal static class Delve
         sr.color = kind == PadKind.Home ? new Color(0.45f, 0.75f, 1f, 0.9f) : kind == PadKind.Arena ? new Color(0.85f, 0.4f, 1f, 0.95f) : kind == PadKind.Finish ? new Color(1f, 0.9f, 0.35f, 1f) : new Color(1f, 0.55f, 0.15f, 0.95f);
         var playerSprite = LocalPlayer.Get() ? LocalPlayer.Get().GetComponentInChildren<SpriteRenderer>() : null;
         if (playerSprite) { sr.sortingLayerID = playerSprite.sortingLayerID; sr.sortingOrder = -500; }
+        // in a built floor: just over its merged floor tiles (on the player's layer at -500 they were under them)
+        if (parent && parent.Find("MergedTiles") is Transform mt)
+        {
+            int best = int.MinValue, layer = 0;
+            foreach (var r in mt.GetComponentsInChildren<UnityEngine.Tilemaps.TilemapRenderer>(true))
+                if (r.name.StartsWith("Merged_Ground") && r.sortingOrder > best) { best = r.sortingOrder; layer = r.sortingLayerID; }
+            if (best != int.MinValue) { sr.sortingLayerID = layer; sr.sortingOrder = best + 5; }
+        }
+        else OverFlatGround(sr, at);
         art.transform.localScale = Vector3.one * Size;
-        PadFx.Add(go, Ring(), sr.color, sr.sortingLayerID, ring);   // turning inner ring, rising motes, a glow on the ground
+        PadFx.Add(go, Ring(), sr.color, sr.sortingLayerID, ring, sr.sortingOrder);   // turning inner ring, rising motes, a glow on the ground
         if (!ring) sr.enabled = false;   // on a landmark (the well, the lamp): its glow and sparkles, no ring
+        if (portal && PadFx.Portal(go.transform, at)) { sr.enabled = false; labelHeight[go] = 3.2f; }   // the game's own portal stands there
         var pad = go.AddComponent<Pad>();
         pad.Kind = kind;
         pad.Armed = armed;
@@ -510,7 +568,109 @@ internal static class Delve
 
     // ---- on screen ----
 
+    /// <summary>/exitarrow: an edge arrow to the floor's stairs down (for testing floors). Not saved.</summary>
+    public static bool ExitArrow { get; private set; }
+
+    public static void ToggleExitArrow()
+    {
+        ExitArrow = !ExitArrow;
+        NetLog.Info(ExitArrow ? "Exit arrow: on (an arrow at the screen's edge points to the stairs down; /exitarrow to hide)" : "Exit arrow: off", toast: true);
+    }
+
+    // ---- /exitpath: the way from you to the stairs, over the floor tiles (props ignored: they can be broken) ----
+
+    public static bool ExitPath { get; private set; }
+    static List<Vector3> path = new List<Vector3>();
+    static float nextPath;
+    static string pathNote = "";
+
+    public static void ToggleExitPath()
+    {
+        ExitPath = !ExitPath;
+        nextPath = 0f;
+        NetLog.Info(ExitPath ? "Exit path: on (a line on the floor from you to the stairs down; props don't count, they can be broken. /exitpath to hide)" : "Exit path: off", toast: true);
+    }
+
+    static void UpdatePath()
+    {
+        if (Time.unscaledTime < nextPath) return;
+        nextPath = Time.unscaledTime + 0.5f;
+        path.Clear();
+        var me = LocalPlayer.Get();
+        var target = pads.FirstOrDefault(p => p && (p.Kind == PadKind.Down || p.Kind == PadKind.Finish));
+        if (!me || !target) { pathNote = "no stairs on this floor"; return; }
+        var cells = Dungeon.floorCells;
+        var cs = Dungeon.cellSize;
+        Vector3Int Cell(Vector3 w) => new Vector3Int(Mathf.FloorToInt(w.x / cs.x), Mathf.FloorToInt(w.y / cs.y), 0);
+        var from = Cell(me.transform.position);
+        var to = Cell(target.transform.position);
+        if (!cells.Contains(from)) from = cells.OrderBy(c => (c - from).sqrMagnitude).First();
+        // breadth-first over the floor (8 directions, no cutting wall corners), then back from the stairs
+        var came = new Dictionary<Vector3Int, Vector3Int> { [from] = from };
+        var q = new Queue<Vector3Int>();
+        q.Enqueue(from);
+        while (q.Count > 0 && !came.ContainsKey(to))
+        {
+            var c = q.Dequeue();
+            for (int dx = -1; dx <= 1; dx++)
+                for (int dy = -1; dy <= 1; dy++)
+                {
+                    if (dx == 0 && dy == 0) continue;
+                    var n = new Vector3Int(c.x + dx, c.y + dy, 0);
+                    if (came.ContainsKey(n) || !cells.Contains(n)) continue;
+                    if (dx != 0 && dy != 0 && (!cells.Contains(new Vector3Int(c.x + dx, c.y, 0)) || !cells.Contains(new Vector3Int(c.x, c.y + dy, 0)))) continue;
+                    came[n] = c;
+                    q.Enqueue(n);
+                }
+        }
+        if (!came.ContainsKey(to)) { pathNote = "NO PATH to the stairs over the floor from here"; return; }
+        for (var c = to; ; c = came[c])
+        {
+            path.Add(new Vector3((c.x + 0.5f) * cs.x, (c.y + 0.5f) * cs.y, 0f));
+            if (c == from) break;
+        }
+        path.Reverse();
+        pathNote = $"{path.Count} steps to the stairs";
+    }
+
+    static void DrawPath()
+    {
+        if (!ExitPath || Dungeon.Floor <= 0) return;
+        UpdatePath();
+        var cam = Camera.main;
+        if (!cam) return;
+        var dl = ImGui.GetBackgroundDrawList();
+        uint col = ImGui.ColorConvertFloat4ToU32(new Vector4(1f, 0.85f, 0.2f, 0.9f));
+        uint shadow = ImGui.ColorConvertFloat4ToU32(new Vector4(0f, 0f, 0f, 0.6f));
+        Vector2 Screen(Vector3 w) { var s = cam.WorldToScreenPoint(w); return new Vector2(s.x, UnityEngine.Screen.height - s.y); }
+        for (int i = 1; i < path.Count; i++)
+        {
+            var a = Screen(path[i - 1]); var b = Screen(path[i]);
+            dl.AddLine(a, b, shadow, 5f);
+            dl.AddLine(a, b, col, 2.5f);
+        }
+        var vp = ImGui.GetMainViewport();
+        var note = "Exit path: " + pathNote;
+        var size = ImGui.CalcTextSize(note);
+        float x = vp.WorkPos.x + vp.WorkSize.x / 2f - size.x / 2f, y = vp.WorkPos.y + 40f;
+        bool bad = pathNote.StartsWith("NO");
+        dl.AddRectFilled(new Vector2(x - 6, y - 2), new Vector2(x + size.x + 6, y + size.y + 2), ImGui.ColorConvertFloat4ToU32(new Vector4(0f, 0f, 0f, 0.55f)), 4f);
+        dl.AddText(new Vector2(x, y), ImGui.ColorConvertFloat4ToU32(bad ? new Vector4(1f, 0.35f, 0.3f, 1f) : new Vector4(1f, 0.85f, 0.4f, 1f)), note);
+    }
+
     /// <summary>From Hud.Draw: the floor number, and labels over the pads.</summary>
+    /// <summary>From Hud.Draw, always (not hidden with the world labels while the game calls you busy, e.g. just after
+    /// a death): the testing tools, /exitpath and /exitarrow.</summary>
+    public static void DrawTesting()
+    {
+        if (Dungeon.Loading.On) return;
+        DrawPath();
+        if (ExitArrow && Dungeon.Floor > 0)
+            foreach (var p in pads)
+                if (p && p.gameObject.activeInHierarchy && (p.Kind == PadKind.Down || p.Kind == PadKind.Finish))
+                    Hud.EdgeArrowTo(p.transform.position, new Vector4(1f, 0.6f, 0.2f, 1f), p.Kind == PadKind.Finish ? "The bottom" : "Stairs down");
+    }
+
     public static void Draw()
     {
         int floor = Dungeon.Floor;
@@ -549,7 +709,7 @@ internal static class Delve
                 PadKind.Finish => "The bottom! Leave the descent",
                 _ => deepest.Value > 1 ? $"The descent (deepest: floor {deepest.Value})" : "The descent"
             };
-            var s = cam.WorldToScreenPoint(p.transform.position + Vector3.up * 1.3f);
+            var s = cam.WorldToScreenPoint(p.transform.position + Vector3.up * (labelHeight.TryGetValue(p.gameObject, out float lh) ? lh : 1.3f));
             if (s.z < 0) continue;
             var size = ImGui.CalcTextSize(text);
             float x = s.x, y = Screen.height - s.y;
@@ -564,8 +724,9 @@ internal static class Delve
     static bool startAfter;
     static string seedText = "";
     static int floorsEdit, maxEdit, sprawlEdit;
+    static float densityEdit;
     static bool growsEdit, bigEdit;
-    static readonly string[] SprawlNames = { "the game's own layouts", "branching", "sprawling", "a web", "a maze" };
+    static readonly string[] SprawlNames = { "compact (the game's own)", "a few side rooms", "branching", "sprawling", "a maze" };
     static float healthEdit, damageEdit;
 
     static bool seedRolled;   // this game session
@@ -578,7 +739,7 @@ internal static class Delve
         if (!seedRolled || seed.Value == 0) { seedRolled = true; seedText = new System.Random().Next(1, int.MaxValue).ToString(); }
         else seedText = seed.Value.ToString();
         floorsEdit = floors.Value; maxEdit = maxEnemies.Value;
-        sprawlEdit = sprawl.Value; growsEdit = sprawlGrows.Value; bigEdit = bigFloors.Value;
+        sprawlEdit = sprawl.Value; growsEdit = sprawlGrows.Value; bigEdit = bigFloors.Value; densityEdit = density.Value;
         healthEdit = healthGrowth.Value * 100f; damageEdit = damageGrowth.Value * 100f;
         SetupOpen = true;
         GameInput.Block("delvesetup");
@@ -595,6 +756,7 @@ internal static class Delve
         seed.Value = newSeed;
         floors.Value = Mathf.Max(0, floorsEdit);
         sprawl.Value = Mathf.Clamp(sprawlEdit, 0, 4); sprawlGrows.Value = growsEdit; bigFloors.Value = bigEdit;
+        density.Value = Mathf.Clamp(densityEdit, 0.5f, 3f);
         maxEnemies.Value = Mathf.Max(0, maxEdit);
         healthGrowth.Value = Mathf.Max(100f, healthEdit) / 100f;
         damageGrowth.Value = Mathf.Max(100f, damageEdit) / 100f;
@@ -653,11 +815,14 @@ internal static class Delve
         ImGui.SetNextItemWidth(160);
         ImGui.SliderInt("Sprawl##sprawl", ref sprawlEdit, 0, 4, SprawlNames[Mathf.Clamp(sprawlEdit, 0, 4)]);
         ImGui.Checkbox("Spread out more as you go down (+1 every 3 floors)", ref growsEdit);
-        ImGui.Checkbox("Boss floors are a big open region (slower to build)", ref bigEdit);
+        ImGui.Checkbox("Boss floors are a big open region (maze-like, slower to build)", ref bigEdit);
 
         ImGui.Separator();
         ImGui.SetNextItemWidth(160);
-        ImGui.InputInt("Most creatures on a floor", ref maxEdit, 5, 20);
+        ImGui.SetNextItemWidth(160);
+        ImGui.SliderFloat("Density (groups per spawn area)", ref densityEdit, 0.5f, 3f, "%.1fx");
+        ImGui.SetNextItemWidth(160);
+        ImGui.InputInt("Most creatures alive at once", ref maxEdit, 5, 20);
         if (maxEdit < 0) maxEdit = 0;
         if (maxEdit == 0) { ImGui.SameLine(); ImGui.TextDisabled("no limit"); }
 

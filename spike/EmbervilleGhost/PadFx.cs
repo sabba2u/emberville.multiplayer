@@ -14,7 +14,7 @@ internal static class PadFx
     static Sprite dot;
     static Material unlit;
 
-    public static void Add(GameObject pad, Sprite ring, Color color, int sortingLayer, bool groundArt = true)
+    public static void Add(GameObject pad, Sprite ring, Color color, int sortingLayer, bool groundArt = true, int baseOrder = -500)
     {
         try
         {
@@ -32,10 +32,10 @@ internal static class PadFx
             isr.sprite = ring;
             isr.color = new Color(color.r, color.g, color.b, 0.55f);
             isr.sortingLayerID = sortingLayer;
-            isr.sortingOrder = -499;
+            isr.sortingOrder = baseOrder + 1;
             inner.AddComponent<Spin>().DegreesPerSecond = -40f;
 
-            Burn(pad, color, sortingLayer);
+            // (the game's scorched-ground burst flipbook was too much on a pad: just the pulsing ring)
             Motes(pad, color, sortingLayer);
             Glow(pad, color);
         }
@@ -57,7 +57,7 @@ internal static class PadFx
         return burnFrames;
     }
 
-    static void Burn(GameObject pad, Color color, int sortingLayer)
+    static void Burn(GameObject pad, Color color, int sortingLayer, int order)
     {
         var frames = BurnFrames();
         if (frames.Length == 0) return;
@@ -67,7 +67,7 @@ internal static class PadFx
         sr.sprite = frames[0];
         sr.color = Color.Lerp(Color.white, color, 0.45f);   // the art is cyan: the pad's colour shows through
         sr.sortingLayerID = sortingLayer;
-        sr.sortingOrder = -498;
+        sr.sortingOrder = order;
         float w = Mathf.Max(0.01f, frames.Max(f => f.bounds.size.x));
         go.transform.localScale = Vector3.one * (3.6f / w);   // about the ring's width
         var fb = go.AddComponent<Flipbook>();
@@ -92,6 +92,45 @@ internal static class PadFx
             sr.enabled = i < Frames.Length;
             if (sr.enabled) sr.sprite = Frames[i];
         }
+    }
+
+    // ---- the game's Vitromotus portal (the dungeon's portal room: ChunkPortal > ActivePortal > Art) ----
+
+    static GameObject portalArt;
+
+    /// <summary>A copy of the game's portal art (its animated sprite, sorted like the world) standing at the spot.</summary>
+    public static GameObject Portal(Transform parent, Vector3 at)
+    {
+        if (!portalArt)
+        {
+            Dungeon.AllSettings();   // the biomes bring the dungeon rooms (and the portal room) in
+            foreach (var cp in Resources.FindObjectsOfTypeAll<ChunkPortal>())
+            {
+                if (!cp || !cp.portal) continue;
+                var art = cp.portal.transform.Find("Art");
+                if (art) { portalArt = art.gameObject; break; }
+            }
+            if (!portalArt) { NetLog.Info("Pad effects: the game's portal art isn't loaded here", toast: false); return null; }
+        }
+        var holder = new GameObject("EG_PortalHolder");
+        holder.SetActive(false);
+        GameObject copy;
+        try
+        {
+            copy = Object.Instantiate(portalArt, holder.transform);
+            copy.name = "EG_Portal";
+            foreach (var mb in copy.GetComponentsInChildren<MonoBehaviour>(true))
+                if (mb && mb.GetType().Assembly == typeof(ChunkPortal).Assembly) Object.DestroyImmediate(mb);
+            foreach (var c in copy.GetComponentsInChildren<Collider2D>(true)) Object.DestroyImmediate(c);
+            copy.transform.SetParent(parent, false);
+        }
+        finally { Object.Destroy(holder); }
+        copy.transform.position = at;
+        copy.SetActive(true);
+        foreach (var a in copy.GetComponentsInChildren<Animator>(true))
+            foreach (var p in a.parameters)
+                if (p.name == "Activate" && p.type == AnimatorControllerParameterType.Trigger) a.SetTrigger("Activate");   // the open, swirling state
+        return copy;
     }
 
     /// <summary>A puff of light when the pad sends you off.</summary>

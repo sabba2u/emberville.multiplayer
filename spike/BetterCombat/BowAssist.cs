@@ -3,7 +3,7 @@ using BepInEx.Configuration;
 using HarmonyLib;
 using UnityEngine;
 
-namespace EmbervilleGhost;
+namespace BetterCombat;
 
 /// <summary>
 /// Bow lock-on: an arrow (bow or crossbow) we shoot curves onto the closest living creature roughly where we aimed
@@ -11,7 +11,7 @@ namespace EmbervilleGhost;
 /// creatures' shots use), turned gentler, so near misses hit but a shot the other way still goes where it's aimed.
 /// /bowlock turns it on and off (remembered).
 /// </summary>
-internal static class BowAssist
+public static class BowAssist
 {
     static ConfigEntry<bool> on, trueAim;
     static ConfigEntry<float> angle, range;
@@ -30,17 +30,18 @@ internal static class BowAssist
     /// <summary>The Insert menu: lock-on on / off, its cone and range; true aim.</summary>
     public static void DrawMenu()
     {
-        ImGuiNET.ImGui.Separator();
+        ImGuiNET.ImGui.SeparatorText("Bow lock-on");
         bool v = on.Value;
-        if (ImGuiNET.ImGui.Checkbox("Bow lock-on: arrows curve onto the creature nearest your aim", ref v)) on.Value = v;
-        if (on.Value)
-        {
-            float a = angle.Value, r = range.Value;
-            ImGuiNET.ImGui.SetNextItemWidth(160);
-            if (ImGuiNET.ImGui.SliderFloat("Cone (degrees either side)##bowlock", ref a, 2f, 90f, "%.0f")) angle.Value = a;
-            ImGuiNET.ImGui.SetNextItemWidth(160);
-            if (ImGuiNET.ImGui.SliderFloat("Range##bowlock", ref r, 4f, 25f, "%.0f")) range.Value = r;
-        }
+        if (ImGuiNET.ImGui.Checkbox("Arrows curve onto the creature nearest your aim (/bowlock)", ref v)) on.Value = v;
+        if (!on.Value) ImGuiNET.ImGui.BeginDisabled();
+        float a = angle.Value, r = range.Value;
+        ImGuiNET.ImGui.SetNextItemWidth(280);
+        if (ImGuiNET.ImGui.SliderFloat("Cone##bowlock", ref a, 2f, 90f, "%.0f° either side")) angle.Value = a;
+        ImGuiNET.ImGui.SameLine(); ImGuiNET.ImGui.TextDisabled("how far off your aim a creature can be");
+        ImGuiNET.ImGui.SetNextItemWidth(280);
+        if (ImGuiNET.ImGui.SliderFloat("Range##bowlock", ref r, 4f, 25f, "%.0f steps")) range.Value = r;
+        ImGuiNET.ImGui.SameLine(); ImGuiNET.ImGui.TextDisabled("how far away it can be");
+        if (!on.Value) ImGuiNET.ImGui.EndDisabled();
         bool t = trueAim.Value;
         if (ImGuiNET.ImGui.Checkbox("Bows aim true (any direction, not just up / right / down / left)", ref t)) trueAim.Value = t;
     }
@@ -50,13 +51,13 @@ internal static class BowAssist
     {
         angle.Value = Mathf.Clamp(degrees, 2f, 90f);
         on.Value = true;
-        NetLog.Info($"Bow lock-on: {angle.Value:0}° either side of your aim ({angle.Value * 2f:0}° wide), up to {range.Value:0} steps", toast: true);
+        Log.Info($"Bow lock-on: {angle.Value:0}° either side of your aim ({angle.Value * 2f:0}° wide), up to {range.Value:0} steps", toast: true);
     }
 
     public static void Toggle()
     {
         on.Value = !on.Value;
-        NetLog.Info(on.Value ? $"Bow lock-on: on ({angle.Value:0}° either side of your aim; /bowlock 15 to change)" : "Bow lock-on: off", toast: true);
+        Log.Info(on.Value ? $"Bow lock-on: on ({angle.Value:0}° either side of your aim; /bowlock 15 to change)" : "Bow lock-on: off", toast: true);
     }
 
     static bool HoldingBow(PlayerMaster me) =>

@@ -1019,3 +1019,22 @@ On an IL2CPP game the same idea works, but meshes/shaders go through Il2CppInter
 
 The Emberville plan at the top replaces the old TODO list (recon of other mods, LiteNetLib console spike, the
 first "ghost co-op" sketch). Duckov taught all of that; those items are dropped.
+
+## Later
+
+- Split the dungeon / Descent / arena / Boss Rush features into their own mod, `BetterDungeonsAndBossRushArena`:
+  not started on purpose (2026-10-20). Findings and the two ways to do it: `notes/split-better-dungeons.md`.
+- **Better mouse movement**: decided 2026-10-21 to keep it as it is. Mouse walking stays on a side button (mouse 4 by
+  default, picked in Insert > Mouse Options); left click stays the attack. The left-click plan (click enemies / NPCs /
+  items / ground) was dropped.
+- **Build mode anywhere (B)**: switched off 2026-10-21 (`BuildMode.Enabled = false`). The demo has no build
+  controller anywhere (not in the tutorial area, not in Town), so the game's build bar never opens; our own placer
+  (`FreeBuild.cs`) opened but clicks didn't place, untested why (it now says why on a refused click). Off means: B does
+  nothing, nothing built is loaded or saved, no Insert > Construction tab. Spec and plan:
+  `docs/superpowers/specs/2026-10-21-build-anywhere-design.md`, `docs/superpowers/plans/2026-10-21-build-anywhere.md`.
+- **Lua scripting for BetterNPCsAndQuests** (idea, 2026-10-21; not needed yet: the files cover dialogue, quests and
+  rules). If we add it:
+  - MoonSharp: a Lua interpreter written in plain C#, so it works inside the game with no extra native files.
+  - Optional scripts: in a `scripts/` folder, run only by the host.
+  - A small API: read and set flags, start and advance quests, give items, say a line, spawn a creature, and react
+    to the same events the rules use.

@@ -10,6 +10,14 @@
 !/spike/EmbervilleGhost/
 !/spike/EmbervilleFavorites/
 !/spike/BetterChests/
+!/spike/BetterCombat/
+!/spike/BetterLooting/
+!/spike/BetterPetsAndSummons/
+!/spike/BetterFishing/
+!/spike/BetterNPCsAndQuests/
+!/spike/BetterNPCsAndQuests.Tests/
+!/spike/EmbervilleGhost.Tests/
+!/spike/package-all.ps1
 !/spike/libs/
 
 /spike/libs/*

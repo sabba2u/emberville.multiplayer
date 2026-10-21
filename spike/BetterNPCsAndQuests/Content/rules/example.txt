@@ -1,0 +1,8 @@
+# World rules: "when <event> [what] [if <condition>] -> <action>; <action>"
+# Lines starting with # are notes. Some examples (remove the # to use one):
+#
+# when boss_kill 5 -> set $saved_rory_d5 to true
+# when descent_floor 10 -> set $reached_floor_10 to true
+# when kill Mob_Glowbat if $hunting_bats -> set $bats to $bats + 1
+# when enter VitromotusCrystal -> set $visited_town to true
+# when quest_done ellie_errands -> start my_next_quest

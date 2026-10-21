@@ -12,7 +12,7 @@ namespace BetterChests;
 internal static class Hint
 {
     static ConfigEntry<bool> show;
-    static GameObject plate;
+    static GameObject plate, plate2;
     static Chest shownOn;
 
     public static void Bind(ConfigFile config) =>
@@ -31,6 +31,15 @@ internal static class Hint
 
     static void Show(Chest chest)
     {
+        plate = Plate(chest, $"{QuickStack.KeyName}: quick deposit   Shift+{QuickStack.KeyName}: all nearby", 1);
+        plate2 = Plate(chest, $"{ChestLooks.KeyName}: customize", 2);   // a second line under it
+        shownOn = chest;
+    }
+
+    /// <summary>A copy of the chest's name plate with our text, <paramref name="row"/> plates under the name.</summary>
+    static GameObject Plate(Chest chest, string line, int row)
+    {
+        GameObject plate;
         var source = chest.titlePivot.transform;
         // copy it switched off, so the copy's localisation never runs and overwrites our text
         var holder = new GameObject("BC_HintHolder");
@@ -39,8 +48,8 @@ internal static class Hint
         plate.name = "BC_QuickDepositHint";
         foreach (var l in plate.GetComponentsInChildren<LocalizeStringEvent>(true)) Object.DestroyImmediate(l);
         var text = plate.GetComponentInChildren<TMP_Text>(true);
-        if (!text) { Object.Destroy(holder); plate = null; return; }
-        text.text = $"{QuickStack.KeyName}: quick deposit";
+        if (!text) { Object.Destroy(holder); return null; }
+        text.text = line;
         text.fontSize *= 0.8f;
         text.color = new Color(1f, 0.86f, 0.55f, text.color.a);
 
@@ -49,20 +58,21 @@ internal static class Hint
         // just under the chest's own name plate
         var fitter = chest.titleSizeFitter;
         float nameHeight = fitter && fitter.sprite ? fitter.sprite.transform.localScale.y : 0.5f;
-        plate.transform.localPosition = source.localPosition + Vector3.down * (nameHeight * 1.15f + 0.05f) * source.localScale.y;
+        plate.transform.localPosition = source.localPosition + Vector3.down * (nameHeight * 1.15f * row + 0.05f) * source.localScale.y;
         plate.transform.localRotation = source.localRotation;
         plate.transform.localScale = source.localScale;
         plate.SetActive(true);
         text.ForceMeshUpdate();
         var myFitter = plate.GetComponentInChildren<TextMeshSizeFitter>(true);
         if (myFitter) myFitter.AdjustSize();
-        shownOn = chest;
+        return plate;
     }
 
     public static void Hide()
     {
         if (plate) Object.Destroy(plate);
-        plate = null;
+        if (plate2) Object.Destroy(plate2);
+        plate = plate2 = null;
         shownOn = null;
     }
 }

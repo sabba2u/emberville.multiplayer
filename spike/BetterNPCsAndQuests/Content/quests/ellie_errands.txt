@@ -1,0 +1,16 @@
+# Ellie's quest (Better NPCs and Quests' example quest)
+id       = ellie_errands
+title    = Ellie's Errands
+text     = Ellie is fixing up her workshop by the old well and needs a few things.
+
+step     = Bring Ellie 10 softwood logs
+collect  = softwood x10 take
+done     = set $ellie_wood_given to true
+
+step     = Bring Ellie a sword
+collect  = any sword x1 take
+done     = set $ellie_sword_given to true
+
+complete = set $ellie_trusts_you to true
+reward   = gold 200
+reward   = random good-legendary

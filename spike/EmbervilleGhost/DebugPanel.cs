@@ -23,23 +23,45 @@ internal static class DebugPanel
             return;
         }
 
-        // ---- Connection ----
-        ImGui.Text($"Copy #{SaveIsolation.CopyNumber}   Data: {SaveIsolation.DataPath}");
-        ImGui.Text($"Status: {plugin.Status}");
-        var me = LocalPlayer.Get();
-        ImGui.Text($"Me: P{plugin.MyId + 1}   {LocalPlayer.Scene} / {LocalPlayer.Area}" + (me ? $"   at {me.transform.position}" : "   (no player)"));
-        foreach (var p in plugin.Players)
+        if (ImGui.BeginTabBar("menuTabs"))
         {
-            ImGui.Text($"  {p.Name}: {p.Scene} / {p.Area}   {p.Health}/{p.MaxHealth} hp" + (p.Avatar != null && p.Avatar.Visible ? "   (visible)" : ""));
-            ImGui.SameLine();
-            bool sameScene = p.HaveState && p.Scene == LocalPlayer.Scene;
-            if (!sameScene || !me) ImGui.BeginDisabled();
-            if (ImGui.SmallButton($"Teleport to##tp{p.Id}")) TeleportTo(p);
-            if (!sameScene || !me) ImGui.EndDisabled();
-            if (p.HaveState && !sameScene) { ImGui.SameLine(); ImGui.TextDisabled("(another scene)"); }
+            if (ImGui.BeginTabItem("Online / Hosting")) { DrawOnline(plugin); ImGui.EndTabItem(); }
+            if (ImGui.BeginTabItem($"Who's connected ({plugin.PlayerCount})###who")) { DrawPlayers(plugin); ImGui.EndTabItem(); }
+            if (GreyTab("Pets", Integrations.HasPets)) { Integrations.DrawPets(); ImGui.EndTabItem(); }
+            if (ImGui.BeginTabItem("Mouse Options"))
+            {
+                MouseWalk.DrawMenu();
+                ImGui.EndTabItem();
+            }
+            if (GreyTab("Better Combat", Integrations.HasCombat)) { Integrations.DrawCombat(); ImGui.EndTabItem(); }
+            if (GreyTab("Better Looting", Integrations.HasLooting)) { Integrations.DrawLooting(); ImGui.EndTabItem(); }
+            if (GreyTab("NPCs & Quests", Integrations.HasNpcs)) { Integrations.DrawNpcs(); ImGui.EndTabItem(); }
+            if (BuildMode.Enabled && ImGui.BeginTabItem("Construction")) { DrawConstruction(plugin); ImGui.EndTabItem(); }
+            if (ImGui.BeginTabItem("Dungeon")) { Dungeon.DrawMenu(); ImGui.EndTabItem(); }
+            if (ImGui.BeginTabItem("Log")) { DrawLog(plugin); ImGui.EndTabItem(); }
+            ImGui.EndTabBar();
         }
-        if (plugin.IsClient) ImGui.Text($"Ping to host: {plugin.Remote.Ping} ms");
 
+        ImGui.End();
+    }
+
+
+    // ---- the tabs ----
+
+    /// <summary>A tab whose mod may not be installed: greyed then (it still opens, to say what it needs).</summary>
+    static bool GreyTab(string label, bool installed)
+    {
+        if (!installed) ImGui.PushStyleColor(ImGuiCol.Text, ImGui.GetColorU32(ImGuiCol.TextDisabled));
+        bool open = ImGui.BeginTabItem(label);
+        if (!installed) ImGui.PopStyleColor();
+        return open;
+    }
+
+    static void DrawOnline(Plugin plugin)
+    {
+        ImGui.Text($"Status: {plugin.Status}");
+        if (plugin.IsClient) ImGui.Text($"Ping to host: {plugin.Remote.Ping} ms");
+        ImGui.Separator();
         string address = plugin.AddressSetting.Value;
         if (ImGui.InputTextWithHint("Address", "127.0.0.1 (this PC)", ref address, 64)) plugin.AddressSetting.Value = address;
         ImGui.SameLine();
@@ -62,49 +84,59 @@ internal static class DebugPanel
         if (ImGui.Button("Join LAN (F10)")) plugin.Join();
         ImGui.SameLine();
         if (ImGui.Button("Disconnect (F10)")) plugin.Stop();
-        ImGui.SameLine();
-        if (ImGui.Button("Test toast")) NetLog.Info("Hello from the menu", toast: true);
-        ImGui.Checkbox("Log every hit (recon)", ref HitProbe.Enabled);
-        if (ImGui.Button(SeedTest.Running ? "Map seed test (running...)" : "Map seed test")) SeedTest.Run().Forget();
-        if (SeedTest.Result.Length > 0) { ImGui.SameLine(); ImGui.TextWrapped(SeedTest.Result); }
         Session.DrawSettings();
-        DrawEstate(plugin);
-        Dungeon.DrawMenu();
+    }
+
+    static void DrawPlayers(Plugin plugin)
+    {
+        var me = LocalPlayer.Get();
+        ImGui.Text($"Me: P{plugin.MyId + 1}   {LocalPlayer.Scene} / {LocalPlayer.Area}" + (me ? $"   at {me.transform.position}" : "   (no player)"));
+        if (!plugin.Connected) { ImGui.TextDisabled("Not connected: host or join on the Online / Hosting tab."); return; }
+        ImGui.Separator();
+        foreach (var p in plugin.Players)
+        {
+            ImGui.Text($"{p.Name}: {p.Scene} / {p.Area}   {p.Health}/{p.MaxHealth} hp" + (p.Avatar != null && p.Avatar.Visible ? "   (visible)" : ""));
+            ImGui.SameLine();
+            bool sameScene = p.HaveState && p.Scene == LocalPlayer.Scene;
+            if (!sameScene || !me) ImGui.BeginDisabled();
+            if (ImGui.SmallButton($"Teleport to##tp{p.Id}")) TeleportTo(p);
+            if (!sameScene || !me) ImGui.EndDisabled();
+            if (p.HaveState && !sameScene) { ImGui.SameLine(); ImGui.TextDisabled("(another scene)"); }
+        }
+        ImGui.TextDisabled("O opens Online Players: trade, mute, kick.");
+    }
+
+    static void DrawLog(Plugin plugin)
+    {
+        ImGui.Text($"Copy #{SaveIsolation.CopyNumber}   Data: {SaveIsolation.DataPath}");
+        if (ImGui.Button("Test toast")) NetLog.Info("Hello from the menu", toast: true);
+        ImGui.SameLine();
+        ImGui.Checkbox("Log every hit (recon)", ref HitProbe.Enabled);
+        ImGui.SameLine();
+        if (ImGui.Button(SeedTest.Running ? "Map seed test (running...)" : "Map seed test")) SeedTest.Run().Forget();
+        if (SeedTest.Result.Length > 0) ImGui.TextWrapped(SeedTest.Result);
         if (plugin.Connected)
         {
-            ImGui.Separator();
             int bad = DesyncCheck.MismatchCount;
             if (bad > 0) ImGui.TextColored(new Vector4(1f, 0.6f, 0.3f, 1f), $"Mismatches right now: {bad} (details in the log)");
             else if (plugin.IOwnHere) ImGui.TextDisabled("Mismatch checker: everyone here agrees with your game");
             else ImGui.TextDisabled($"Mismatch checker: {plugin.NameOf(plugin.OwnerHere)} compares your game with theirs");
             if (Diag.FilePath != null) ImGui.TextDisabled($"Session log: {Diag.FilePath}");
         }
-        MouseWalk.DrawMenu();
-        Magnet.DrawMenu();
-        LootArrows.DrawMenu();
-        BowAssist.DrawMenu();
-        MoveAttack.DrawMenu();
-        Pet.DrawMenu();
-
         string perf = $"Player packet {plugin.StateBytes} bytes.  Mod ms/frame:";
         foreach (var pair in Perf.Ms) perf += $"  {pair.Key} {pair.Value:0.0}";
         ImGui.TextDisabled(perf);
-
         ImGui.Separator();
 
-        // ---- Log ----
         if (ImGui.Button("Clear log")) NetLog.Entries.Clear();
         ImGui.SameLine();
         ImGui.Checkbox("Auto-scroll", ref autoScroll);
-
         ImGui.BeginChild("log", new Vector2(0, 0), ImGuiChildFlags.Border);
         foreach (var e in NetLog.Entries)
             ImGui.TextColored(ColorFor(e.Kind), $"{e.Time:HH:mm:ss}  {e.Text}");
         if (autoScroll && ImGui.GetScrollY() >= ImGui.GetScrollMaxY() - 5f)
             ImGui.SetScrollHereY(1f);
         ImGui.EndChild();
-
-        ImGui.End();
     }
 
     /// <summary>
@@ -114,57 +146,24 @@ internal static class DebugPanel
     /// <summary>
     /// The estate (your farm in Town: plots, build mode, repairing buildings) is behind two story flags the demo
     /// never sets (BoolID.PlaceablesActive / RepairablesActive). Turning them on opens build mode on the estate.
-    /// Connected: the host decides, and everyone gets the flags (EstateUnlock).
+    /// Connected: the host decides, and everyone gets the flags (EstateUnlock). (Chat: /estate.)
     /// </summary>
-    static void DrawEstate(Plugin plugin)
+    static void DrawConstruction(Plugin plugin)
     {
-        ImGui.Separator();
-
-        // The game's own developer tools (DevMode): on in every scene while ticked.
-        bool dev = DevMode.On;
-        if (ImGui.Checkbox("Dev mode (the game's developer tools)", ref dev)) DevMode.Toggle();
-        bool keep = DemoEnd.On;
-        if (ImGui.Checkbox("Keep playing after the demo ends (no \"Thank you for playing\")", ref keep)) DemoEnd.Toggle(keep);
-        if (DevMode.On)
-        {
-            ImGui.SameLine();
-            if (ImGui.SmallButton("Open dev panel")) DevMode.TogglePanel();
-            ImGui.TextDisabled("    Ctrl+Shift+Numpad7: dev panel, Numpad1: test arenas; Ctrl+Shift + Numpad+ XP, Numpad- hurt yourself");
-        }
-        if (ImGui.SmallButton("Dump game UI")) UiDump.Dump();
-        ImGui.SameLine();
-        ImGui.TextDisabled("what's on screen now (also /uidump) -> BepInEx/UIDumps");
-
-        // Test arenas in this scene (the dev panel's own button loads a scene the demo doesn't ship).
-        if (LocalPlayer.Get())
-        {
-            var arenas = DevMode.ArenasHere();
-            if (arenas.Count == 0) ImGui.TextDisabled("No test arena in this scene.");
-            else
-            {
-                ImGui.Text("Test arenas here:");
-                foreach (var arena in arenas)
-                {
-                    ImGui.SameLine();
-                    if (ImGui.SmallButton($"{(string.IsNullOrEmpty(arena.ArenaName) ? arena.name : arena.ArenaName)}##{arena.GetInstanceID()}")) DevMode.GoTo(arena);
-                }
-            }
-        }
-
-        if (!GameData.HasWorldData) return;
-        // The estate (your farm and house in Town): building + repairs, story flags the demo never sets.
-        bool on = GameData.gameBools.IsTrue(BoolID.PlaceablesActive) && GameData.gameBools.IsTrue(BoolID.RepairablesActive);
-        bool allowed = !plugin.Connected || plugin.IsHost;
-        if (!allowed) ImGui.BeginDisabled();
-        if (ImGui.Checkbox("Estate: building + repairs (your farm and house in Town)", ref on))
+        if (!GameData.HasWorldData) { ImGui.TextDisabled("Load a world first."); return; }
+        bool guest = plugin.Connected && !plugin.IsHost;
+        bool on = GameData.gameBools.IsTrue(BoolID.PlaceablesActive);
+        if (guest) ImGui.BeginDisabled();
+        if (ImGui.Checkbox("Building on your estate (place chests and furniture, repair buildings)", ref on))
         {
             SetEstate(on);
-            if (on && plugin.Connected) SendEstateUnlock(plugin);   // (off reaches everyone as story flags)
+            if (on && plugin.Connected) SendEstateUnlock(plugin);
         }
-        if (!allowed) { ImGui.EndDisabled(); ImGui.SameLine(); ImGui.TextDisabled("(the host decides)"); }
-        ImGui.SameLine();
-        if (ImGui.SmallButton("Go to Town") && Singleton<SceneLoader>.HasMain && LocalPlayer.Get())
-            Singleton<SceneLoader>.main.CallScene("Town", null).Forget();
+        if (guest) ImGui.EndDisabled();
+        ImGui.TextWrapped(guest
+            ? "The host decides this (it's the host's world)."
+            : "The demo never turns this on. With it on, walk onto your estate in Town, then use a chest or other placeable from your bag to place it." +
+              (plugin.Connected ? " Turning it on turns it on for everyone." : ""));
     }
 
     static void SetEstate(bool on)

@@ -2,14 +2,15 @@ using System.Collections.Generic;
 using BepInEx.Configuration;
 using ImGuiNET;
 using UnityEngine;
+using UnityEngine.AI;
 using Vector2 = ImGuiNET.Vector2;
 using Vector4 = ImGuiNET.Vector4;
 using Vector3 = UnityEngine.Vector3;
 
-namespace EmbervilleGhost;
+namespace BetterPetsAndSummons;
 
 /// <summary>One kind of pet: a creature of the game (its prefab name) and how it moves.</summary>
-internal sealed class PetKind
+public sealed class PetKind
 {
     public readonly string Id, Label, Prefab, DefaultName;
     public readonly bool Flies;
@@ -34,12 +35,11 @@ internal sealed class PetKind
 /// (more damage). Saved in the config: kind, name, colour, level, XP, out or not (one pet: level and name stay when
 /// you switch kinds).
 ///
-/// Others see it: our player state says "kind, level, name, colour"; their copy runs a follower behind our stand-in.
+/// Others see it (with the multiplayer mod): its player state says "kind, level, name, colour" (KindByte, Level, Name,
+/// Tint), and their copy runs a follower behind our stand-in (its RemotePets).
 /// </summary>
-internal static class Pet
+public static class Pet
 {
-    public static Plugin Plugin;
-
     public static readonly PetKind[] Kinds =
     {
         new PetKind("chicken", "Chicken", "Mob_Chicken", "Clucky"),
@@ -57,11 +57,11 @@ internal static class Pet
         new PetKind("bugfuzz", "Bug Fuzz", "Mob_BugFuzz", "Fuzzy"),
     };
 
-    static ConfigEntry<bool> enabled, owned, outNow;
-    static ConfigEntry<string> petName, petColor, petKind;
-    static ConfigEntry<int> level, xp;
+    internal static ConfigEntry<bool> enabled, owned, outNow;
+    internal static ConfigEntry<string> petName, petColor, petKind;
+    internal static ConfigEntry<int> level, xp;
 
-    const float FollowGap = 1.1f, WalkSpeed = 2.4f, RunSpeed = 5.5f, TeleportDistance = 12f;
+    public const float FollowGap = 1.1f, WalkSpeed = 2.4f, RunSpeed = 5.5f, TeleportDistance = 12f;
     const float AggroRange = 3.5f, PeckRange = 0.8f, PeckCooldown = 1.1f;
 
     static PetBody mine;
@@ -85,7 +85,7 @@ internal static class Pet
     public static bool Out => enabled.Value && owned.Value && outNow.Value;
     public static string Name => petName.Value;
     public static int Level => Mathf.Max(1, level.Value);
-    static int XpNeeded => 15 * Level;
+    internal static int XpNeeded => 15 * Level;
     static int Damage => 2 + Level;
 
     public static PetKind Kind => KindOf(petKind.Value) ?? Kinds[0];
@@ -107,7 +107,7 @@ internal static class Pet
         set => petColor.Value = ColorUtility.ToHtmlStringRGB(value);
     }
 
-    static readonly (string name, string hex)[] Colours =
+    internal static readonly (string name, string hex)[] Colours =
     {
         ("white", "FFFFFF"), ("red", "FF6B6B"), ("orange", "FFA94D"), ("yellow", "FFE066"), ("green", "8CE99A"),
         ("blue", "74C0FC"), ("purple", "C9A0FF"), ("pink", "FFA8D8"), ("gray", "9E9E9E"), ("black", "4A4A4A"), ("gold", "FFD43B"),
@@ -156,6 +156,28 @@ internal static class Pet
             NetLog.Info("Creature prefabs in memory: " + string.Join(", ", prefabs));
             return;
         }
+        if (args.StartsWith("new "))   // a fresh pet of this kind: its own name, its own colours, level 1 (an NPC's gift)
+        {
+            var fresh = KindOf(args.Substring(4).Trim());
+            if (fresh == null) { Chat.System($"No pet called \"{args.Substring(4).Trim()}\". /pet list shows them."); return; }
+            owned.Value = false;   // (so Switch names it as a first pet)
+            petName.Value = fresh.DefaultName;
+            petColor.Value = (string)petColor.DefaultValue;
+            level.Value = 1;       // and it starts out at level 1
+            xp.Value = 0;
+            Switch(fresh);
+            return;
+        }
+        if (args == "release")
+        {
+            if (!owned.Value) { Chat.System("You don't have a pet."); return; }
+            string was = Name;
+            owned.Value = false;
+            outNow.Value = false;
+            Despawn();
+            Chat.System($"You said goodbye to {was}.");
+            return;
+        }
         if (args == "list")
         {
             var parts = new List<string>();
@@ -176,9 +198,9 @@ internal static class Pet
     }
 
     /// <summary>Befriend (first time) or switch to this kind.</summary>
-    static void Switch(PetKind kind)
+    internal static void Switch(PetKind kind)
     {
-        if (!PetBody.Available(kind))
+        if (!PetBody.Available(kind) && !PetBody.Learn(kind))   // (not in memory: loaded for this one)
         { Chat.System($"No {kind.Label} anywhere to befriend yet: get near one once (it has to be loaded), then try again."); return; }
         bool first = !owned.Value;
         bool defaultName = first || System.Array.Exists(Kinds, k => k.DefaultName == petName.Value);
@@ -193,7 +215,7 @@ internal static class Pet
     }
 
     /// <summary>Insert menu: befriend / out, kind, colour.</summary>
-    static void SetEnabled(bool on)
+    internal static void SetEnabled(bool on)
     {
         enabled.Value = on;
         Chat.System(on ? "Pets on: /pet to befriend one or call yours." : "Pets off.");
@@ -201,6 +223,10 @@ internal static class Pet
 
     public static void DrawMenu()
     {
+        ImGui.Separator();
+        if (ImGui.SmallButton("Give me the Staff of Clucking")) CluckStaff.Give();
+        ImGui.SameLine();
+        if (ImGui.SmallButton("Give me the Staff of the Risen")) RisenStaff.Give();
         ImGui.Separator();
         bool on = enabled.Value;
         if (ImGui.Checkbox("Pets (early feature)", ref on)) SetEnabled(on);
@@ -251,7 +277,7 @@ internal static class Pet
         if (learnedIn == LocalPlayer.Scene || !LocalPlayer.Get()) return;
         learnedIn = LocalPlayer.Scene;
         int n = 0;
-        foreach (var k in Kinds) if (PetBody.Learn(k)) n++;
+        foreach (var k in Kinds) if (PetBody.Learn(k, load: false)) n++;   // (only what's here: loading them all would stall the game)
         if (n > 0) NetLog.Info($"Pets: {n} new kind{(n == 1 ? "" : "s")} available here");
     }
 
@@ -259,12 +285,12 @@ internal static class Pet
     {
         if (enabled.Value) Learn();
         var me = LocalPlayer.Get();
-        if (!Out || !me || me.IsDead && mine == null) { Despawn(); TickOthers(); return; }
+        if (!Out || !me || me.IsDead && mine == null) { Despawn(); return; }
         if (mine == null || !mine.Alive || mine.Kind != Kind)
         {
             mine?.Destroy();
             mine = PetBody.Create(Kind, me.transform.position + Behind(me, FollowGap));
-            if (mine == null) { TickOthers(); return; }
+            if (mine == null) return;
         }
         mine.SetTint(Tint);
 
@@ -296,7 +322,6 @@ internal static class Pet
 
         // A kill shortly after our attack (on a creature someone else runs, the death arrives a moment later).
         if (lastHit && !killCounted && lastHit.IsDead && Time.unscaledTime - lastHitAt < 3f) { killCounted = true; GainXp(10); }
-        TickOthers();
     }
 
     static Enemy PickTarget(PlayerMaster me)
@@ -349,42 +374,6 @@ internal static class Pet
 
     static UnityEngine.Vector2 Flat(Vector3 v) => new UnityEngine.Vector2(v.x, v.y);
 
-    // ---- other players' pets (followers behind their stand-ins) ----
-
-    static readonly Dictionary<int, PetBody> theirs = new Dictionary<int, PetBody>();
-    static readonly Dictionary<int, float> retryAt = new Dictionary<int, float>();   // their kind isn't loaded here: look again later
-
-    static void TickOthers()
-    {
-        var gone = new List<int>(theirs.Keys);
-        if (Plugin != null && Plugin.Connected)
-            foreach (var p in Plugin.Players)
-            {
-                var avatar = p.Avatar;
-                var kind = KindFromByte(p.PetKind);
-                if (kind == null || avatar == null || !avatar.Visible) continue;
-                gone.Remove(p.Id);
-                var owner = avatar.Root.transform.position;
-                var spot = owner + new Vector3(p.Flip ? FollowGap : -FollowGap, -0.25f, 0f);
-                if (!theirs.TryGetValue(p.Id, out var body) || body == null || !body.Alive || body.Kind != kind)
-                {
-                    if (body == null && retryAt.TryGetValue(p.Id, out float when) && Time.unscaledTime < when) continue;
-                    retryAt[p.Id] = Time.unscaledTime + 2f;
-                    body?.Destroy();
-                    body = PetBody.Create(kind, spot);
-                    theirs[p.Id] = body;
-                    if (body == null) continue;   // we haven't got that creature loaded: no pet shown for now
-                }
-                body.SetTint(p.PetColor);
-                float far = UnityEngine.Vector2.Distance(Flat(body.Position), Flat(spot));
-                if (far > TeleportDistance) body.Teleport(spot);
-                else if (far > 0.35f) body.MoveToward(spot, far > 3f ? RunSpeed : WalkSpeed, Time.deltaTime, 0.2f);
-                else body.Stop(owner);
-                body.Hover();
-            }
-        foreach (int id in gone) { theirs[id]?.Destroy(); theirs.Remove(id); retryAt.Remove(id); }
-    }
-
     // ---- name tags ----
 
     public static void DrawLabels()
@@ -392,13 +381,10 @@ internal static class Pet
         var cam = Camera.main;
         if (!cam) return;
         if (mine != null && mine.Alive) Label(cam, mine.Position, $"{Name}  Lv{Level}", xp.Value / (float)XpNeeded);
-        if (Plugin != null)
-            foreach (var p in Plugin.Players)
-                if (theirs.TryGetValue(p.Id, out var body) && body != null && body.Alive)
-                    Label(cam, body.Position, $"{p.PetName}  Lv{p.PetLevel}", -1f);
     }
 
-    static void Label(Camera cam, Vector3 at, string text, float xpFrac)
+    /// <summary>A pet's name tag (and XP bar, if xpFrac >= 0) under it; the multiplayer mod uses it for teammates' pets too.</summary>
+    public static void Label(Camera cam, Vector3 at, string text, float xpFrac)
     {
         var s = cam.WorldToScreenPoint(at);
         float x = s.x, y = Screen.height - s.y + 4f;
@@ -411,16 +397,10 @@ internal static class Pet
         dl.AddRectFilled(new Vector2(x - w / 2, by), new Vector2(x + w / 2, by + 3), ImGui.ColorConvertFloat4ToU32(new Vector4(0, 0, 0, 0.6f)));
         dl.AddRectFilled(new Vector2(x - w / 2, by), new Vector2(x - w / 2 + w * Mathf.Clamp01(xpFrac), by + 3), ImGui.ColorConvertFloat4ToU32(new Vector4(0.95f, 0.8f, 0.3f, 1f)));
     }
-
-    public static void ForgetAll()
-    {
-        foreach (var b in theirs.Values) b?.Destroy();
-        theirs.Clear();
-    }
 }
 
 /// <summary>A creature's body without its brain: the animator and sprites, moved by us. Position = its spot on the ground.</summary>
-internal sealed class PetBody
+public sealed class PetBody
 {
     sealed class Template { public GameObject Go; public string GraphicsPath; }
     static readonly Dictionary<string, Template> templates = new Dictionary<string, Template>();
@@ -436,38 +416,72 @@ internal sealed class PetBody
     float bobPhase;
 
     public bool Alive => root;
+    public GameObject Root => root;
     public Vector3 Position => root.transform.position;
 
     /// <summary>Can we make this kind (we have its template, or the game has the creature loaded now)?</summary>
-    public static bool Available(PetKind kind) => templates.TryGetValue(kind.Prefab, out var t) && t.Go || Source(kind);
+    /// <summary>One we have, or one in memory now (looking only: nothing is loaded for this).</summary>
+    public static bool Available(PetKind kind) => templates.TryGetValue(kind.Prefab, out var t) && t.Go || Source(kind, load: false);
 
     /// <summary>The creature as the game has it: its prefab if loaded, else one in the scene.</summary>
-    static Enemy Source(PetKind kind)
+    /// <summary>
+    /// "Mob_Chicken" is the scene's "Chicken" (or "Chicken_01", "Chicken (2)", "Chicken(Clone)"): names compared without the
+    /// Mob_ prefix, a copy number or "(Clone)".
+    /// </summary>
+    static bool SameCreature(string name, string wanted)
     {
-        Enemy found = null;
+        string Norm(string n)
+        {
+            n = n.Replace("(Clone)", "").Trim();
+            int sp = n.IndexOf(" (", System.StringComparison.Ordinal);
+            if (sp > 0) n = n.Substring(0, sp);
+            if (n.StartsWith("Mob_", System.StringComparison.OrdinalIgnoreCase)) n = n.Substring(4);
+            int u = n.LastIndexOf('_');
+            if (u > 0 && int.TryParse(n.Substring(u + 1), out _)) n = n.Substring(0, u);
+            return n.ToLowerInvariant();
+        }
+        return name == wanted || Norm(name) == Norm(wanted);
+    }
+
+    static Enemy Source(PetKind kind, bool load = true)
+    {
+        var found = Search(kind);
+        if (found || !load) return found;   // a prefab, or one in the scene (its faded-out death look is undone in TemplateFor)
+        // none in memory at all: the biomes (Resources "AllBiomes") carry the chicken, glowbat and tick prefabs with
+        // them in any scene, so load them and look again (a synchronous load: a short hitch, only in this case)
+        Dungeon.AllSettings();
+        var again = Search(kind);
+        return again ? again : found;
+    }
+
+    static Enemy Search(PetKind kind)
+    {
+        // best a prefab; else one alive in the scene; else any (a corpse)
+        Enemy prefab = null, alive = null, any = null;
         foreach (var e in Resources.FindObjectsOfTypeAll<Enemy>())
         {
-            if (!e) continue;
-            string n = e.gameObject.name;
-            if (n != kind.Prefab && !n.StartsWith(kind.Prefab + " ") && !n.StartsWith(kind.Prefab + "(")) continue;
-            found = e;
-            if (!e.gameObject.scene.IsValid()) break;   // a prefab: best
+            if (!e || !SameCreature(e.gameObject.name, kind.Prefab)) continue;
+            if (!e.gameObject.scene.IsValid()) { prefab = e; break; }
+            if (!e.IsDead && e.gameObject.activeInHierarchy) alive ??= e;
+            any ??= e;
         }
-        return found;
+        return prefab ? prefab : alive ? alive : any;
     }
 
     /// <summary>Make this kind's template now if the game has the creature loaded. True = newly learned.</summary>
-    public static bool Learn(PetKind kind)
+    /// <summary>Make this kind's template now. load = false: only from what's in memory already (no loading hitch:
+    /// the background check of every kind); true: the biomes are loaded for it if need be (someone asked for this one).</summary>
+    public static bool Learn(PetKind kind, bool load = true)
     {
         if (templates.TryGetValue(kind.Prefab, out var t) && t.Go) return false;
-        return TemplateFor(kind) != null;
+        return TemplateFor(kind, load) != null;
     }
 
     /// <summary>Strip the creature into our template for this kind (once; kept for good).</summary>
-    static Template TemplateFor(PetKind kind)
+    static Template TemplateFor(PetKind kind, bool load = true)
     {
         if (templates.TryGetValue(kind.Prefab, out var t) && t.Go) return t;
-        var source = Source(kind);
+        var source = Source(kind, load);
         if (!source) return null;
         var holder = new GameObject("EmbervilleGhost_PetTemplate_" + kind.Id);
         holder.SetActive(false);   // nothing in the copy wakes up (no AI registers itself)
@@ -478,8 +492,28 @@ internal sealed class PetBody
         string path = RemoteAvatar.PathFrom(source.transform, source.graphics);
         RemoteAvatar.Strip(copy, null);
         copy.transform.localScale = source.transform.localScale;
+        if (source.gameObject.scene.IsValid()) Unfade(source, copy);
         templates[kind.Prefab] = t = new Template { Go = copy, GraphicsPath = path };
         return t;
+    }
+
+    /// <summary>A creature copied from the scene may be a corpse: the game fades a dead one's sprites out (Enemy.FadeSprites),
+    /// and a copy keeps that (invisible). Put back the alpha each fading sprite had when the creature woke up.</summary>
+    static void Unfade(Enemy source, GameObject copy)
+    {
+        var renderers = source.fadableRenderers;
+        var alphas = source.renderersAlphas;
+        if (renderers == null || alphas == null) return;
+        for (int i = 0; i < renderers.Length && i < alphas.Length; i++)
+        {
+            var path = RemoteAvatar.PathFrom(source.transform, renderers[i] ? renderers[i].transform : null);
+            var t = path == null ? null : path.Length == 0 ? copy.transform : copy.transform.Find(path);
+            var sr = t ? t.GetComponent<SpriteRenderer>() : null;
+            if (!sr) continue;
+            var c = sr.color;
+            c.a = alphas[i];
+            sr.color = c;
+        }
     }
 
     public static PetBody Create(PetKind kind, Vector3 at)
@@ -509,11 +543,149 @@ internal sealed class PetBody
         var d = new UnityEngine.Vector2(to.x - from.x, to.y - from.y);
         float dist = d.magnitude;
         if (dist <= stopAt) { Stop(to); return; }
+        if (Route(from, to)) { FollowRoute(from, to, speed, dt); return; }
+        // no walkable map here (or we're off it): straight there, stopped by walls
         float step = Mathf.Min(speed * dt, dist - stopAt);
         var dir = d / dist;
-        root.transform.position = from + new Vector3(dir.x, dir.y, 0f) * step;
+        var next = from + new Vector3(dir.x, dir.y, 0f) * step;
+        if (Blocks(next) && !Blocks(from))   // (one a door closed on, or stuck in a wall, can still walk out)
+        {
+            // a wall, water or a closed door: slide along it (one axis at a time), or wait there (far behind, we catch up by teleport)
+            var alongX = from + new Vector3(dir.x * step, 0f, 0f);
+            var alongY = from + new Vector3(0f, dir.y * step, 0f);
+            if (Mathf.Abs(dir.x) > 0.1f && !Blocks(alongX)) next = alongX;
+            else if (Mathf.Abs(dir.y) > 0.1f && !Blocks(alongY)) next = alongY;
+            else { Stop(to); return; }
+        }
+        root.transform.position = next;
         Face(dir);
         Set("Speed", speed);
+    }
+
+    static bool Blocks(Vector3 at) => DoorBlocks(at) || WallBlocks(at);
+
+    // ---- the way there: the walkable map the game's creatures walk on (its navmesh), so cliffs, pits and water are
+    // walked around; a spot that can't be reached is walked to as near as it gets ----
+
+    readonly NavMeshPath path = new NavMeshPath();
+    Vector3[] corners = new Vector3[0];
+    int corner;
+    Vector3 pathTo;
+    float pathAt = -10f;
+    bool hasPath;
+
+    static int agentType;
+    static string agentScene;
+
+    static NavMeshQueryFilter Filter()
+    {
+        string scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name;
+        if (scene != agentScene)
+        {
+            var agent = Object.FindAnyObjectByType<NavMeshAgent>();
+            if (!agent) return new NavMeshQueryFilter { agentTypeID = 0, areaMask = NavMesh.AllAreas };   // (no creatures yet: look again)
+            agentScene = scene;
+            agentType = agent.agentTypeID;
+            Plugin.Logger_.LogInfo($"Pets: walking the creatures' walkable map in {scene} (agent type {agentType}, from {agent.name})");
+        }
+        return new NavMeshQueryFilter { agentTypeID = agentType, areaMask = NavMesh.AllAreas };
+    }
+
+    /// <summary>A route to there (worked out again as it moves, a few times a second). False: no walkable map here.</summary>
+    bool Route(Vector3 from, Vector3 to)
+    {
+        if (Time.time - pathAt < 0.4f && ((UnityEngine.Vector2)(to - pathTo)).sqrMagnitude < 0.25f) return hasPath;
+        pathAt = Time.time;
+        pathTo = to;
+        hasPath = false;
+        var filter = Filter();
+        if (!NavMesh.SamplePosition(new Vector3(from.x, from.y, 0f), out var start, 1f, filter)) return false;
+        if (!NavMesh.SamplePosition(new Vector3(to.x, to.y, 0f), out var end, 6f, filter)) return false;
+        if (!NavMesh.CalculatePath(start.position, end.position, filter, path) || path.status == NavMeshPathStatus.PathInvalid) return false;
+        corners = path.corners;
+        corner = corners.Length > 1 ? 1 : corners.Length;
+        hasPath = true;
+        return true;
+    }
+
+    void FollowRoute(Vector3 from, Vector3 to, float speed, float dt)
+    {
+        var pos = from;
+        float left = speed * dt;
+        var moved = UnityEngine.Vector2.zero;
+        while (corner < corners.Length && left > 0f)
+        {
+            var c = corners[corner];
+            var d = new UnityEngine.Vector2(c.x - pos.x, c.y - pos.y);
+            float m = d.magnitude;
+            if (m <= left) { pos.x = c.x; pos.y = c.y; left -= m; corner++; moved += d; }
+            else { var s = d / m * left; pos.x += s.x; pos.y += s.y; moved += s; left = 0f; }
+        }
+        if (moved.sqrMagnitude < 1e-8f || DoorBlocks(pos) && !DoorBlocks(from)) { Stop(to); return; }   // (as near as it gets, or a closed door)
+        root.transform.position = pos;
+        Face(moved.normalized);
+        Set("Speed", speed);
+    }
+
+    // ---- walls and water stop pets: whatever would stop the player there (the layers their body collides with) ----
+
+    const float WallRadius = 0.2f;
+    static int wallMask;
+    static float maskAt = -1f;
+    static bool loggedMask;
+
+    static bool WallBlocks(Vector3 at)
+    {
+        if (Time.unscaledTime >= maskAt)
+        {
+            maskAt = Time.unscaledTime + 2f;
+            var me = Singleton<GameManager>.HasMain ? Singleton<GameManager>.main.player : null;
+            var col = me && me.rb ? System.Linq.Enumerable.FirstOrDefault(me.rb.GetComponents<Collider2D>(), c => c && !c.isTrigger) : null;
+            wallMask = me ? Physics2D.GetLayerCollisionMask(col ? col.gameObject.layer : me.gameObject.layer) : 0;
+            if (wallMask != 0 && !loggedMask)
+            {
+                loggedMask = true;
+                var names = new List<string>();
+                for (int l = 0; l < 32; l++) if ((wallMask & (1 << l)) != 0) names.Add(LayerMask.LayerToName(l));
+                Plugin.Logger_.LogInfo($"Pets: walls are what the player bumps into, layers {string.Join(", ", names)}");
+            }
+        }
+        if (wallMask == 0) return false;
+        foreach (var c in Physics2D.OverlapCircleAll(new UnityEngine.Vector2(at.x, at.y), WallRadius, wallMask))
+        {
+            if (!c || c.isTrigger) continue;
+            bool mapWall = c is UnityEngine.Tilemaps.TilemapCollider2D || c is CompositeCollider2D;   // (the map's walls, on whatever body the map hangs them)
+            if (!mapWall && c.attachedRigidbody && c.attachedRigidbody.bodyType != RigidbodyType2D.Static) continue;   // (creatures, players, pets: things that move)
+            if (c.GetComponentInParent<Enemy>() || c.GetComponentInParent<PlayerMaster>()) continue;
+            if (c.transform.root.name.StartsWith("EmbervilleGhost_Pet_")) continue;   // (a pet, chicken or risen: our copies)
+            return true;
+        }
+        return false;
+    }
+
+    // ---- closed doors stop pets (GateDoor turns its closedColliders on while it's shut) ----
+
+    static readonly List<Collider2D> closedDoors = new List<Collider2D>();
+    static float doorsAt = -1f;
+    const float DoorRadius = 0.3f;
+
+    static bool DoorBlocks(Vector3 at)
+    {
+        if (Time.unscaledTime >= doorsAt)
+        {
+            doorsAt = Time.unscaledTime + 0.5f;
+            closedDoors.Clear();
+            foreach (var door in Object.FindObjectsByType<GateDoor>(FindObjectsSortMode.None))
+            {
+                if (!door || door.state == DoorState.Opened || !door.closedColliders || !door.closedColliders.activeInHierarchy) continue;
+                foreach (var c in door.closedColliders.GetComponentsInChildren<Collider2D>())
+                    if (c && c.enabled && !c.isTrigger) closedDoors.Add(c);
+            }
+        }
+        var p = new UnityEngine.Vector2(at.x, at.y);
+        foreach (var c in closedDoors)
+            if (c && (c.ClosestPoint(p) - p).sqrMagnitude < DoorRadius * DoorRadius) return true;
+        return false;
     }
 
     public void Stop(Vector3 lookAt)
@@ -524,7 +696,12 @@ internal sealed class PetBody
         Set("Speed", 0f);
     }
 
-    public void Teleport(Vector3 to) => root.transform.position = to;
+    public void Teleport(Vector3 to)
+    {
+        root.transform.position = to;
+        hasPath = false;
+        pathAt = -10f;
+    }
 
     public void Attack()
     {
@@ -566,6 +743,9 @@ internal sealed class PetBody
     Color tint = Color.white;
 
     /// <summary>Tint the whole creature (its own colours times this; white = as it is). Only does work on a change.</summary>
+    /// <summary>Bigger or smaller (a levelled-up summon).</summary>
+    public void Scale(float s) { if (root) root.transform.localScale = Vector3.one * s; }
+
     public void SetTint(Color c)
     {
         c.a = 1f;
@@ -585,5 +765,32 @@ internal sealed class PetBody
     {
         if (animators != null) foreach (var a in animators) if (a) PuppetStateBehaviours.Puppets.Remove(a);
         if (root) Object.Destroy(root);
+    }
+
+    /// <summary>Gone in the creature's own gore death (its "DeathGore": the burst its kind does when hit hard), then
+    /// removed once that's played. A kind without one is just gone.</summary>
+    public void Burst()
+    {
+        if (!root) return;
+        float length = 0f;
+        foreach (var a in animators)
+        {
+            if (!a || !a.isActiveAndEnabled || !a.runtimeAnimatorController) continue;
+            if (!System.Linq.Enumerable.Any(a.parameters, p => p.type == AnimatorControllerParameterType.Trigger && p.name == "DeathGore")) continue;
+            a.SetFloat("Speed", 0f);
+            a.SetTrigger("DeathGore");
+            float clip = 0f;
+            foreach (var c in a.runtimeAnimatorController.animationClips)
+                if (c && c.name.IndexOf("gore", System.StringComparison.OrdinalIgnoreCase) >= 0) clip = Mathf.Max(clip, c.length);
+            length = Mathf.Max(length, clip > 0f ? clip : 1.2f);
+        }
+        if (length <= 0f) { Destroy(); return; }
+        RemoveAfter(length + 0.1f).Forget();
+    }
+
+    async Cysharp.Threading.Tasks.UniTaskVoid RemoveAfter(float seconds)
+    {
+        await Cysharp.Threading.Tasks.UniTask.Delay((int)(seconds * 1000f));
+        Destroy();
     }
 }
