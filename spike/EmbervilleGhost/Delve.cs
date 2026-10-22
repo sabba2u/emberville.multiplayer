@@ -221,8 +221,9 @@ internal static class Delve
         var main = new HashSet<Vector3Int>(biggest);
         var atCell = new Vector3Int(Mathf.FloorToInt(at.x / cs.x), Mathf.FloorToInt(at.y / cs.y), 0);
         var start = main.Contains(atCell) ? atCell : biggest.OrderBy(c => (c - atCell).sqrMagnitude).First();
-        // room around a pad: a 5x5 patch if the floor has those, else smaller
-        int room = 2;
+        // room around a pad: enough floor all round for the ring at its widest (its pulse; in cells, whatever their
+        // size), else as much as the floor has
+        int room = Mathf.Max(2, Mathf.CeilToInt(Size * 0.5f * 1.4f / Mathf.Min(cs.x, cs.y)));
         while (room > 0 && !biggest.Any(c => Open(c, main, room))) room--;
         if (!Open(start, main, room)) start = biggest.Where(c => Open(c, main, room)).OrderBy(c => (c - start).sqrMagnitude).DefaultIfEmpty(start).First();
 
@@ -310,8 +311,24 @@ internal static class Delve
         void Start()
         {
             glow = GetComponentInChildren<SpriteRenderer>();
-            // (now the floor is live: over any rug or carpet lying under it, still under what stands there)
-            if (glow && Kind != PadKind.Entrance && Kind != PadKind.Arena) OverFlatGround(glow, transform.position);
+            // on a built floor: over everything the floor is made of (walls, their tops, props, rugs)
+            if (glow && Kind != PadKind.Entrance && Kind != PadKind.Arena && Dungeon.Root && transform.IsChildOf(Dungeon.Root.transform))
+                OverTheFloor(glow, Dungeon.Root);
+        }
+
+        static void OverTheFloor(SpriteRenderer sr, GameObject floor)
+        {
+            int bestValue = int.MinValue, bestOrder = int.MinValue, bestId = sr.sortingLayerID;
+            foreach (var r in floor.GetComponentsInChildren<Renderer>(true))
+            {
+                if (!r || r == sr || r.name.StartsWith("EG_") || r.GetComponentInParent<Pad>() || r.GetComponentInParent<Enemy>()) continue;
+                if (!(r is SpriteRenderer) && !(r is UnityEngine.Tilemaps.TilemapRenderer)) continue;
+                int v = SortingLayer.GetLayerValueFromID(r.sortingLayerID);
+                if (v > bestValue || v == bestValue && r.sortingOrder > bestOrder) { bestValue = v; bestOrder = r.sortingOrder; bestId = r.sortingLayerID; }
+            }
+            if (bestValue == int.MinValue) return;
+            sr.sortingLayerID = bestId;
+            sr.sortingOrder = bestOrder + 1;
         }
 
         void Update()
