@@ -32,7 +32,7 @@ namespace EmbervilleGhost;
 [BepInDependency(Integrations.WeatherGuid, BepInDependency.DependencyFlags.SoftDependency)]
 public class Plugin : BaseUnityPlugin, ITransportListener
 {
-    internal const string Version = "0.1.9";
+    internal const string Version = "0.2.0";
     internal const string ModName = "Sabba's Emberville Multiplayer Mod";
     internal static string Title => $"{ModName} v{Version}";
 
