@@ -1354,7 +1354,7 @@ internal enum MsgType : byte
     NpcAsk = 150,       // guest -> host, reliable: an action ("start q", "set $x to 1"), "handed q step" (turned in from their own bag, for that step), "event kill Mob_Glowbat"
     NpcLook = 153,
     HookBlood = 154,
-    WeatherStorm = 155, // whoever switched it -> everyone (host -> each player who joins), reliable: on (Better Weather's storm)
+    WeatherStorm = 155, // whoever changed it -> everyone (host -> each player who joins), reliable: kind (0 clear, 1 rain, 2 snow: Better Weather)
     WeatherStrike = 156, // the game it struck on -> their place, reliable unordered: x, y (a lightning strike, to show if in view)    // thrower -> their place, reliable unordered: x, y, direction x, y, sorting layer id (blood where the hook bit)      // host -> everyone (and each player who joins), reliable: count x (npc id, LookSync look): how the host's NPCs and Rory look
     NpcWander = 151,    // host -> their place, reliable: npc id, x, y (where that NPC walks to next / stops)
     BuiltList = 152,    // host -> a player who joined, reliable: everything built anywhere (B), BuildList's saved text

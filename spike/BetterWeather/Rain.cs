@@ -142,7 +142,7 @@ internal static class Rain
     static float nextWaterScan;
     static int waterSig;
 
-    static bool IsWater(Vector3 at)
+    internal static bool IsWater(Vector3 at)
     {
         string scene = SceneManager.GetActiveScene().name;
         // (looked at again every few seconds: the map loads in pieces as you go, the river's with its own)
@@ -192,7 +192,11 @@ internal static class Rain
 
     // ---- building ----
 
-    static void Layers()
+    /// <summary>Where things fall from the sky (over everything) and where they land (over the ground, under what
+    /// stands on it): for the snow too.</summary>
+    internal static int SkyLayer, GroundLayer, GroundOrder;
+
+    internal static void Layers()
     {
         string scene = SceneManager.GetActiveScene().name;
         if (scene == layeredFor) return;
@@ -216,6 +220,7 @@ internal static class Rain
             .Where(r => r && r.enabled && r.sortingLayerID == ground && r.sortingOrder < standing).ToList();
         foreach (var r in tiles) groundTop = Mathf.Max(groundTop, r.sortingOrder);
         int order = groundTop == int.MinValue ? standing - 1 : Mathf.Min(groundTop + 1, standing - 1);
+        SkyLayer = best; GroundLayer = ground; GroundOrder = order;
         foreach (var s in splashes) { s.Sr.sortingLayerID = ground; s.Sr.sortingOrder = order; }
         Log.Info($"Better Weather: rain over {SortingLayer.IDToName(best)}, splashes on {SortingLayer.IDToName(ground)} at {order} " +
                  $"(the player at {standing}; tiles there: {string.Join(", ", Object.FindObjectsByType<TilemapRenderer>(FindObjectsSortMode.None).Where(r => r && r.sortingLayerID == ground).Select(r => r.name + " " + r.sortingOrder))})");
@@ -223,8 +228,7 @@ internal static class Rain
 
     static void Build()
     {
-        Ppu = GamePpu();
-        Log.Info($"Better Weather: pixels per unit {Ppu}");
+        EnsurePpu();
         root = new GameObject("BW_Rain");
         Object.DontDestroyOnLoad(root);
         var shader = Shader.Find("Universal Render Pipeline/2D/Sprite-Unlit-Default") ?? Shader.Find("Sprites/Default");
@@ -288,6 +292,15 @@ internal static class Rain
         int id = rs.GroupBy(r => r.sortingLayerID).OrderByDescending(g => g.Count()).First().Key;
         order = rs.Where(r => r.sortingLayerID == id).Min(r => r.sortingOrder);   // (its lowest part)
         return id;
+    }
+
+    static bool ppuRead;
+    internal static void EnsurePpu()
+    {
+        if (ppuRead) return;
+        Ppu = GamePpu();
+        ppuRead = Singleton<GameManager>.HasMain && Singleton<GameManager>.main.player;
+        Log.Info($"Better Weather: pixels per unit {Ppu}");
     }
 
     /// <summary>The game's pixel size: the player's own sprites' pixels per unit (most common), else 16.</summary>

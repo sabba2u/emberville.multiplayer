@@ -109,7 +109,7 @@ internal static class Integrations
     /// <summary>Better Weather's Insert tab.</summary>
     public static void DrawWeather()
     {
-        if (HasWeather) WeatherMenu(); else Missing("Better Weather (a rain storm: /rain)");
+        if (HasWeather) WeatherMenu(); else Missing("Better Weather (a rain storm: /rain, snow: /snow)");
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)] static void WeatherMenu() => BetterWeather.Plugin.DrawMenu();

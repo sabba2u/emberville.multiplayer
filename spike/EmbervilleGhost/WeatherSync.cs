@@ -8,7 +8,7 @@ using UnityEngine;
 namespace EmbervilleGhost;
 
 /// <summary>
-/// Better Weather, together: one storm for everyone (whoever switches it, everyone gets it; the host tells each player
+/// Better Weather, together: one weather for everyone (clear, rain or snow) (whoever switches it, everyone gets it; the host tells each player
 /// who joins how it is), and each game's lightning strikes shown on the others' screens too (to their place). The
 /// wind needs nothing: it's a function of the clock, the same everywhere. Every call into Better Weather sits behind
 /// Integrations.HasWeather, in NoInlining methods.
@@ -25,7 +25,7 @@ internal static class WeatherSync
     {
         BetterWeather.Hooks.Say = Chat.System;
         BetterWeather.Hooks.Underground = () => Dungeon.Active;
-        BetterWeather.Hooks.SendStorm = on => { if (Up) Plugin.SendToAll(Storm(on), DeliveryMethod.ReliableOrdered); };
+        BetterWeather.Hooks.SendWeather = kind => { if (Up) Plugin.SendToAll(Storm(kind), DeliveryMethod.ReliableOrdered); };
         BetterWeather.Hooks.SendStrike = at =>
         {
             if (!Up) return;
@@ -36,11 +36,11 @@ internal static class WeatherSync
         };
     }
 
-    static NetDataWriter Storm(bool on)
+    static NetDataWriter Storm(int kind)
     {
         var w = new NetDataWriter();
         w.Put((byte)MsgType.WeatherStorm);
-        w.Put(on);
+        w.Put((byte)kind);
         return w;
     }
 
@@ -51,11 +51,11 @@ internal static class WeatherSync
         if (Plugin == null || !Plugin.IsHost) { sentTo.Clear(); return; }
         var ids = Plugin.Players.Select(p => p.Id).ToList();
         sentTo.RemoveWhere(id => !ids.Contains(id));
-        foreach (var id in ids) if (sentTo.Add(id)) Plugin.SendTo(id, Storm(BetterWeather.Plugin.StormOn));
+        foreach (var id in ids) if (sentTo.Add(id)) Plugin.SendTo(id, Storm(BetterWeather.Plugin.WeatherNow));
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
-    public static void OnStorm(NetDataReader r) => BetterWeather.Plugin.OnStorm(r.GetBool());
+    public static void OnStorm(NetDataReader r) => BetterWeather.Plugin.OnWeather(r.GetByte());
 
     [MethodImpl(MethodImplOptions.NoInlining)]
     public static void OnStrike(NetDataReader r) => BetterWeather.Plugin.OnStrike(new Vector3(r.GetFloat(), r.GetFloat(), 0f));
