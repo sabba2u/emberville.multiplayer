@@ -36,6 +36,7 @@ internal static class DebugPanel
             if (GreyTab("Better Combat", Integrations.HasCombat)) { Integrations.DrawCombat(); ImGui.EndTabItem(); }
             if (GreyTab("Better Looting", Integrations.HasLooting)) { Integrations.DrawLooting(); ImGui.EndTabItem(); }
             if (GreyTab("NPCs & Quests", Integrations.HasNpcs)) { Integrations.DrawNpcs(); ImGui.EndTabItem(); }
+            if (GreyTab("Weather", Integrations.HasWeather)) { Integrations.DrawWeather(); ImGui.EndTabItem(); }
             if (BuildMode.Enabled && ImGui.BeginTabItem("Construction")) { DrawConstruction(plugin); ImGui.EndTabItem(); }
             if (ImGui.BeginTabItem("Dungeon")) { Dungeon.DrawMenu(); ImGui.EndTabItem(); }
             if (ImGui.BeginTabItem("Log")) { DrawLog(plugin); ImGui.EndTabItem(); }
@@ -85,6 +86,7 @@ internal static class DebugPanel
         ImGui.SameLine();
         if (ImGui.Button("Disconnect (F10)")) plugin.Stop();
         Session.DrawSettings();
+        TeamHud.DrawSettings();
     }
 
     static void DrawPlayers(Plugin plugin)

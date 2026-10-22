@@ -243,6 +243,7 @@ internal static class HunterHook
             int dmg = 4;
             try { var b = CombatSystem.GetBaseDamage(me.currentWeaponItem, me); dmg = Mathf.Max(2, Mathf.RoundToInt((b.x + b.y) * 0.5f * 0.6f)); } catch { }
             CombatSystem.Resolve(new DamageData(me, target, dmg, DamageHitType.Impact, KnockBack.None));
+            HookNet.Blood(head, (Vector2)(head - me.transform.position), LayerOf(p.Avatar.Root.transform));
         }
         HookNet.Popup("Get over here!", head + Vector3.up * 0.4f, DamageResult.Critical);
         float d = ((Vector2)(p.Avatar.Root.transform.position - me.transform.position)).magnitude;
@@ -290,6 +291,18 @@ internal static class HunterHook
         }
     }
 
+    /// <summary>The sorting layer of what's caught (its topmost sprite's), for the blood to sit on it.</summary>
+    static int LayerOf(Component c)
+    {
+        int best = 0, bestValue = int.MinValue;
+        foreach (var sr in c.GetComponentsInChildren<SpriteRenderer>())
+        {
+            int v = SortingLayer.GetLayerValueFromID(sr.sortingLayerID);
+            if (sr.enabled && v > bestValue) { bestValue = v; best = sr.sortingLayerID; }
+        }
+        return best;
+    }
+
     static void Caught(PlayerMaster me, Enemy e)
     {
         caught = e;
@@ -297,6 +310,7 @@ internal static class HunterHook
         int dmg = 4;
         try { var b = CombatSystem.GetBaseDamage(me.currentWeaponItem, me); dmg = Mathf.Max(2, Mathf.RoundToInt((b.x + b.y) * 0.5f * 0.6f)); } catch { }
         CombatSystem.Resolve(new DamageData(me, e, dmg, DamageHitType.Impact, KnockBack.None));
+        HookNet.Blood(head, (Vector2)(head - me.transform.position), LayerOf(e));
         if (e.IsDead) { phase = Phase.Reeling; return; }
         HookNet.Popup("Get over here!", e.transform.position + Vector3.up * 0.8f, DamageResult.Critical);
 

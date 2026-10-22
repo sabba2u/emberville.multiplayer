@@ -44,8 +44,7 @@ internal static class Talk
         try
         {
             var t = TriggerFor(npc.Def.Id);
-            var me = LocalPlayer.Get();
-            if (me) npc.Body.Face(me.transform.position);
+            npc.Body.FaceFront();   // (to us, the screen: so the portrait shows their face, as the inventory shows yours)
             Listen(Singleton<DialogueManager>.main);
             Speaking = npc;
             t.isOpened = false;   // (left set if the game's window went away without telling it: then it would never open again)

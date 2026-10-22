@@ -183,11 +183,11 @@ public static class ChestLooks
         ChestUi.Place(takesNote.rectTransform, 130, 240, W - 170, 26);
         NoteTakes();
 
-        var save = ChestUi.Button(box, "Save", () => { Save(editing, nameEdit, hexEdit, takesEdit); Close(); });
+        var save = ChestUi.Button(box, "Save", () => { Save(editing, nameEdit, hexEdit, takesEdit); Close(); }, square: true);
         ChestUi.Place((RectTransform)save.transform, 40, H - 84, 140, 40);
-        var clear = ChestUi.Button(box, "Clear", () => { Save(editing, "", "", 0); Close(); });
+        var clear = ChestUi.Button(box, "Clear", () => { Save(editing, "", "", 0); Close(); }, square: true);
         ChestUi.Place((RectTransform)clear.transform, 196, H - 84, 140, 40);
-        var cancel = ChestUi.Button(box, "Cancel", Close);
+        var cancel = ChestUi.Button(box, "Cancel", Close, square: true);
         ChestUi.Place((RectTransform)cancel.transform, W - 180, H - 84, 140, 40);
         var hint = ChestUi.Label(box, "Enter saves, Esc cancels", 16, ChestUi.Dim, TMPro.TextAlignmentOptions.Center);
         ChestUi.Place(hint.rectTransform, 40, H - 40, W - 80, 22);

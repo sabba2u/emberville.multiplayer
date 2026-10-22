@@ -32,7 +32,8 @@ internal static class Wander
         {
             if (plan.Target != null && !Hooks.IsClient()) { plan.Target = null; Hooks.SendWander(n.Def.Id, pos); }
             body.Stop();
-            if (me) body.Face(me.transform.position);
+            if (Talk.IsOpen && Talk.Speaking == n) body.FaceFront();   // (talking: to the screen, for the portrait)
+            else if (me) body.Face(me.transform.position);
             plan.WaitUntil = Time.time + Random.Range(n.Def.PauseMin, n.Def.PauseMax);
             return;
         }

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using BepInEx.Configuration;
 using ImGuiNET;
 using UnityEngine;
@@ -28,6 +29,14 @@ internal static class TeamHud
 
     const float CardW = 210f, CardH = 58f, Gap = 8f, Top = 34f;
     const int PerRow = 4;
+
+    /// <summary>The party strip's switches (Insert menu, Online / Hosting).</summary>
+    public static void DrawSettings()
+    {
+        if (portraitsOn == null) return;
+        bool on = portraitsOn.Value;
+        if (ImGui.Checkbox("Party strip: live character portraits (instead of weapon icons)", ref on)) portraitsOn.Value = on;
+    }
 
     class Portrait
     {
@@ -144,8 +153,11 @@ internal static class TeamHud
         show = config.Bind("PartyStrip", "Show", true, "The party strip at the top of the screen while connected");
         portraitsOn = config.Bind("PartyStrip", "Portraits", false, "Live character portraits instead of the weapon icons (a small camera per player)");
         // Full body, like the character in the inventory screen (the keys are new so old head-only values don't stick).
-        headHeight = config.Bind("PartyStrip", "PortraitCenter", 0.95f, "Where the middle of the portrait is above a character's feet (world units)");
-        headSize = config.Bind("PartyStrip", "PortraitSize", 1.1f, "How much of the character the portrait shows (half height, world units): ~1.1 = the whole body");
+        headHeight = config.Bind("PartyStrip", "PortraitCenter", 0.75f, "Where the middle of the portrait is above a character's feet (world units)");
+        headSize = config.Bind("PartyStrip", "PortraitSize", 0.88f, "How much of the character the portrait shows (half height, world units): ~1.1 = the whole body");
+        // the old defaults (characters sat low and small in the box): to the new ones
+        if (Mathf.Approximately(headHeight.Value, 0.95f)) headHeight.Value = 0.75f;
+        if (Mathf.Approximately(headSize.Value, 1.1f)) headSize.Value = 0.88f;
     }
 
     /// <summary>From Hud.Draw (only when the game isn't covering the screen).</summary>
@@ -370,6 +382,7 @@ internal static class TeamHud
         cam.depth = -100;
         cam.nearClipPlane = 0.01f;
         cam.farClipPlane = 100f;
+        Light(cam);
         return new Portrait { Cam = cam, Tex = tex, Id = ImGuiUnity.TextureId(tex) };
     }
 
@@ -418,13 +431,43 @@ internal static class TeamHud
         }
     }
 
+    /// <summary>
+    /// The portrait's own light. URP's 2D renderer only uses lights on a layer the camera sees (global ones too), and
+    /// ours sees only PortraitLayer: without a light there every lit sprite draws black. A wide point light on that
+    /// layer, always on (the main camera never sees the layer, so it never lights the world). Not a global one: a
+    /// second global light trips URP's one-per-sorting-layer check.
+    /// </summary>
+    static void Light(Camera cam)
+    {
+        try
+        {
+            var go = new GameObject("EmbervilleGhost_PortraitLight") { layer = PortraitLayer, hideFlags = HideFlags.HideAndDontSave };
+            go.SetActive(false);
+            go.transform.SetParent(cam.transform, false);
+            go.transform.localPosition = new Vector3(0f, 0f, 1f);
+            var l = go.AddComponent<UnityEngine.Rendering.Universal.Light2D>();
+            // every sorting layer first (the body's parts may sit on several; the light's checks read it)
+            typeof(UnityEngine.Rendering.Universal.Light2D).GetField("m_ApplyToSortingLayers", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
+                ?.SetValue(l, SortingLayer.layers.Select(s => s.id).ToArray());
+            l.lightType = UnityEngine.Rendering.Universal.Light2D.LightType.Point;
+            l.pointLightInnerRadius = 20f;
+            l.pointLightOuterRadius = 25f;
+            l.color = Color.white;
+            l.intensity = 1f;
+            go.SetActive(true);
+        }
+        catch (Exception e) { NetLog.Warn($"Portrait light: {e.Message}"); }
+    }
+
     static void Isolate(Transform target)
     {
-        int minimap = LayerMask.NameToLayer("Minimap");
+        int body = LayerMask.NameToLayer("Player");
         foreach (var r in target.GetComponentsInChildren<Renderer>())
         {
             var go = r.gameObject;
-            if (go.layer == minimap || go.layer == PortraitLayer) continue;
+            // only the body you see in the world: not the minimap marker, nor the second body the game keeps for the
+            // inventory picture (layer PlayerPortrait), which would draw over it
+            if (go.layer != body) continue;
             moved.Add((go, go.layer));
             go.layer = PortraitLayer;
         }

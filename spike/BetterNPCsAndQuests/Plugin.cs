@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Linq;
 using BepInEx;
 using BepInEx.Logging;
 using UnityEngine;
@@ -45,6 +47,7 @@ public class Plugin : BaseUnityPlugin
             Events.Hook();
             Window.Tick();
             GiveBox.Tick();
+            Portraits.Tick();
         }
         catch (System.Exception e) { Logger.LogWarning(e); }
     }
@@ -68,4 +71,8 @@ public class Plugin : BaseUnityPlugin
     public static void OnAsk(string text) => Net.OnAsk(text);
     public static void OnWander(string npcId, Vector3 to) => Wander.Remote(npcId, to);
     public static void Disconnected() => Net.Disconnected();
+
+    /// <summary>The NPCs standing in this scene: id and body (for the multiplayer mod: the host's looks for everyone).</summary>
+    public static IEnumerable<(string id, GameObject root)> Bodies() =>
+        Npcs.Here.Where(n => n.Body != null && n.Body.Root).Select(n => (n.Def.Id, n.Body.Root)).ToList();
 }

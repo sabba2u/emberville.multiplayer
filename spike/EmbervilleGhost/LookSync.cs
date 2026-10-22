@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using LiteNetLib.Utils;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -57,6 +58,15 @@ internal static class LookSync
                     default: w.Put((byte)2); w.Put(m.GetFloat(id)); break;   // Float, Range
                 }
             }
+        }
+
+        // dyed pieces (GearDye: the sprite's own tint, which the materials don't carry)
+        var dyed = nodes.Where(n => n.t.GetComponent<GearDye.Mark>() && n.t.GetComponent<SpriteRenderer>()).ToList();
+        w.Put(dyed.Count);
+        foreach (var (hash, t) in dyed)
+        {
+            var c = t.GetComponent<SpriteRenderer>().color;
+            w.Put(hash); w.Put(c.r); w.Put(c.g); w.Put(c.b);
         }
         return w.CopyData();
     }
@@ -127,6 +137,17 @@ internal static class LookSync
                 else if (shader.GetPropertyType(index) == ShaderPropertyType.Int) m.SetInteger(id, (int)v.x);
                 else m.SetFloat(id, v.x);
             }
+        }
+
+        // dyed pieces: the old dyes off, these on
+        foreach (var mark in root.GetComponentsInChildren<GearDye.Mark>(true)) GearDye.Untint(mark.GetComponent<SpriteRenderer>());
+        if (r.EndOfData) return;
+        int dyes = r.GetInt();
+        for (int i = 0; i < dyes; i++)
+        {
+            uint hash = r.GetUInt();
+            var c = new Color(r.GetFloat(), r.GetFloat(), r.GetFloat());
+            if (nodes.TryGetValue(hash, out var t) && t.GetComponent<SpriteRenderer>() is SpriteRenderer sr) GearDye.Tint(sr, c);
         }
     }
 

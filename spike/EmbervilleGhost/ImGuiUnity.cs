@@ -122,6 +122,20 @@ internal static class ImGuiUnity
         // Typing into one of our text fields: the game's controls and our hotkeys stay out of it (I, M, O, X...).
         Typing = ImGui.GetIO().WantTextInput;
         if (Typing) GameInput.Block("imgui-text"); else GameInput.Unblock("imgui-text");
+        // ... or into a game-style one (a chest's name, the search boxes): our hotkeys stay out of that too
+        if (!Typing && UiFieldFocused()) Typing = true;
+    }
+
+    /// <summary>A uGUI text field (the game's, or one of the companion mods') has the keyboard.</summary>
+    static bool UiFieldFocused()
+    {
+        var es = UnityEngine.EventSystems.EventSystem.current;
+        var go = es ? es.currentSelectedGameObject : null;
+        if (!go) return false;
+        var tmp = go.GetComponent<TMPro.TMP_InputField>();
+        if (tmp) return tmp.isFocused;
+        var ui = go.GetComponent<UnityEngine.UI.InputField>();
+        return ui && ui.isFocused;
     }
 
     /// <summary>A text field of ours has the keyboard (as of the last frame).</summary>

@@ -95,6 +95,8 @@ internal class RemoteAvatar
         {
             copy = UnityEngine.Object.Instantiate(template.gameObject, holder.transform);
             copy.name = $"EmbervilleGhost_P{playerId + 1}";
+            // our dyes off the copy (it's someone else: theirs come with their look)
+            foreach (var m in copy.GetComponentsInChildren<GearDye.Mark>(true)) GearDye.Untint(m.GetComponent<SpriteRenderer>());
             // The collider creatures' attacks look for on a player: keep it (as a trigger) so they can hit the stand-in.
             var hurtPath = PathFrom(template.transform, template.iDamageableCollider ? template.iDamageableCollider.transform : null);
             var hurtGo = hurtPath == null ? null : (hurtPath.Length == 0 ? copy.transform : copy.transform.Find(hurtPath));

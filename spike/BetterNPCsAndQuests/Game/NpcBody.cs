@@ -189,6 +189,8 @@ internal sealed class NpcBody
 
     public void Face(Vector3 lookAt) { if (Root) Turn(lookAt - Root.transform.position); }
 
+    public void FaceFront() { if (Root) Turn(Vector3.down); }
+
     void Facing(string facing)
     {
         switch (facing)
@@ -233,6 +235,10 @@ internal sealed class NpcBody
     static void Strip(GameObject copy)
     {
         foreach (var t in copy.GetComponentsInChildren<Transform>(true)) t.gameObject.tag = "Untagged";
+        // the player's dyes (the multiplayer mod's GearDye marks its tinted sprites) off: the NPC wears their own colours
+        foreach (var mb in copy.GetComponentsInChildren<MonoBehaviour>(true))
+            if (mb && mb.GetType().FullName == "EmbervilleGhost.GearDye+Mark" && mb.GetComponent<SpriteRenderer>() is SpriteRenderer sr)
+                sr.color = new Color(1f, 1f, 1f, sr.color.a);
         for (int pass = 0; pass < 4; pass++)
         {
             bool any = false;

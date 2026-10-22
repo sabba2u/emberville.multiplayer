@@ -19,11 +19,13 @@ internal static class Integrations
     public const string LootingGuid = "spike.emberville.betterlooting";
     public const string PetsGuid = "spike.emberville.betterpetsandsummons";
     public const string NpcsGuid = "spike.emberville.betternpcsandquests";
+    public const string WeatherGuid = "spike.emberville.betterweather";
 
     public static bool HasCombat { get; private set; }
     public static bool HasLooting { get; private set; }
     public static bool HasPets { get; private set; }
     public static bool HasNpcs { get; private set; }
+    public static bool HasWeather { get; private set; }
 
     /// <summary>From Plugin.Awake (they load first: soft dependencies).</summary>
     public static void Init()
@@ -34,10 +36,12 @@ internal static class Integrations
         if (HasPets) PetHooks();
         HasNpcs = Chainloader.PluginInfos.ContainsKey(NpcsGuid);
         if (HasNpcs) NpcHooks();
+        HasWeather = Chainloader.PluginInfos.ContainsKey(WeatherGuid);
+        if (HasWeather) WeatherSync.Hook();
         NetLog.Info("Split-out mods: " + string.Join(", ", new List<string> {
             HasCombat ? "Better Combat" : null, HasLooting ? "Better Looting" : null, HasPets ? "Better Pets and Summons" : null,
-            HasNpcs ? "Better NPCs and Quests" : null }.FindAll(x => x != null)) +
-            (HasCombat || HasLooting || HasPets || HasNpcs ? "" : "none"), toast: false);
+            HasNpcs ? "Better NPCs and Quests" : null, HasWeather ? "Better Weather" : null }.FindAll(x => x != null)) +
+            (HasCombat || HasLooting || HasPets || HasNpcs || HasWeather ? "" : "none"), toast: false);
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
@@ -94,11 +98,21 @@ internal static class Integrations
     {
         if (HasCombat && CombatCommand(cmd)) return true;
         if (HasPets && PetsCommand(cmd)) return true;
+        if (HasWeather && WeatherCommand(cmd)) return true;
         return false;
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)] static bool CombatCommand(string c) => BetterCombat.Plugin.Command(c);
     [MethodImpl(MethodImplOptions.NoInlining)] static bool PetsCommand(string c) => BetterPetsAndSummons.Plugin.Command(c);
+    [MethodImpl(MethodImplOptions.NoInlining)] static bool WeatherCommand(string c) => BetterWeather.Plugin.Command(c);
+
+    /// <summary>Better Weather's Insert tab.</summary>
+    public static void DrawWeather()
+    {
+        if (HasWeather) WeatherMenu(); else Missing("Better Weather (a rain storm: /rain)");
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)] static void WeatherMenu() => BetterWeather.Plugin.DrawMenu();
 
     // ---- the Insert menu ----
 

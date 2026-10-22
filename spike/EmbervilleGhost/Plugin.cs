@@ -29,6 +29,7 @@ namespace EmbervilleGhost;
 [BepInDependency(Integrations.LootingGuid, BepInDependency.DependencyFlags.SoftDependency)]
 [BepInDependency(Integrations.PetsGuid, BepInDependency.DependencyFlags.SoftDependency)]
 [BepInDependency(Integrations.NpcsGuid, BepInDependency.DependencyFlags.SoftDependency)]
+[BepInDependency(Integrations.WeatherGuid, BepInDependency.DependencyFlags.SoftDependency)]
 public class Plugin : BaseUnityPlugin, ITransportListener
 {
     internal const string Version = "0.1.9";
@@ -124,6 +125,8 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         PropSync.Plugin = this;
         ChestSync.Plugin = this;
         NpcSync.Plugin = this;
+        NpcLooks.Plugin = this;
+        WeatherSync.Plugin = this;
         Chat.Plugin = this;
         HookSounds.Init(Config);
         Chat.Lift = Config.Bind("Chat", "HeightAboveBottom", 0.25f, "Chat's bottom edge, as a fraction of the window height from the bottom (clears the game's health bar and hotbar)");
@@ -208,11 +211,14 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         Arena.Tick();
         ArenaTraps.Tick();   // the arena's traps: in step with whoever switched them
         Rory.Tick();
+        NpcLooks.Tick();   // the host's NPCs (and Rory) look the same on every game
+        GearDye.Tick();   // dyed gear (and the Hunter's Hook's yellow on every armour piece)
         Dungeon.Tick();      // creatures off the navigation mesh put back on it
         DungeonMap.Tick();   // the dungeon minimap (top left; ~ hides it)
         NoClip.Tick();       // /noclip stays on through deaths and respawns
         HunterHook.Tick();   // the Hunter's Hook: the throw, the rope, the drag
         HookNet.Tick();      // teammates' hooks: their ropes
+        if (Integrations.HasWeather) WeatherSync.Tick();   // Better Weather: the storm for each player who joins
         Integrations.Tick();   // teammates' pets, chickens and risen (Better Pets and Summons)
         if (Integrations.HasNpcs) NpcSync.Tick();   // Better NPCs and Quests: the host's files and story for everyone
         SteamLobby.Tick();
@@ -1145,6 +1151,9 @@ public class Plugin : BaseUnityPlugin, ITransportListener
             case MsgType.HookThrow: HookNet.OnThrow(reader, from); break;
             case MsgType.HookText: HookNet.OnText(reader, from); break;
             case MsgType.HookPull: HookNet.OnPull(reader, from); break;
+            case MsgType.HookBlood: HookNet.OnBlood(reader, from); break;
+            case MsgType.WeatherStorm: if (Integrations.HasWeather) WeatherSync.OnStorm(reader); break;
+            case MsgType.WeatherStrike: if (Integrations.HasWeather) WeatherSync.OnStrike(reader); break;
             case MsgType.Summons: if (Integrations.HasPets) SummonSync.OnSummons(reader, from); break;
             case MsgType.PathDraw: Pings.OnPath(reader, from); break;
             case MsgType.ChestTake: if (owner) ChestSync.OnTake(reader, from); break;   // shared chests: the area owner's are real
@@ -1169,6 +1178,7 @@ public class Plugin : BaseUnityPlugin, ITransportListener
             case MsgType.NpcBook: if (Integrations.HasNpcs && !IsHost) NpcSync.OnBook(reader); break;
             case MsgType.NpcAsk: if (Integrations.HasNpcs && IsHost) NpcSync.OnAsk(reader); break;
             case MsgType.NpcWander: if (Integrations.HasNpcs) NpcSync.OnWander(reader); break;
+            case MsgType.NpcLook: if (!IsHost) NpcLooks.OnLooks(reader); break;
             case MsgType.BossLook: MiniBoss.OnLook(reader); break;   // a mini-boss's size, colour, name, toughness   // generated dungeons: someone went in, the others may join
             case MsgType.CutsceneStart: CutsceneSync.OnStart(reader, from); break;   // story cutscenes: everyone in the area watches
             case MsgType.CutsceneSnapshot: if (!owner) CutsceneSync.OnSnapshot(reader); break;   // story cutscenes: everyone in the area watches
@@ -1342,6 +1352,10 @@ internal enum MsgType : byte
     NpcFiles = 148,     // host -> a player who joined (and everyone after a reload), reliable: Better NPCs and Quests' files (packed: count, path + bytes)
     NpcBook = 149,      // host -> everyone, reliable: the story (flags + quest progress, its saved text as UTF-8 bytes)
     NpcAsk = 150,       // guest -> host, reliable: an action ("start q", "set $x to 1"), "handed q step" (turned in from their own bag, for that step), "event kill Mob_Glowbat"
+    NpcLook = 153,
+    HookBlood = 154,
+    WeatherStorm = 155, // whoever switched it -> everyone (host -> each player who joins), reliable: on (Better Weather's storm)
+    WeatherStrike = 156, // the game it struck on -> their place, reliable unordered: x, y (a lightning strike, to show if in view)    // thrower -> their place, reliable unordered: x, y, direction x, y, sorting layer id (blood where the hook bit)      // host -> everyone (and each player who joins), reliable: count x (npc id, LookSync look): how the host's NPCs and Rory look
     NpcWander = 151,    // host -> their place, reliable: npc id, x, y (where that NPC walks to next / stops)
     BuiltList = 152,    // host -> a player who joined, reliable: everything built anywhere (B), BuildList's saved text
     ChestLook = 147,    // editor -> everyone (ToAll) / area owner -> arriving player, reliable: chest id, name, colour hex, what it takes (ItemCategory bits) (Better Chests' V)

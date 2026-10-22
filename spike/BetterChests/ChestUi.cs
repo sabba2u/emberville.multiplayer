@@ -119,17 +119,43 @@ internal static class ChestUi
         return t;
     }
 
-    public static Button Button(Transform parent, string text, Action onClick)
+    /// <param name="square">Square corners instead: a flat copper block with a thin lighter edge (as the Online Players screen's).</param>
+    public static Button Button(Transform parent, string text, Action onClick, bool square = false)
     {
         var r = Rect("BC_Button_" + text, parent);
-        var img = Img(r.gameObject, "UI_Buttons_0", new Color(0.45f, 0.3f, 0.18f));
-        var b = r.gameObject.AddComponent<Button>();
-        b.targetGraphic = img;
-        var hover = Sprite("UI_Buttons_2"); var press = Sprite("UI_Buttons_5");
-        if (img.sprite && hover && press)
+        Button b;
+        if (square)
         {
-            b.transition = Selectable.Transition.SpriteSwap;
-            b.spriteState = new SpriteState { highlightedSprite = hover, selectedSprite = img.sprite, pressedSprite = press, disabledSprite = img.sprite };
+            var edge = r.gameObject.AddComponent<Image>();
+            edge.color = new Color(0.78f, 0.55f, 0.33f);
+            var fillRect = Rect("Fill", r);
+            Stretch(fillRect, 2, 2, 2, 2);
+            var fill = fillRect.gameObject.AddComponent<Image>();
+            fill.color = Color.white;   // (the button's colours below tint it)
+            b = r.gameObject.AddComponent<Button>();
+            b.targetGraphic = fill;
+            b.transition = Selectable.Transition.ColorTint;
+            var c = b.colors;
+            c.normalColor = new Color(0.36f, 0.22f, 0.13f);
+            c.highlightedColor = new Color(0.52f, 0.33f, 0.19f);
+            c.selectedColor = c.normalColor;
+            c.pressedColor = new Color(0.25f, 0.15f, 0.09f);
+            c.disabledColor = new Color(0.25f, 0.22f, 0.2f, 0.7f);
+            c.colorMultiplier = 1f;
+            c.fadeDuration = 0.05f;
+            b.colors = c;
+        }
+        else
+        {
+            var img = Img(r.gameObject, "UI_Buttons_0", new Color(0.45f, 0.3f, 0.18f));
+            b = r.gameObject.AddComponent<Button>();
+            b.targetGraphic = img;
+            var hover = Sprite("UI_Buttons_2"); var press = Sprite("UI_Buttons_5");
+            if (img.sprite && hover && press)
+            {
+                b.transition = Selectable.Transition.SpriteSwap;
+                b.spriteState = new SpriteState { highlightedSprite = hover, selectedSprite = img.sprite, pressedSprite = press, disabledSprite = img.sprite };
+            }
         }
         b.onClick.AddListener(new UnityAction(() => { try { onClick?.Invoke(); } catch (Exception e) { Plugin.Log.LogWarning(e); } }));
         AddSounds(r.gameObject);

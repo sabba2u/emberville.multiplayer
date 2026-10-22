@@ -67,6 +67,85 @@ internal static class HookNet
         Plugin.SendToPlace(w, DeliveryMethod.ReliableUnordered);
     }
 
+    // ---- blood where the hook bites ----
+
+    /// <summary>A spray of blood where the hook caught something (dir: the way the hook was going), here and for
+    /// everyone in our place (sorting layer: the creature's, so it sits on it, not over the roofs).</summary>
+    public static void Blood(Vector3 at, Vector2 dir, int sortingLayer)
+    {
+        Spray(at, dir, sortingLayer);
+        if (!Online) return;
+        var w = new NetDataWriter();
+        w.Put((byte)MsgType.HookBlood);
+        w.Put(at.x); w.Put(at.y); w.Put(dir.x); w.Put(dir.y);
+        w.Put(sortingLayer);
+        Plugin.SendToPlace(w, DeliveryMethod.ReliableUnordered);
+    }
+
+    public static void OnBlood(NetDataReader r, int from)
+    {
+        var at = new Vector3(r.GetFloat(), r.GetFloat(), 0f);
+        var dir = new Vector2(r.GetFloat(), r.GetFloat());
+        Spray(at, dir, r.GetInt());
+    }
+
+    static Material bloodMat;
+
+    static void Spray(Vector3 at, Vector2 dir, int sortingLayer)
+    {
+        try
+        {
+            var go = new GameObject("EG_HookBlood");
+            go.transform.position = at;
+            var ps = go.AddComponent<ParticleSystem>();
+            ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+            var main = ps.main;
+            main.loop = false;
+            main.duration = 0.2f;
+            main.startLifetime = new ParticleSystem.MinMaxCurve(0.6f, 1.4f);
+            main.startSpeed = new ParticleSystem.MinMaxCurve(1.5f, 5f);
+            main.startSize = new ParticleSystem.MinMaxCurve(0.05f, 0.13f);
+            main.startColor = new ParticleSystem.MinMaxGradient(new Color(0.75f, 0.03f, 0.05f), new Color(0.42f, 0f, 0.02f));
+            main.simulationSpace = ParticleSystemSimulationSpace.World;
+            main.gravityModifier = 0.9f;   // (down the screen: a little arc before they land)
+            main.maxParticles = 60;
+            var emission = ps.emission;
+            emission.rateOverTime = 0f;
+            emission.SetBursts(new[] { new ParticleSystem.Burst(0f, 28, 40) });
+            // a cone the way the hook was going (the blood flies on past the bite)
+            var shape = ps.shape;
+            shape.shapeType = ParticleSystemShapeType.Cone;
+            shape.angle = 40f;
+            shape.radius = 0.05f;
+            if (dir.sqrMagnitude < 0.0001f) dir = Vector2.up;
+            shape.rotation = new Vector3(-Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg, 90f, 0f);
+            // they land and stop (drag), then fade where they fell
+            var limit = ps.limitVelocityOverLifetime;
+            limit.enabled = true;
+            limit.limit = 0f;
+            limit.dampen = 0.12f;
+            var fade = ps.colorOverLifetime;
+            fade.enabled = true;
+            var g = new Gradient();
+            g.SetKeys(new[] { new GradientColorKey(Color.white, 0f), new GradientColorKey(new Color(0.6f, 0.6f, 0.6f), 1f) },
+                      new[] { new GradientAlphaKey(1f, 0f), new GradientAlphaKey(1f, 0.6f), new GradientAlphaKey(0f, 1f) });
+            fade.color = g;
+            var r = go.GetComponent<ParticleSystemRenderer>();
+            r.renderMode = ParticleSystemRenderMode.Billboard;
+            if (!bloodMat)
+            {
+                var shader = Shader.Find("Universal Render Pipeline/2D/Sprite-Unlit-Default") ?? Shader.Find("Universal Render Pipeline/Particles/Unlit") ?? Shader.Find("Sprites/Default");
+                bloodMat = new Material(shader) { name = "EG_HookBlood", mainTexture = Texture2D.whiteTexture };   // (square drops: pixel art)
+            }
+            r.sharedMaterial = bloodMat;
+            r.sortingLayerID = sortingLayer;
+            r.sortingOrder = 30000;
+            ps.Play();
+            Object.Destroy(go, 2f);
+        }
+        catch (System.Exception e) { NetLog.Warn($"Hook blood: {e.Message}", toast: false); }
+    }
+
     public static void OnText(NetDataReader r, int from)
     {
         string text = r.GetString();

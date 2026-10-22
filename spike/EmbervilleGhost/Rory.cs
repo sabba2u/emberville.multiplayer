@@ -28,6 +28,7 @@ internal static class Rory
     static float sayUntil;
 
     public static bool Here => body != null && body.Root;
+    public static GameObject Root => body != null ? body.Root : null;
 
     public static void Spawn(Vector3 at, Vector3 lookAt)
     {
