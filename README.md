@@ -66,16 +66,22 @@ Not made or supported by Cygnus Cross.
 Type the command in chat to get one.
 - **Staff of Clucking (`/clucking`):** right-click summons a battle chicken (a tenth of your Kymia); left-click is a
   normal attack.
+  
   ![chickens](chickens2_sm.gif)
+  
 - **Staff of the Risen (`/risen`):** creatures that die near you glow green; right-click near one raises it to fight
   for you (a fifth of your Kymia).
+  
   ![zombie](zombie_sm.gif)
+  
 - With either staff, **middle-click** sends your chickens or risen there (they path around walls and water). Both
   staffs level up as you use them; summons go out in their creature's gore burst.
 - **Hunter's Hook (`/hook`):** right-click throws it (a sixth of your Kymia): it drags a creature to your feet, stunned
   (big guardians pull you to them instead), with a spray of blood. While it's in your hand your whole outfit turns
   Scorpion yellow.
+  
   ![hook](hook2_sm.gif)
+
 
 ## Your character
 - **Respec:** `/respec`, or ask Ellie: every stat point back to spend again (level, XP and gear kept).
@@ -85,7 +91,9 @@ Type the command in chat to get one.
   (the boxes sit between the two skulls on the HUD), or hold **Left Alt** (gamepad LT) for a weapon wheel.
 - **Bestiary (N):** every creature you've killed, with its stats and your kill count.
 - **Better Combat:** move while attacking (`/moveattack`), bows that aim in any direction and lock on (`/bowlock`).
+  
   ![moveandattack](moveandattack_sm.gif)
+
 
 ## Chests and loot
 - **F** on an item marks it a favourite (a heart on its slot): favourites never get swept into chests.
