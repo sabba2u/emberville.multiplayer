@@ -41,7 +41,7 @@ internal static class TownPortal
 
     static readonly Dictionary<int, Link> links = new();
     static readonly HashSet<int> sentTo = new();
-    static string homeArea;   // the starting area's GameArea name (seen when we're by the door)
+    static string homeArea = "002_Cavern";   // the starting area's outdoors (its GameArea; checked again when we're by the door)
 
     static int MeId => Plugin != null && Plugin.Connected && Plugin.MyId >= 0 ? Plugin.MyId : 0;
     static bool Online => Plugin != null && Plugin.Connected && Plugin.MyId >= 0;
@@ -61,11 +61,18 @@ internal static class TownPortal
     static void LearnHome(PlayerMaster me)
     {
         if (!me || LocalPlayer.Scene != HomeScene || Dungeon.Active || !Singleton<GameManager>.HasMain) return;
+        // only an area that really holds the town spot (walking in at the starting door, the house's area comes on a
+        // moment before you're moved into it: that's not town)
         var area = Singleton<GameManager>.main.CurrentArea;
-        if (area && ((UnityEngine.Vector2)(me.transform.position - HomeSpot)).magnitude < 30f) homeArea = area.name;
+        if (area && Travel.Holds(area, HomeSpot) && Travel.Holds(area, me.transform.position)) homeArea = area.name;
     }
 
-    static bool InTown => LocalPlayer.Scene == HomeScene && !Dungeon.Active && homeArea != null && LocalPlayer.Area == homeArea;
+    /// <summary>In the starting area's outdoors: the town portals show (from anywhere in it).</summary>
+    static bool TownHere => LocalPlayer.Scene == HomeScene && !Dungeon.Active && LocalPlayer.Area == homeArea;
+
+    /// <summary>By the starting door: no casting a portal home (you're there).</summary>
+    static bool InTown => LocalPlayer.Scene == HomeScene && !Dungeon.Active && LocalPlayer.Get() && LocalPlayer.Area == homeArea &&
+                          ((UnityEngine.Vector2)(LocalPlayer.Get().transform.position - HomeSpot)).magnitude < 8f;
 
     static Vector3 TownSpot(int owner)
     {
@@ -98,8 +105,7 @@ internal static class TownPortal
         if (channel >= 0f) { channel = -1f; NetLog.Info("Town portal: cancelled", toast: true); return; }
         if (Dungeon.Busy) return;
         if (InTown) { NetLog.Info("You're already in town", toast: true); return; }
-        if (LocalPlayer.Scene != HomeScene) { NetLog.Info("A town portal only works in this world's starting lands for now", toast: true); return; }
-        if (homeArea == null) { NetLog.Info("Town portal: visit town (by the starting door) once first", toast: true); return; }
+
         channel = 0f;
         healthAtStart = me.CurrentHealthPoints;
         startedAt = me.transform.position;
@@ -143,13 +149,10 @@ internal static class TownPortal
     /// <summary>To this pair's town end (in front of it, not in it).</summary>
     static void Home(Link l)
     {
-        var to = AreaNamed(homeArea ?? "");
-        if (!to) { NetLog.Warn("Town portal: can't find town", toast: true); return; }
-        var at = TownSpot(l.Owner) + new Vector3(0f, -1.3f, 0f);
         l.TownArmed = false;
-        if (Dungeon.Active) Dungeon.LeaveTo(at, to, HomeScene);
-        else Singleton<GameManager>.main.TeleportPlayerFade(at, Direction.Down, to, to.CameraConfiner).Forget();
-        NetLog.Info($"Through {l.Name}'s portal: to town", toast: true);
+        // (the starting area: from anywhere, another scene too; its area found by the spot if we've never been)
+        var to = new Travel.Spot { Scene = HomeScene, Area = homeArea, At = TownSpot(l.Owner) + new Vector3(0f, -1.3f, 0f) };
+        if (Travel.Go(to)) NetLog.Info($"Through {l.Name}'s portal: to town", toast: true);
     }
 
     /// <summary>To this pair's far end (in front of it).</summary>
@@ -168,23 +171,32 @@ internal static class TownPortal
 
     static void Show(Link l, PlayerMaster me)
     {
-        bool far = FarHere(l), town = InTown;
-        Keep(ref l.Far, far, l.At, $"EG_TownPortal_{l.Owner}_far");
-        Keep(ref l.Town, town, TownSpot(l.Owner), $"EG_TownPortal_{l.Owner}_town");
+        bool far = FarHere(l), town = TownHere;
+        Keep(ref l.Far, far, l.At, $"EG_TownPortal_{l.Owner}_far", Tint(l.Owner));
+        Keep(ref l.Town, town, TownSpot(l.Owner), $"EG_TownPortal_{l.Owner}_town", Tint(l.Owner));
         if (!me || Dungeon.Busy || PlayerStatusUtil.LocalBusy || ImGuiUnity.Typing) return;
         if (far && Stepped(me, l.Far, ref l.FarArmed, ref l.FarStood)) Home(l);
         else if (town && Stepped(me, l.Town, ref l.TownArmed, ref l.TownStood)) Away(l);
     }
 
-    static void Keep(ref GameObject go, bool want, Vector3 at, string name)
+    /// <summary>Each player's portals in their own colour (the host's gold, as on the party strip; then blue, green, pink...).</summary>
+    static readonly Color[] Tints =
+    {
+        new Color(1f, 0.82f, 0.35f), new Color(0.45f, 0.75f, 1f), new Color(0.5f, 1f, 0.55f), new Color(1f, 0.55f, 0.85f),
+        new Color(0.75f, 0.55f, 1f), new Color(1f, 0.6f, 0.35f),
+    };
+    static Color Tint(int owner) => Tints[Mathf.Abs(owner) % Tints.Length];
+
+    static void Keep(ref GameObject go, bool want, Vector3 at, string name, Color tint)
     {
         if (!want) { if (go) Object.Destroy(go); go = null; return; }
         if (go) { go.transform.position = at; return; }
         go = new GameObject(name);
         go.transform.position = at;
-        if (Beam(go.transform)) return;
-        var art = PadFx.Portal(go.transform, at);   // (the dungeon's portal, if the beam isn't to be found)
-        if (!art) NetLog.Info("Town portal: no portal art loaded", toast: false);
+        bool beam = Beam(go.transform);
+        if (!beam) PadFx.Portal(go.transform, at);   // (the dungeon's portal, if the beam isn't to be found)
+        foreach (var sr in go.GetComponentsInChildren<SpriteRenderer>(true)) sr.color = new Color(tint.r, tint.g, tint.b, sr.color.a);
+        return;
     }
 
     // ---- the look: the mage's magic beam effect (Attack_Mage_MagicBeam_Fx), smaller than the dungeon's portal ----
@@ -313,7 +325,8 @@ internal static class TownPortal
                 var size = ImGui.CalcTextSize(label);
                 var pos = new Vector2(sp.x - size.x / 2f, Screen.height - sp.y);
                 bg.AddText(new Vector2(pos.x + 1f, pos.y + 1f), ImGui.ColorConvertFloat4ToU32(new Vector4(0f, 0f, 0f, 0.8f)), label);
-                bg.AddText(pos, ImGui.ColorConvertFloat4ToU32(new Vector4(0.6f, 0.82f, 1f, 1f)), label);
+                var t = Tint(l.Owner);
+                bg.AddText(pos, ImGui.ColorConvertFloat4ToU32(new Vector4(t.r, t.g, t.b, 1f)), label);
             }
     }
 

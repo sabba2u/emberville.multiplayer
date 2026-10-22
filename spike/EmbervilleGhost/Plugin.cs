@@ -215,7 +215,8 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         Rory.Tick();
         NpcLooks.Tick();   // the host's NPCs (and Rory) look the same on every game
         GearDye.Tick();
-        TownPortal.Tick();   // the town portal button, its channel, everyone's portal pairs   // dyed gear (and the Hunter's Hook's yellow on every armour piece)
+        TownPortal.Tick();
+        Travel.Tick();   // arriving in another scene: on to the exact spot   // the town portal button, its channel, everyone's portal pairs   // dyed gear (and the Hunter's Hook's yellow on every armour piece)
         Dungeon.Tick();      // creatures off the navigation mesh put back on it
         DungeonMap.Tick();   // the dungeon minimap (top left; ~ hides it)
         NoClip.Tick();       // /noclip stays on through deaths and respawns

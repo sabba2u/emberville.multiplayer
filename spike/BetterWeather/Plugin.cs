@@ -82,6 +82,9 @@ public class Plugin : BaseUnityPlugin
     public static Kind Current => Weather.Now;
     public static WeatherOptions CurrentOptions => Weather.Options;
 
+    /// <summary>How much snow has settled (seconds of snowing; 0 = bare): the multiplayer mod sends it to whoever joins.</summary>
+    public static float SnowDepth { get => Snow.Depth; set => Snow.Depth = value; }
+
     /// <summary>Someone else changed the weather (the multiplayer mod): 0 clear, 1 rain, 2 snow, and its settings.</summary>
     public static void OnWeather(int kind, WeatherOptions options = null) => Weather.Set((Kind)Mathf.Clamp(kind, 0, 2), local: false, options);
 

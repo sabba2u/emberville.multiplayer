@@ -307,7 +307,12 @@ internal static class Delve
         SpriteRenderer glow;
         const float Radius = 0.9f, Hold = 0.8f;
 
-        void Start() => glow = GetComponentInChildren<SpriteRenderer>();
+        void Start()
+        {
+            glow = GetComponentInChildren<SpriteRenderer>();
+            // (now the floor is live: over any rug or carpet lying under it, still under what stands there)
+            if (glow && Kind != PadKind.Entrance && Kind != PadKind.Arena) OverFlatGround(glow, transform.position);
+        }
 
         void Update()
         {

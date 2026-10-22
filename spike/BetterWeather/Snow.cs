@@ -52,6 +52,8 @@ internal static class Snow
     public static int Covered => cells.Count(c => c.Value.Stage > 0);
     /// <summary>How far toward full cover the map is (0..1): for the caps on trees and the rest.</summary>
     internal static float Amount => Mathf.Clamp01(depth / Full);
+    /// <summary>How much has settled (seconds of snowing): sent to a player who joins, so their ground matches.</summary>
+    internal static float Depth { get => depth; set => depth = Mathf.Clamp(value, 0f, Full); }
 
     /// <summary>Just arrived in a scene: everything at once, every frame, for a few seconds (the snow's already
     /// there when you see the place, not popping in after).</summary>

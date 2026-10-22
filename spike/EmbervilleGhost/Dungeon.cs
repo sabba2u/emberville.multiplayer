@@ -220,8 +220,9 @@ internal static class Dungeon
                 var undo = Sprawl.Apply(settings, where.Floor > 0 ? Delve.SprawlLevel(where.Floor) : 0);
                 DungeonModel model;
                 Loading.Stage("Shaping the floor", 0.05f, 0.4f, creep: true);   // (one long step: the bar creeps meanwhile)
+                GenRandom.Begin(genSeed);   // (its steps that roll Unity's own random number: from the seed too)
                 try { model = await settings.CreateDungeon(ctx, Plugin.destroyCancellationToken); }
-                finally { undo(); }
+                finally { undo(); GenRandom.End(); }
                 if (model == null) throw new Exception("the generator gave up (no layout)");
                 render = model.GetRender(ctx.RNG);
                 renderKey = (settings.name, genSeed);
@@ -379,7 +380,12 @@ internal static class Dungeon
             var c = UnityEngine.Object.Instantiate(prefab, rooms);
             c.transform.position = Origin + new Vector3(pos.x * chunkSize.x, pos.y * chunkSize.y, 0f);
             c.Position = pos;
-            c.AfterInScene();
+            // the room's props (its RandomAsset spots: tables, barrels, crates and their nudges) roll Unity's own
+            // random number: seeded from the floor and the room's place, the same props on every game
+            var was = UnityEngine.Random.state;
+            UnityEngine.Random.InitState(unchecked(Delve.SeedOf(where) * 486187739 + where.Region * 92821 + pos.x * 73856093 ^ pos.y * 19349663));
+            try { c.AfterInScene(); }
+            finally { UnityEngine.Random.state = was; }
             chunks.Add(c);
             return c;
         }
@@ -1149,5 +1155,53 @@ internal static class Dungeon
     public static void Command()
     {
         if (Active) Leave(); else EnterMain();
+    }
+}
+
+
+/// <summary>
+/// The same floor on every game: most of the game's dungeon generator rolls the seeded number it's given, but a few of
+/// its steps roll Unity's own random number (which room fills a spot first, side doors' barriers, the entrance and
+/// exit, which far room starts a path). While a floor is generated, those steps get a random stream of their own,
+/// started from the floor's seed and swapped in only while each one runs, so nothing else that rolls in between
+/// (a flickering light, a creature) shifts it.
+/// </summary>
+[HarmonyPatch]
+internal static class GenRandom
+{
+    static bool on;
+    static UnityEngine.Random.State state;
+
+    public static void Begin(int seed)
+    {
+        var was = UnityEngine.Random.state;
+        UnityEngine.Random.InitState(unchecked(seed * 1103515245 + 12345));
+        state = UnityEngine.Random.state;
+        UnityEngine.Random.state = was;
+        on = true;
+    }
+
+    public static void End() => on = false;
+
+    static System.Collections.Generic.IEnumerable<System.Reflection.MethodBase> TargetMethods()
+    {
+        yield return AccessTools.Method(typeof(UniformNeighborSelection), nameof(UniformNeighborSelection.Select));
+        yield return AccessTools.Method(typeof(RandomNeighborSelection), nameof(RandomNeighborSelection.Select));
+        yield return AccessTools.Method(typeof(ConnectChunksStep), nameof(ConnectChunksStep.Generate));
+        yield return AccessTools.Method(typeof(DungeonEntranceGeneration), nameof(DungeonEntranceGeneration.Generate));
+        yield return AccessTools.Method(typeof(SelectFromDistanceRange), nameof(SelectFromDistanceRange.SelectStart));
+        yield return AccessTools.Method(typeof(ChunkModel), nameof(ChunkModel.GetRandomAvailableBarrier));
+    }
+
+    static void Prefix(out UnityEngine.Random.State __state)
+    {
+        __state = UnityEngine.Random.state;
+        if (on) UnityEngine.Random.state = state;
+    }
+
+    static void Postfix(UnityEngine.Random.State __state)
+    {
+        if (on) state = UnityEngine.Random.state;
+        UnityEngine.Random.state = __state;
     }
 }

@@ -42,6 +42,7 @@ internal static class WeatherSync
         w.Put((byte)MsgType.WeatherStorm);
         w.Put((byte)kind);
         foreach (var f in (options ?? new BetterWeather.WeatherOptions()).ToArray()) w.Put(f);   // (its own settings: NaN = the sliders')
+        w.Put(BetterWeather.Plugin.SnowDepth);   // (how much snow lies already: a player who joins gets the same ground)
         return w;
     }
 
@@ -59,9 +60,10 @@ internal static class WeatherSync
     public static void OnStorm(NetDataReader r)
     {
         int kind = r.GetByte();
-        var f = new float[5];
+        var f = new float[] { float.NaN, float.NaN, float.NaN, float.NaN, float.NaN };   // (not sent: the sliders', never 0)
         for (int i = 0; i < f.Length && r.AvailableBytes >= 4; i++) f[i] = r.GetFloat();
         BetterWeather.Plugin.OnWeather(kind, BetterWeather.WeatherOptions.FromArray(f));
+        if (r.AvailableBytes >= 4) { float depth = r.GetFloat(); if (!float.IsNaN(depth)) BetterWeather.Plugin.SnowDepth = depth; }
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]

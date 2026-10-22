@@ -59,7 +59,7 @@ internal static class Travel
         var me = LocalPlayer.Get();
         if (!me || !Singleton<GameManager>.HasMain) return false;
         if (Dungeon.Busy) { NetLog.Info("Still building a dungeon floor...", toast: true); return false; }
-        if (to.Scene != LocalPlayer.Scene) { NetLog.Info($"That's in another part of the world ({to.Scene}): can't get there from here yet", toast: true); return false; }
+        if (to.Scene != LocalPlayer.Scene) return Load(to);
         var gm = Singleton<GameManager>.main;
         if (to.InDungeon)
         {
@@ -74,11 +74,78 @@ internal static class Travel
             Dungeon.Enter(to.Where.Settings, to.Where.Seed, to.Where.Region, announce: false, floor: to.Where.Floor);
             return true;
         }
-        var target = AreaNamed(to.Area);
-        if (!target) { NetLog.Warn($"Can't find {to.Area}", toast: true); return false; }
+        // the area whose camera bounds hold the spot (an area's name can be shared; a wrong one leaves the camera behind)
+        var byName = string.IsNullOrEmpty(to.Area) ? null : AreaNamed(to.Area);
+        var target = Holds(byName, to.At) ? byName : AreaAt(to.At) ?? byName;
+        if (!target) { NetLog.Warn($"Can't find {(string.IsNullOrEmpty(to.Area) ? "that place" : to.Area)}", toast: true); return false; }
+        var all = Object.FindObjectsByType<GameArea>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+        NetLog.Info($"Travel: from {LocalPlayer.Area} at {me.transform.position} to {target.name} ({(target.gameObject.activeInHierarchy ? "active" : "inactive")}, " +
+                    $"{all.Count(a => a && a.name == target.name)} areas by that name; the spot {(Holds(target, to.At) ? "inside" : "OUTSIDE")} its camera bounds) at {to.At}" +
+                    $"; areas holding the spot: {string.Join(", ", all.Where(a => Holds(a, to.At)).Select(a => a.name))}", toast: false);
         if (Dungeon.Active) Dungeon.LeaveTo(to.At, target, to.Scene);
         else gm.TeleportPlayerFade(to.At, facing, target, target.CameraConfiner).Forget();
         return true;
+    }
+
+    /// <summary>The area whose camera bounds hold this spot (when we only know where, not the area's name).</summary>
+    static GameArea AreaAt(Vector3 at) =>
+        Object.FindObjectsByType<GameArea>(FindObjectsInactive.Include, FindObjectsSortMode.None).FirstOrDefault(a => Holds(a, at));
+
+    /// <summary>Is the spot inside this area's camera bounds? (An area you're not in is switched off, and a switched-off
+    /// collider answers no to everything: its shape is checked by hand then.)</summary>
+    public static bool Holds(GameArea a, Vector3 at)
+    {
+        var c = a ? a.CameraConfiner : null;
+        if (!c) return false;
+        if (c.enabled && c.gameObject.activeInHierarchy) return c.OverlapPoint(at);
+        var local = (UnityEngine.Vector2)c.transform.InverseTransformPoint(at) - c.offset;
+        switch (c)
+        {
+            case PolygonCollider2D poly:
+                for (int i = 0; i < poly.pathCount; i++) if (Inside(poly.GetPath(i), local)) return true;
+                return false;
+            case BoxCollider2D box:
+                return Mathf.Abs(local.x) <= box.size.x / 2f && Mathf.Abs(local.y) <= box.size.y / 2f;
+            default:
+                return false;
+        }
+    }
+
+    static bool Inside(UnityEngine.Vector2[] poly, UnityEngine.Vector2 p)
+    {
+        bool inside = false;
+        for (int i = 0, j = poly.Length - 1; i < poly.Length; j = i++)
+            if ((poly[i].y > p.y) != (poly[j].y > p.y) && p.x < (poly[j].x - poly[i].x) * (p.y - poly[i].y) / (poly[j].y - poly[i].y) + poly[i].x)
+                inside = !inside;
+        return inside;
+    }
+
+    // ---- another scene: the game's own loading, then the spot ----
+
+    static Spot? pending;
+    static float pendingSince;
+
+    /// <summary>Into another scene (the game's loading screen), then on to the spot once we're standing in it.</summary>
+    static bool Load(Spot to)
+    {
+        if (!Singleton<SceneLoader>.HasMain) { NetLog.Warn("Can't change scenes from here", toast: true); return false; }
+        pending = to;
+        pendingSince = Time.unscaledTime;
+        Singleton<SceneLoader>.main.CallScene(to.Scene, null).Forget();
+        NetLog.Info($"Travelling to {to.Scene}...", toast: true);
+        return true;
+    }
+
+    /// <summary>Every frame: arrived in the scene we were going to? Then to the spot itself.</summary>
+    public static void Tick()
+    {
+        if (!(pending is Spot to)) return;
+        if (Time.unscaledTime - pendingSince > 60f) { pending = null; return; }   // (it never got there)
+        var me = LocalPlayer.Get();
+        if (!me || LocalPlayer.Scene != to.Scene || !Singleton<GameManager>.HasMain || Singleton<GameManager>.main.CurrentArea == null) return;
+        if (Time.unscaledTime - pendingSince < 1.5f) return;   // (let the scene settle: the player placed, the fade done)
+        pending = null;
+        Go(to);
     }
 
     // ---- /tp and /summon ----
