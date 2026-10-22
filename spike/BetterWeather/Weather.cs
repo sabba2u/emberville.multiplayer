@@ -34,25 +34,46 @@ internal static class Weather
     const float FadeSeconds = 4f, MaxWind = 3.2f;
     static float nextOutsideCheck;
 
-    public static void Set(Kind kind, bool local)
+    /// <summary>This spell of weather's own settings (null: the sliders'), from SetWeather.</summary>
+    public static WeatherOptions Options { get; private set; } = new();
+
+    public static float RainAmount => Options.Amount ?? Plugin.density.Value;
+    public static float SnowAmount => Options.Amount ?? Plugin.snowDensity.Value;
+    public static float RainDarkness => Mathf.Clamp(Options.Darkness ?? Plugin.darkness.Value, 0f, 0.95f);
+    public static float SnowDarkness => Mathf.Clamp(Options.Darkness ?? Plugin.snowDarkness.Value, 0f, 0.95f);
+    public static float Settle => Options.Settle ?? Plugin.snowSettle.Value;
+    public static float LightningEvery => Options.LightningEvery ?? Plugin.lightningEvery.Value;
+    public static float WindScale => Options.Wind ?? 1f;
+
+    public static void Set(Kind kind, bool local, WeatherOptions options = null)
     {
-        if (Now == kind) return;
+        options ??= new WeatherOptions();
+        if (Now == kind && options.Same(Options)) return;
         Now = kind;
-        Log.Info($"Better Weather: {kind.ToString().ToLowerInvariant()}{(local ? "" : " (from another player)")}");
-        if (local) Hooks.SendWeather((int)kind);
+        Options = options;
+        Log.Info($"Better Weather: {kind.ToString().ToLowerInvariant()}{(options.Any ? " " + options : "")}{(local ? "" : " (from another player)")}");
+        if (local) Hooks.SendWeather((int)kind, options);
     }
+
+    static bool hooked;
 
     public static void Tick()
     {
+        if (!hooked) { hooked = true; SceneManager.sceneLoaded += (_, _) => nextOutsideCheck = 0f; }
         float dt = Time.unscaledDeltaTime;
         RainStrength = Mathf.MoveTowards(RainStrength, Now == Kind.Rain ? 1f : 0f, dt / FadeSeconds);
         SnowStrength = Mathf.MoveTowards(SnowStrength, Now == Kind.Snow ? 1f : 0f, dt / FadeSeconds);
-        if (Time.unscaledTime >= nextOutsideCheck) { nextOutsideCheck = Time.unscaledTime + 0.5f; Outside = IsOutside(); }
+        if (Time.unscaledTime >= nextOutsideCheck)
+        {
+            Outside = IsOutside();
+            // (until the player's in the new scene, every frame: then the snow and the sky are there from the start)
+            nextOutsideCheck = Time.unscaledTime + (Singleton<GameManager>.HasMain && Singleton<GameManager>.main.player ? 0.5f : 0f);
+        }
         double t = (DateTime.UtcNow - new DateTime(2026, 1, 1)).TotalSeconds;
         float slow = Mathf.PerlinNoise((float)(t * 0.03 % 10000.0), 0.37f) * 2f - 1f;          // the prevailing wind, drifting
         float gust = Mathf.PerlinNoise((float)(t * 0.35 % 10000.0), 5.1f);                     // gusts
         gust = Mathf.Max(0f, gust - 0.55f) * 2.2f;                                             // (mostly calm, now and then a push)
-        Wind = (slow + Mathf.Sign(slow) * gust) * MaxWind;
+        Wind = (slow + Mathf.Sign(slow) * gust) * MaxWind * WindScale;
         Rain.Tick(RainHere);
         Lightning.Tick(RainHere);
         Snow.Tick(SnowHere, Outside);
@@ -74,6 +95,7 @@ internal static class Weather
         ImGui.SameLine(); if (ImGui.RadioButton("Rain storm  (/rain)", ref k, 1)) Set(Kind.Rain, local: true);
         ImGui.SameLine(); if (ImGui.RadioButton("Snow  (/snow)", ref k, 2)) Set(Kind.Snow, local: true);
         ImGui.TextDisabled(Outside ? (Here > 0f ? $"Out in it: {Here * 100f:0}%" : "Outside: clear") : "Inside here: nothing falls (outside is " + Plugin.outdoors.Value.Replace(",", ", ") + ")");
+        if (Options.Any) ImGui.TextColored(new ImGuiNET.Vector4(1f, 0.8f, 0.4f, 1f), $"This weather has its own settings ({Options}): the sliders count for what it leaves out");
         float d = Plugin.density.Value;
         if (ImGui.SliderFloat("Rain drops (fewer / more)", ref d, 0.1f, 4f, "x%.1f")) Plugin.density.Value = d;
         float f = Plugin.snowDensity.Value;

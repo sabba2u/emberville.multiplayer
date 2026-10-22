@@ -113,9 +113,15 @@ internal static class Chat
     }
 
     /// <summary>Chat commands. True = it was one (not sent as chat).</summary>
+    /// <summary>A chat command from elsewhere (an NPC's "command ...", the Api): as if typed after "/".</summary>
+    internal static bool Run(string cmd) => Command((cmd ?? "").Trim());
+
     static bool Command(string cmd)
     {
         if (cmd.StartsWith("trade")) { Trade.InviteByName(cmd.Substring(5)); return true; }
+        if (cmd == "tp" || cmd.StartsWith("tp ")) { Travel.TeleportTo(Travel.Find(cmd.Length > 2 ? cmd.Substring(3) : "")); return true; }
+        if (cmd == "summon all") { Travel.SummonAll(); return true; }
+        if (cmd == "summon" || cmd.StartsWith("summon ")) { Travel.Summon(Travel.Find(cmd.Length > 6 ? cmd.Substring(7) : "")); return true; }
         if (Integrations.Command(cmd)) return true;   // /bowlock, /moveattack, /pet, /clucking, /risen (the split-out mods)
         if (cmd == "resources" || cmd.StartsWith("resources ") || cmd == "mats" || cmd.StartsWith("mats "))
         {
@@ -153,7 +159,7 @@ internal static class Chat
             case "help":
             case "?":
                 System("/sleep: ready to skip to morning (everyone must)   /estate: unlock building on your estate (host)");
-                System("/devmode: the game's developer tools on/off   /devpanel: open the developer panel   /arena: to this scene's test arena   /dungeon: into a generated dungeon (or out)   /walls: show what blocks you (debug)   /noclip: walk through walls   /clucking: a Staff of Clucking   /risen: a Staff of the Risen   /hook: a Hunter's Hook   /respec: your stat points back to spend again   /rain: a rain storm on/off   /snow: snow on/off (Better Weather)   /exitarrow: arrow to the stairs down   /exitpath: a line to them   /nodeath: take no damage   /onehitkill: 500 damage a hit (testing)   /bowlock: arrows home in (off to start; /bowlock 15 = 15° cone)   /moveattack: move while attacking (off to start)");
+                System("/devmode: the game's developer tools on/off   /devpanel: open the developer panel   /arena: to this scene's test arena   /dungeon: into a generated dungeon (or out)   /walls: show what blocks you (debug)   /noclip: walk through walls   /clucking: a Staff of Clucking   /risen: a Staff of the Risen   /hook: a Hunter's Hook   /respec: your stat points back to spend again   /tp name: go to a player   /summon name (or all): bring them to you   /rain: a rain storm on/off   /snow: snow on/off (Better Weather)   /exitarrow: arrow to the stairs down   /exitpath: a line to them   /nodeath: take no damage   /onehitkill: 500 damage a hit (testing)   /bowlock: arrows home in (off to start; /bowlock 15 = 15° cone)   /moveattack: move while attacking (off to start)");
                 System("/resources (or /resources 250): 100 of every material, and enough for the town's repairs   /repair: fix the nearest broken building");
                 System("/trade P2 (or a name): trade items with someone   /pet on (pets start off), /pet: befriend / call / send home, /pet list, /pet glowbat, /pet name ..., /pet color red");
                 System($"/online (or {OnlinePlayers.KeyName}): who's connected, mute; the host also kicks and bans   X at a chest (Better Chests mod): put in what it already has");

@@ -22,7 +22,7 @@ internal static class Lightning
 
     public static void Tick(float strength)
     {
-        float every = Plugin.lightningEvery.Value;
+        float every = Weather.LightningEvery;
         if (strength >= 0.8f && every > 0f)
         {
             if (next < 0f) next = Time.time + Random.Range(every * 0.4f, every * 1.2f);

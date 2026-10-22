@@ -158,6 +158,18 @@ internal static class Dungeon
         Enter(main.name, seed, 0);
     }
 
+    /// <summary>Arrive at this spot next time a floor is built (the town portal's far end), not its usual arrival.</summary>
+    internal static void ArriveNextAt(Vector3 at) => placeAt = at;
+    static Vector3? placeAt;
+
+    /// <summary>Leave, but to this spot (the town portal's town end), not back where you came in.</summary>
+    internal static void LeaveTo(Vector3 at, GameArea to, string scene)
+    {
+        if (!Active || busy || !to) return;
+        returnPos = at; returnArea = to; returnScene = scene;
+        Leave();
+    }
+
     public static void Leave()
     {
         if (!Active || busy) return;
@@ -230,6 +242,7 @@ internal static class Dungeon
             { at = tp.DestPosition; dir = tp.SpawnDirection; }
             else if (built.entry) { at = built.entry.DestPosition; dir = built.entry.SpawnDirection; }
             if (where.Floor > 0) at = Delve.SetUpFloor(where, at);   // the descent: arrival, stairs down, the way home
+            if (placeAt is Vector3 there) { at = there; dir = Direction.Down; placeAt = null; }   // (through a town portal)
             DungeonLoot.Place(root, where, genSeed, at);   // chests
             Loading.Stage("Lighting the torches", 1f, 1f);
             await UniTask.Delay(250, ignoreTimeScale: true);
@@ -251,6 +264,7 @@ internal static class Dungeon
         }
         catch (Exception e)
         {
+            placeAt = null;
             Loading.End();
             status = "Failed: " + e.Message;
             NetLog.Warn($"Dungeon: couldn't build it: {e.Message}", toast: true);

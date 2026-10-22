@@ -73,7 +73,7 @@ internal static class Integrations
         BetterNPCsAndQuests.Hooks.Command = cmd =>
         {
             if (string.Equals(cmd?.Trim(), "respec", System.StringComparison.OrdinalIgnoreCase)) { Respec.Run(); return true; }
-            return others(cmd);
+            return others(cmd) || Chat.Run(cmd);   // (then any of our chat commands: /tp, /summon, /dungeon...)
         };
     }
 

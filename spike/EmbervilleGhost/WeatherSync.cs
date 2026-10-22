@@ -25,7 +25,7 @@ internal static class WeatherSync
     {
         BetterWeather.Hooks.Say = Chat.System;
         BetterWeather.Hooks.Underground = () => Dungeon.Active;
-        BetterWeather.Hooks.SendWeather = kind => { if (Up) Plugin.SendToAll(Storm(kind), DeliveryMethod.ReliableOrdered); };
+        BetterWeather.Hooks.SendWeather = (kind, options) => { if (Up) Plugin.SendToAll(Storm(kind, options), DeliveryMethod.ReliableOrdered); };
         BetterWeather.Hooks.SendStrike = at =>
         {
             if (!Up) return;
@@ -36,11 +36,12 @@ internal static class WeatherSync
         };
     }
 
-    static NetDataWriter Storm(int kind)
+    static NetDataWriter Storm(int kind, BetterWeather.WeatherOptions options)
     {
         var w = new NetDataWriter();
         w.Put((byte)MsgType.WeatherStorm);
         w.Put((byte)kind);
+        foreach (var f in (options ?? new BetterWeather.WeatherOptions()).ToArray()) w.Put(f);   // (its own settings: NaN = the sliders')
         return w;
     }
 
@@ -51,11 +52,17 @@ internal static class WeatherSync
         if (Plugin == null || !Plugin.IsHost) { sentTo.Clear(); return; }
         var ids = Plugin.Players.Select(p => p.Id).ToList();
         sentTo.RemoveWhere(id => !ids.Contains(id));
-        foreach (var id in ids) if (sentTo.Add(id)) Plugin.SendTo(id, Storm(BetterWeather.Plugin.WeatherNow));
+        foreach (var id in ids) if (sentTo.Add(id)) Plugin.SendTo(id, Storm(BetterWeather.Plugin.WeatherNow, BetterWeather.Plugin.CurrentOptions));
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
-    public static void OnStorm(NetDataReader r) => BetterWeather.Plugin.OnWeather(r.GetByte());
+    public static void OnStorm(NetDataReader r)
+    {
+        int kind = r.GetByte();
+        var f = new float[5];
+        for (int i = 0; i < f.Length && r.AvailableBytes >= 4; i++) f[i] = r.GetFloat();
+        BetterWeather.Plugin.OnWeather(kind, BetterWeather.WeatherOptions.FromArray(f));
+    }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
     public static void OnStrike(NetDataReader r) => BetterWeather.Plugin.OnStrike(new Vector3(r.GetFloat(), r.GetFloat(), 0f));

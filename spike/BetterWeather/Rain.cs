@@ -48,7 +48,7 @@ internal static class Rain
         float now = Time.time, dt = Time.deltaTime;
         // new drops: enough to keep (Medium x density x strength) in the air
         float avgLife = 0.375f;
-        owed += Medium * Plugin.density.Value * strength / avgLife * dt;
+        owed += Medium * Weather.RainAmount * strength / avgLife * dt;
         float h = cam.orthographicSize, w = h * cam.aspect;
         var c = cam.transform.position;
         while (owed >= 1f)

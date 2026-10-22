@@ -308,7 +308,7 @@ internal static class Hud
 
         // Menus, the journal, dialogue, cutscenes: the game covers the world, so no name tags / labels on top of it.
         UpdateGameBubbles();
-        if (!PlayerStatusUtil.LocalBusy) { if (!PanelUp) DrawTeammates(); Pings.Draw(); Delve.Draw(); DungeonInvite.Draw(); Rory.Draw(); Integrations.DrawHud(); TeamHud.Draw(); }   // (the party strip last: over the names in the world)
+        if (!PlayerStatusUtil.LocalBusy) { if (!PanelUp) DrawTeammates(); Pings.Draw(); Delve.Draw(); DungeonInvite.Draw(); Rory.Draw(); Integrations.DrawHud(); TownPortal.Draw(); TeamHud.Draw(); }   // (the party strip last: over the names in the world)
         MouseWalk.Draw();
         MapMates.Draw();   // the world map is a menu: not hidden with the rest
         Chat.Draw();

@@ -127,6 +127,8 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         NpcSync.Plugin = this;
         NpcLooks.Plugin = this;
         WeatherSync.Plugin = this;
+        TownPortal.Plugin = this;
+        Travel.Plugin = this;
         Chat.Plugin = this;
         HookSounds.Init(Config);
         Chat.Lift = Config.Bind("Chat", "HeightAboveBottom", 0.25f, "Chat's bottom edge, as a fraction of the window height from the bottom (clears the game's health bar and hotbar)");
@@ -212,7 +214,8 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         ArenaTraps.Tick();   // the arena's traps: in step with whoever switched them
         Rory.Tick();
         NpcLooks.Tick();   // the host's NPCs (and Rory) look the same on every game
-        GearDye.Tick();   // dyed gear (and the Hunter's Hook's yellow on every armour piece)
+        GearDye.Tick();
+        TownPortal.Tick();   // the town portal button, its channel, everyone's portal pairs   // dyed gear (and the Hunter's Hook's yellow on every armour piece)
         Dungeon.Tick();      // creatures off the navigation mesh put back on it
         DungeonMap.Tick();   // the dungeon minimap (top left; ~ hides it)
         NoClip.Tick();       // /noclip stays on through deaths and respawns
@@ -1152,6 +1155,9 @@ public class Plugin : BaseUnityPlugin, ITransportListener
             case MsgType.HookText: HookNet.OnText(reader, from); break;
             case MsgType.HookPull: HookNet.OnPull(reader, from); break;
             case MsgType.HookBlood: HookNet.OnBlood(reader, from); break;
+            case MsgType.TownPortal: TownPortal.OnMessage(reader); break;
+            case MsgType.TpAsk: Travel.OnTpAsk(from); break;
+            case MsgType.SummonTo: Travel.OnSummon(reader); break;
             case MsgType.WeatherStorm: if (Integrations.HasWeather) WeatherSync.OnStorm(reader); break;
             case MsgType.WeatherStrike: if (Integrations.HasWeather) WeatherSync.OnStrike(reader); break;
             case MsgType.Summons: if (Integrations.HasPets) SummonSync.OnSummons(reader, from); break;
@@ -1354,7 +1360,10 @@ internal enum MsgType : byte
     NpcAsk = 150,       // guest -> host, reliable: an action ("start q", "set $x to 1"), "handed q step" (turned in from their own bag, for that step), "event kill Mob_Glowbat"
     NpcLook = 153,
     HookBlood = 154,
-    WeatherStorm = 155, // whoever changed it -> everyone (host -> each player who joins), reliable: kind (0 clear, 1 rain, 2 snow: Better Weather)
+    WeatherStorm = 155, // whoever changed it -> everyone (host -> each player who joins), reliable: kind (0 clear, 1 rain, 2 snow: Better Weather), its own settings (amount, darkness, settle, lightning every, wind: NaN = the sliders')
+    TpAsk = 158,        // player -> the player they want to go to, reliable: (nothing; they answer with SummonTo)
+    SummonTo = 159,     // player -> the player they bring over, reliable: their name, Travel.Spot (scene, area, dungeon floor, x, y)
+    TownPortal = 157,   // its owner -> everyone (host -> each player who joins), reliable: owner, name, scene, area, in a dungeon?, settings, seed, region, floor, x, y (their town portal pair)
     WeatherStrike = 156, // the game it struck on -> their place, reliable unordered: x, y (a lightning strike, to show if in view)    // thrower -> their place, reliable unordered: x, y, direction x, y, sorting layer id (blood where the hook bit)      // host -> everyone (and each player who joins), reliable: count x (npc id, LookSync look): how the host's NPCs and Rory look
     NpcWander = 151,    // host -> their place, reliable: npc id, x, y (where that NPC walks to next / stops)
     BuiltList = 152,    // host -> a player who joined, reliable: everything built anywhere (B), BuildList's saved text

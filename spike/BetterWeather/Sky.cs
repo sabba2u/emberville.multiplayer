@@ -17,6 +17,8 @@ internal static class Sky
     static float flash;   // 0..1, decays
     static float here, share = 1f;   // how stormy the sky is (0..1); rain's share of it (1 rain, 0 snow)
     static Kind kind = Kind.Rain;
+    static bool hooked;
+    static float snapUntil;
 
     static readonly Color StormTint = new Color(0.78f, 0.84f, 1f);   // (blue-grey, before darkening)
     static readonly Color SnowTint = new Color(0.9f, 0.94f, 1f);
@@ -29,7 +31,9 @@ internal static class Sky
         flash = Mathf.MoveTowards(flash, 0f, Time.unscaledDeltaTime * 3.5f);
         // the sky turns quicker than the rain builds (about 1.5 s): dark almost as soon as it starts, light again as fast
         bool falling = Weather.Outside && Weather.Now != Kind.Clear;
-        here = Mathf.MoveTowards(here, falling ? 1f : 0f, Time.unscaledDeltaTime / 1.5f);
+        if (!hooked) { hooked = true; UnityEngine.SceneManagement.SceneManager.sceneLoaded += (_, _) => snapUntil = Time.unscaledTime + 3f; }
+        // (just arrived somewhere: straight to it, no fading in)
+        here = Time.unscaledTime < snapUntil ? (falling ? 1f : 0f) : Mathf.MoveTowards(here, falling ? 1f : 0f, Time.unscaledDeltaTime / 1.5f);
         if (falling) kind = Weather.Now;
         if (here <= 0f && flash <= 0f) { Restore(); return; }
         if (!light) { light = Find(); touched = false; if (!light) return; }
@@ -38,7 +42,7 @@ internal static class Sky
         // rain: blue-grey; snow: a paler, whiter grey; each its own darkness
         share = Mathf.MoveTowards(share, kind == Kind.Snow ? 0f : 1f, Time.unscaledDeltaTime / 1.5f);   // (rain to snow: blended)
         var tint = Color.Lerp(SnowTint, StormTint, share);
-        float dark = Mathf.Lerp(Plugin.snowDarkness.Value, Plugin.darkness.Value, share) * here;
+        float dark = Mathf.Lerp(Weather.SnowDarkness, Weather.RainDarkness, share) * here;
         var c = baseColour * Color.Lerp(Color.white, tint, here) * (1f - dark);
         c = Color.Lerp(c, new Color(1.6f, 1.65f, 1.8f), flash * 0.85f);
         c.a = baseColour.a;

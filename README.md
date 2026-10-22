@@ -1,186 +1,186 @@
 # emberville.multiplayer
 
-Unofficial co-op for **Emberville** (the demo; Unity 6, Mono) as a BepInEx 5 plugin: `spike/EmbervilleGhost`.
-Work in progress. Player downloads are on the [Releases](../../releases) page (**EmbervilleModPack** has everything in one zip); notes and the roadmap are in
-[`todo.md`](todo.md) (top section: "Emberville").
+Unofficial online co-op and a set of gameplay mods for **Emberville** (the demo; Unity 6, Mono), as BepInEx 5 plugins.
+Not made or supported by Cygnus Cross.
 
-## What works
-- **Steam:** host with F9 > **HOST VIA STEAM**: friends join from their Steam friends list (Join Game) or an invite
-  (Insert menu > Invite friends); no IP addresses, no port forwarding (Steam's relay). The mod brings Steamworks.NET
-  and `steam_api64.dll` itself (the demo has no Steam code) and runs as the demo (app 5355880).
-- **Connecting by IP:** host with F9 (shared XP, instanced loot, PvP, shared buffs), join with F10 by IP. The joiner downloads
-  the host's world and brings their own character. If the host leaves, the player who joined first takes over hosting
-  where they stand and the others reconnect to them.
-- **Other players** as real characters: looks, gear, animations, name, health and Kymia bars, what they're doing
-  ("in a chest", "talking"...), status effects, damage numbers and a red flash when they're hit, a speech bubble while
-  they type and what they said.
-- **A party strip** along the top: every player in join order (the same on every screen) with a live portrait of their
-  character's weapon, health and Kymia, status (it moves below a boss's health bar during boss fights). Off-screen teammates get edge arrows with distance; teammates show on the
-  minimap and on the big world map (M).
-- **One shared world:** creatures (controlled by whoever is nearest, kept with whoever is fighting them), bosses (phases,
-  immunity, the spider queen's eggs and hatchlings, webbed players), attacks and spells everyone can see, status effects
-  on hits (burning, poison...), matching gory deaths, drops (dupe-proof), chests, breakables, rocks / ore / trees,
-  doors and levers, key altars / item locks (whoever has the item opens it for everyone), floor buttons (down while
-  anyone stands on one), town repairs, the clock (day and time), story progress (a door one player opens is open for everyone), story cutscenes (whoever sets one off,
-  everyone in the area watches it; someone arriving later skips to how it left the world), every
-  crafting station (cooking pot, campfire, anvil, forge, furnace, sawmill...: the food cooks once, collecting is
-  dupe-proof), chests that stations and farming pull from, farm plots, building and removing on the estate.
-- **Chat** (Enter), death announcements, pings and drawing on the ground (middle mouse).
+- **Download:** the [Releases](../../releases) page: **EmbervilleModPack** has everything in one zip. New builds go up
+  often; everyone playing together needs the same version.
+- **Install:** unzip it into the Emberville Demo folder (Steam > right-click Emberville Demo > Manage > Browse local
+  files), so `winhttp.dll` and the `BepInEx` folder sit next to `Emberville.exe`. To leave a mod out, delete its folder
+  in `BepInEx\plugins`.
+- **Commands and API:** [API.md](API.md) (every chat command, NPC dialogue lines, and C# for other mods).
+- Notes and the roadmap: [`todo.md`](todo.md).
 
-## Companion mods (separate DLLs, each works alone or next to this one)
-- **Better Chests** (`spike/BetterChests`): walk up to a chest and press **X** to put in everything it already holds.
-  "X: quick deposit" shows under a chest's name while you stand at it. With the multiplayer mod installed, X works in
-  co-op too (the area owner's chest, locks, everyone sees the new contents).
-- **Emberville Favourite Weapons** (`spike/EmbervilleFavorites`): hover a weapon in the inventory and press **F5-F8**
-  to put it on that key (the slot then shows the key in gold); F5-F8, a click on the small bar above the menu buttons, or
-  the weapon wheel (hold Left Alt / gamepad LT) wield it. The bar and wheel are made of the game's own HUD slots and show
-  the game's tooltip with the compare against the weapon in hand. Shift+F5: a how-to in the game's tutorial window.
+## Contents
+[Playing together](#playing-together) · [Travel: town portal, /tp, /summon](#travel-town-portal-tp-summon) ·
+[The descent and the boss arena](#the-descent-and-the-boss-arena) · [Weapons and summons](#weapons-and-summons) ·
+[Your character](#your-character) · [Chests and loot](#chests-and-loot) · [Weather](#weather) ·
+[NPCs and quests](#npcs-and-quests) · [Fishing](#fishing) · [Pets](#pets) · [Quality of life](#quality-of-life) ·
+[Keys](#keys) · [Commands](#commands) · [API](#api) · [Secrets](#secrets-the-dev-panel-test-arenas-and-the-estate) ·
+[Build](#build)
 
-## The descent and the boss arena (v0.1.6+)
-- **The descent:** the full game's dungeon generator ships in the demo (its rooms, biomes and caves) without the scene
-  it plays in; the mod builds the levels itself. Up the path from the starting area's door, the **water well** is the
-  way down and the **lamp** across the steps is the boss arena, with **Rory** (an archer; talk to him) between them.
-  The well opens the setup: seed (a number or a word: same seed,
-  same floors), how many floors (or endless), how much stronger each floor's creatures get (health and damage, 100-400%
-  a floor, compounding; presets up to 200% / 300%), the most creatures on a floor, and the layout: **Sprawl** (from the
-  game's own layouts to a maze of branches and loops), spreading out more as you go down, and big open boss floors.
-  The game's loading screen shows while a floor is built; the floor's side doors are sealed (only the stairs and the
-  home pad move you); decorative chests become real ones. Each floor has chests (loot from
-  the game's own items, better deeper down), the stairs down at the far end, a mini-boss guarding them every 5th floor,
-  and a blue pad (or the Leave button at the top) back to where you came in. Co-op: everyone gets the same floors;
-  the others can follow you down from the Insert menu.
-- **Boss arena** (the lamp): a walled floor with six pillars, spike traps and arrow shooters, and a panel to make
-  mini-bosses from the game's creatures (name, colour, size, health, damage). **Boss rush**: 30 bosses one after
-  another, tougher each wave; the spikes join at wave 5, the arrows at wave 10. Loot left on the floor goes when you leave.
-- **Move while attacking** (`/moveattack` or the Insert menu, off to start): melee and magic at full speed, bows and
-  crossbows slower while aiming (60%, `/moveattack 70` sets it).
-- **Better loot shows a green arrow:** a weapon on the ground that hits harder than yours, or armour / gear with
-  better stats than what you're wearing in that slot, gets a bobbing green up arrow (Insert menu to turn off).
-- **Bows aim true and lock on:** arrows from a bow / crossbow leave in exactly the direction you aim (the game snaps
-  them to up / right / down / left), and curve onto a creature within 20° of your aim (`/bowlock 15` sets the cone,
-  `/bowlock` or the Insert menu turns lock-on on, it starts off; `[Combat]` in the config: angle, range, true aim).
-- **Tools:** `/uidump` (or the Insert menu) writes the game's on-screen UI and its sprites to `BepInEx/UIDumps`;
-  diagnostics: a session log on the host (`BepInEx/SessionLogs`) and a mismatch checker between players.
+## Playing together
+- **Steam (easiest):** host with **F9 > Host via Steam**; friends join from their Steam friends list (right-click >
+  Join Game) or an invite (Insert menu > Invite friends). No IP address, no port forwarding (Steam's relay). The mod
+  brings Steamworks itself (the demo has none).
+- **By IP:** host with **F9**, friends press **F10** and type the host's IP. Over the internet the host has to forward
+  **UDP port 9060** on their router; on the same home network nothing's needed. If the host leaves, the player who
+  joined first takes over and the others reconnect to them.
+- **Other players** are real characters: looks, gear and dyes, animations, name, health and Kymia bars, what they're
+  doing, status effects, damage numbers, a speech bubble while they type.
+- **One shared world:** creatures (run by whoever is nearest), bosses and their phases, attacks and spells, gory deaths,
+  drops (dupe-proof), chests, breakables, ore and trees, doors, levers, key altars, floor buttons, town repairs, the
+  clock, story progress and cutscenes, every crafting station, farm plots, building on the estate, NPCs (everyone sees
+  the host's NPCs looking the same), the weather.
+- **Party strip** (top): every player with health and Kymia; live character portraits (Insert > Online / Hosting) or
+  their weapon. Right-click a card: teleport, trade, mute. Off-screen teammates get edge arrows; teammates show on the
+  minimap and the world map (M).
+- **Online Players (O):** who's online and where; teleport to them, trade, mute; the host can kick and ban.
+- **Trading:** Online Players > Trade, or `/trade <name>`: drag items into your offer, both tick Ready, the swap happens
+  once both agree on exactly the same two offers.
+- **Chat** (Enter), pings and drawing on the ground (middle mouse), death announcements.
+- **Dungeon invites:** when a teammate goes into a dungeon or down a floor of the descent, a card offers Join.
+
+## Travel: town portal, /tp, /summon
+- **Town Portal** (button on the right edge, half way down): hold still 3 seconds (moving or being hit stops it). A
+  swirling portal opens where you stand, its twin opens in town (the demo: by the starting door), and you're taken home.
+  Step into either end, you or your friends, to go to the other; on a dungeon or descent floor it builds that floor
+  again and puts you at the portal. Each player has one pair, with their name over it, until they open a new one.
+- **`/tp <name>`:** go to a player, even onto their dungeon floor. **`/summon <name>`** or **`/summon all`:** bring
+  them to you, now.
+
+## The descent and the boss arena
+- **The descent:** the full game's dungeon generator ships in the demo; the mod builds the levels. Up the path from the
+  starting door, the **water well** is the way down (and the **lamp** the boss arena, with **Rory** the archer between).
+  Set a seed, how many floors, how much stronger each floor gets, how many creatures, and the layout (Sprawl). Each
+  floor has chests (better loot deeper), the stairs at the far end, a mini-boss guardian every 5th floor (now and then
+  it drops a staff), a minimap, and a blue pad or the Leave button back to where you came in. Everyone gets the same
+  floors.
+- **Boss arena** (the lamp): a walled floor with pillars, spike traps and arrow shooters, and a panel to make mini-bosses
+  from the game's creatures (name, colour, size, health, damage). **Boss rush:** 30 bosses, tougher each wave.
+
+## Weapons and summons
+Type the command in chat to get one.
+- **Staff of Clucking (`/clucking`):** right-click summons a battle chicken (a tenth of your Kymia); left-click is a
+  normal attack.
+- **Staff of the Risen (`/risen`):** creatures that die near you glow green; right-click near one raises it to fight
+  for you (a fifth of your Kymia).
+- With either staff, **middle-click** sends your chickens or risen there (they path around walls and water). Both
+  staffs level up as you use them; summons go out in their creature's gore burst.
+- **Hunter's Hook (`/hook`):** right-click throws it (a sixth of your Kymia): it drags a creature to your feet, stunned
+  (big guardians pull you to them instead), with a spray of blood. While it's in your hand your whole outfit turns
+  Scorpion yellow.
+
+## Your character
+- **Respec:** `/respec`, or ask Ellie: every stat point back to spend again (level, XP and gear kept).
+- **Dye your gear:** right-click an equipped item in your inventory's gear slots, pick one of 12 colours, **Dye** (or
+  Cancel). The dye stays with the item and your friends see it.
+- **Favourite weapons:** hover a weapon in your inventory and press **F5-F8** to put it on that key; F5-F8 wield it
+  (the boxes sit between the two skulls on the HUD), or hold **Left Alt** (gamepad LT) for a weapon wheel.
+- **Bestiary (N):** every creature you've killed, with its stats and your kill count.
+- **Better Combat:** move while attacking (`/moveattack`), bows that aim in any direction and lock on (`/bowlock`).
+
+## Chests and loot
+- **F** on an item marks it a favourite (a heart on its slot): favourites never get swept into chests.
+- At a chest: **X** puts in everything the chest already holds; **V** customizes it (name, colour, and what it takes:
+  items it refuses grey out in your bag).
+- **Search boxes** above your bag and an open chest.
+- **Better Looting:** the magnet picks up items near you (Insert menu: range and kinds), and a green arrow marks better
+  gear.
+
+## Weather
+Insert > **Weather** (Clear / Rain storm / Snow), or `/rain`, `/snow`, `/clear`. One weather for everyone; outside only.
+- **Rain:** pixel rain across the screen, slanted by a shifting, gusting wind; splashes on the ground (under trees and
+  props), rings on open water; lightning strikes now and then with a flash; the sky goes dark.
+- **Snow:** drifting flakes; the ground whitens over a few minutes (32 stages, the first see-through, thinning toward
+  water and cliffs, in several shades of white), trees and other things get snow caps, you leave footprints; it slowly
+  melts when it stops.
+- **Sliders:** rain drops, snowflakes, how fast snow settles, how dark the rain / snow sky gets, lightning. Other mods
+  and NPC scripts can set the weather with settings of its own ([API.md](API.md)).
+
+## NPCs and quests
+- **Ellie** (in the starting area): a two-part quest (wood, then a sword) with a reward; she'll give you a chicken or
+  either staff, and can respec you. Her portrait in the dialogue window is her, live.
+- **Make your own:** NPCs, dialogue (Twine `.twee`) and quests from text files: see `README-BetterNPCsAndQuests.txt` in
+  the download. Dialogue can run any chat command (`(trigger: "command snow on")`).
+- In co-op everyone shares the host's NPCs and story.
+
+## Fishing
+Every catch brings something up (food, materials, sometimes rare gear), and you can fish wherever there are fish
+shadows in the water, the starting area too. Cast, wait for the bite, left-click quickly.
+
+## Pets
+`/pet on`, then `/pet` befriends a pet that follows you, fights with you and levels up. 13 kinds (Chicken, Glowbat,
+Lilshrooms, Lil Ticks, Lil Bombers, Spiderling, Bug Fuzz): `/pet list`, `/pet glowbat`, `/pet name ...`,
+`/pet color red`. Everyone sees your pet.
 
 ## Quality of life
-- **Mouse walking:** hold the mouse side (thumb) button and your character walks toward the mouse (closer = slower,
-  rings show it); a quick click walks to that spot. Walls still block, WASD / pad always win. Insert menu: on / off,
-  which button (Back, Forward, or Middle).
-- **Magnet:** Insert menu > Magnet picks up items near you by themselves (range 1-8, per category: materials, food,
-  coins, weapons, armour, gear, placeables, key items, other), only what fits in your bag. Off to start with.
-- **Online Players screen (O):** who's connected, where, health, ping, what they're doing; mute anyone (just for you);
-  trade; the host can kick and ban (a second click confirms; bans follow a player ID, not the name; unban list).
-- **Sleep vote:** the demo has no beds, so everyone types `/sleep` and the clock skips to 6:00 the next morning.
-- **Team buffs:** a buff you cast on yourself (Swift Foot...) also lands on teammates within 8 m (host option).
-- **Keep playing after the demo:** the demo's "Thank you for playing" screen and freeze (after Gumu's cutscene in Town)
-  are skipped, so you can keep walking around Town, the estate and the mansion (Insert menu to turn it back on).
-- **Characters are safe:** before joining from inside a game, the character files involved are backed up to
-  `Saves/EmbervilleGhost_Backups` (last 10 kept); a character open in another copy of the game can't be picked twice.
-- **"Cohh is the authority of this map"** (top right): whose game runs the enemies, chests and drops of the area you're
-  in (the `[Host]` / `[Client]` tags under the feet say who hosts the session). The status line (top left: version,
-  connection, fps) starts hidden: **Delete** shows it.
-- **Heal / Kymia popups** for teammates, a **Kymia bar** under their health bar, the game's own bordered boxes for
-  messages ("you were kicked") and trade invites.
+- **Mouse walking:** hold the mouse side button to walk toward the mouse; a click walks there.
+- **Sleep vote:** everyone types `/sleep` and the clock skips to the morning.
+- **Team buffs:** a buff you cast on yourself also lands on teammates near you (host option).
+- **Keep playing after the demo:** its "Thank you for playing" stop is skipped.
+- **Your characters are safe:** before joining, the character files are backed up (`Saves/EmbervilleGhost_Backups`).
+- **Typing anywhere** (chat, a chest's name, search boxes) keeps the mods' hotkeys out of it.
+- **Title screen:** Better & Online under the Emberville logo; the Next Fest popup is skipped.
 
-## Trading with friends
-Online Players screen > **Trade**, or `/trade P2` (or their name). The other player accepts (in the game's own yes/no
-box when it can show one). The trade window shows your bag with the real item icons; drag (or click) up to 8 items into
-your offer, click one to take it back; hover anything for its tooltip. Tick **Ready to trade** when you're happy with
-**their** offer: any change on either side (or an offered item leaving your bag) unticks both, and the swap happens only
-when both are ticked on the offers as they are. Key items and equipped gear can't be traded. Nothing is lost or
-duplicated: each game swaps its own side once both agree on exactly the same two offers.
-
-## Pets (early)
-Pets start **off**: `/pet on` (or the Insert menu checkbox) turns them on. Then `/pet` befriends a pet that follows you around, fights with you and levels up:
-- **13 kinds**, the demo's small creatures: Chicken, **Glowbat** (flies, hovers with a bob), Pink / Green / Gray
-  Lilshroom, Blue / Green / Purple Lil Tick, Red / Green / Salmon Lil Bomber, Spiderling, Bug Fuzz. (No dog or cat in
-  the demo's art.) `/pet list`, `/pet glowbat` to switch: name, level and colour stay.
-- **Immune** to everything (nothing can hit it). It attacks enemies close to you through the game's own damage, so its
-  hits count as yours (kills give you the XP, works in multiplayer).
-- **XP and levels:** +1 per hit, +10 per kill; more damage each level; a name tag with an XP bar.
-- **Names:** each kind has its own default (Clucky the chicken, Fang the Glowbat, ...); type your own in the Insert
-  menu's Name box or `/pet name ...` (a name you picked stays when you switch kinds).
-- **Colours:** `/pet color red` (or any `#RRGGBB`) or the colour picker in the Insert menu; everyone sees your pet in
-  your colour, following your character on their screen.
-- A kind can be made once the game has that creature loaded (most are; `/pet scan` shows what's in memory here).
-  Early: it walks through walls and the attack range / animations still need tuning.
-
-## Commands and keys
-
-| Chat command | What it does |
+## Keys
+| Key | What |
 |---|---|
-| `/help` | this list in chat |
-| `/online` (`/players`, `/party`) | the Online Players screen |
-| `/trade P2` (or a name) | ask someone to trade |
-| `/sleep` | ready to skip to the morning (everyone has to) |
-| `/pet on`, `/pet off` | pets on / off (they start off) |
-| `/pet` | befriend your pet / call it / send it home |
-| `/pet list`, `/pet <kind>` | the pet kinds; switch to one |
-| `/pet name Clucky`, `/pet color red` | rename, recolour |
-| `/pet scan` | which creatures the game has loaded right now |
-| `/estate` | unlock building and repairs on your estate (host); lists the broken buildings here |
-| `/resources` (`/resources 250`) | 100 (or more) of every material, and enough for every repair in the area |
-| `/repair` | repair the nearest broken building (uses the materials, like walking onto it and pressing F) |
-| `/devmode` | the game's hidden developer tools on / off |
-| `/devpanel` | open the developer panel (no numpad needed) |
-| `/arena` | teleport to this scene's test arena |
-| `/dungeon` | into a generated dungeon (the world map's), or back out |
-| `/bowlock`, `/bowlock 15` | bow / crossbow lock-on on / off (off to start with; also in the Insert menu); the cone, degrees either side of your aim |
-| `/moveattack`, `/moveattack 70` | move while attacking on / off (off to start with; also in the Insert menu); the bow aiming speed in % |
-| `/nodeath` | testing: take no damage |
-| `/onehitkill` | testing: your hits do 500 damage |
-| `/uidump` | write the game's on-screen UI and sprites to `BepInEx/UIDumps` |
+| F9 / F10 | host (IP or Steam) / join (again: disconnect) |
+| Insert | the mods' menu (every switch and slider) |
+| Enter | chat (and `/commands`) |
+| O | Online Players |
+| N | Bestiary |
+| F5-F8, hold Left Alt | wield a favourite weapon, weapon wheel |
+| F (on an item) | favourite it (heart) |
+| X / V (at a chest) | put matching items in / customize the chest |
+| Right-click (gear slot) | dye the item |
+| Right-click (staff / hook) | summon, raise, throw |
+| Middle mouse | ping, draw; with a staff: send your summons |
+| Mouse side button | walk toward the mouse |
+| Town Portal button (right edge) | a portal home |
+| Delete | the status line (top left) |
 
-| Key | Mod | | Key | Game (left alone) |
-|---|---|---|---|---|
-| F9 / F10 | host (IP or Steam) / join (again: disconnect) | | Tab | inventory + character |
-| Insert | mod menu | | I / C / P / K / J | inventory, character, classes, masteries, quests |
-| Delete | status line (top left) on / off | | | |
-| Mouse side button | hold: walk toward the mouse; click: walk there | | | |
-| Right-click a party card | teleport / trade / mute | | | |
-| Enter | chat | | M | world map |
-| O | Online Players | | F | interact / pick up |
-| X | (Better Chests) put matching items into the chest | | Q E R T | quick-bar items |
-| F5-F8, Left Alt | (Favourite Weapons) wield a favourite, weapon wheel | | | |
-| Middle mouse | ping (click), draw (hold and drag) | | Space / Shift / Ctrl | dodge / show names / walk |
+## Commands
+The full list is in [API.md](API.md#chat-commands). The main ones: `/tp`, `/summon`, `/trade`, `/online`, `/sleep`,
+`/respec`, `/rain`, `/snow`, `/clear`, `/hook`, `/clucking`, `/risen`, `/pet`, `/dungeon`, `/estate`, `/repair`,
+`/resources`, `/bowlock`, `/moveattack`; testing: `/nodeath`, `/onehitkill`, `/noclip`, `/devmode`, `/devpanel`.
+
+## API
+Other BepInEx mods (and NPC dialogue) can drive these mods; the full reference with examples is in [API.md](API.md).
+- **Multiplayer** (`EmbervilleGhost.Api`): `Command`, `Online`, `Players`, `TeleportTo`, `Summon`, `SummonAll`, `Teleport`.
+- **Weather** (`BetterWeather.Plugin`): `SetWeather(kind)`, `SetWeather(kind, new WeatherOptions { Amount, Darkness,
+  Settle, LightningEvery, Wind })`, `StrikeAt(position)`, `Current`.
+- **Pets and summons** (`BetterPetsAndSummons`): `Plugin.Command`, `Plugin.Rally`, `Plugin.HoldingStaff`, staffs'
+  `Make` / `Give`.
+- **NPCs and quests** (`BetterNPCsAndQuests`): `Events.Raise`, `Plugin.Bodies`; any mod's `Command(string)` /
+  `NpcFlag(string)` is picked up by dialogue.
+- **Chests** (`BetterChests.ChestLooks`): `Set`, `All`, `TakesOf`, `Changed`.
+- **Favourite weapons** (`EmbervilleFavorites.Favorites`): `Wield`, `Find`, `HasKey`, `KeyOf`.
+- **Combat** (`BetterCombat`): `BowAssist.SetAngle`, `BowAssist.Toggle`, `MoveAttack.Command`.
 
 ## Secrets: the dev panel, test arenas and the estate
-- **The secret dev panel:** the demo still contains the developers' own tools, switched off. `/devmode` (or the Insert
-  menu checkbox) switches them back on in every scene: **Ctrl+Shift+Numpad7** opens the developer panel (go to Town,
-  unlock skills and masteries, heal, advance time, player speed...), with Ctrl+Shift held **Numpad+** gives XP and
-  **Numpad-** hurts you, **Numpad1** opens the arena and spawn panel. `/devpanel` opens it without a numpad.
-- **Test arenas:** the developers' fighting arenas (a spawn point and a zone where test monsters appear). The panel's own
-  "Test Arena" button loads a scene the demo doesn't ship, so the Insert menu lists the arenas in the scene you're in and
-  `/arena` teleports you to one; Numpad1 then spawns monster groups there.
-- **The estate (your house / mansion and farm in Town):** building, placing and repairing are behind two story flags
-  the demo never sets. `/estate` or the Insert menu checkbox turns them on (the host decides, everyone gets it), with a
-  "Go to Town" button. Everything built is synced. **Repairing the town:** 11 ruined buildings (Blacksmith, Bar,
-  Mayor, Carpenter...): `/resources`, walk onto a ruin and press F (or `/repair`). The repairer pays, everyone sees
-  it repaired (also the broken portal), and each building saves on its own (the demo gave them all the same save id).
+- **The dev panel:** the demo still has the developers' tools, switched off. `/devmode` switches them on:
+  **Ctrl+Shift+Numpad7** opens the developer panel (go to Town, unlock skills, heal, advance time...), `/devpanel` opens
+  it without a numpad.
+- **Test arenas:** `/arena` teleports you to the scene's test arena; Numpad1 spawns monster groups there.
+- **The estate (your house and farm in Town):** `/estate` (host) unlocks building and repairs. **Repairing the town:**
+  `/resources`, walk onto a ruin and press F (or `/repair`); everyone sees it repaired.
 
 ## Build
-Requirements: .NET SDK, Emberville installed with BepInEx 5.4.23 (copy `winhttp.dll`, `doorstop_config.ini`,
-`.doorstop_version` and `BepInEx/core` into the game folder).
-
+Requirements: .NET SDK, Emberville installed with BepInEx 5.4.23 (`winhttp.dll`, `doorstop_config.ini`,
+`.doorstop_version` and `BepInEx/core` in the game folder).
 ```
 dotnet build spike/EmbervilleGhost -c Release -p:GamePath="<path to Emberville Demo>"
 ```
-The build references the game's own DLLs from `<GamePath>/Emberville_Data/Managed` (not included here) and copies the
-plugin into `<GamePath>/BepInEx/plugins/EmbervilleGhost`. Default `GamePath` is in `EmbervilleGhost.csproj`.
+Each mod is its own project in `spike/` (EmbervilleGhost = multiplayer, EmbervilleFavorites, BetterChests, BetterCombat,
+BetterLooting, BetterPetsAndSummons, BetterFishing, BetterNPCsAndQuests, BetterWeather); a build copies the DLL into the
+game's `BepInEx/plugins`. The game's own DLLs are referenced from `<GamePath>/Emberville_Data/Managed` (not included).
 
-## Release zip (for players)
-`pwsh spike/package-all.ps1` makes the all-in-one download, `spike/dist/EmbervilleModPack-v<version>.zip`: BepInEx,
-the multiplayer mod, Favourite Weapons and Better Chests together (each mod's own `package.ps1` makes its zip on its own).
-```
-pwsh spike/EmbervilleGhost/package.ps1 [-GamePath "<path to Emberville Demo>"]
-```
-Builds Release and writes `spike/dist/EmbervilleMultiplayer-v<version>.zip` (version = `Plugin.Version`): BepInEx 5
-(taken from the game folder), the mod in `BepInEx/plugins/EmbervilleMultiplayer`, a player README (install, host,
-join, uninstall, credits). Console window off, log file on. Players unzip it into the game folder.
+**Release zip:** `pwsh spike/package-all.ps1` makes `spike/dist/EmbervilleModPack-v<version>.zip` (BepInEx and every
+mod, each with its own README).
 
-## Testing on one PC
-Launch `Emberville.exe` twice. Copy #2 keeps its own options file (window size); characters are shared, so don't load
-the same character in both. Windows arrange themselves side by side at 1280x720.
+**Testing on one PC:** launch `Emberville.exe` twice (don't load the same character in both).
 
 ## Not included
 No game code or assets: the decompiled reference used for research stays local (`reference/`, git-ignored).

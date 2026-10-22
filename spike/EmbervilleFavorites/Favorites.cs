@@ -18,7 +18,7 @@ namespace EmbervilleFavorites;
 /// same to us), per character, next to the save: Saves/&lt;character&gt;.egfav.
 /// </summary>
 [HarmonyPatch]
-internal static class Favorites
+public static class Favorites
 {
     public const int Slots = 4;
     static readonly string[] keys = new string[Slots];   // fingerprint per slot (null = empty)

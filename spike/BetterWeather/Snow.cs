@@ -17,7 +17,7 @@ namespace BetterWeather;
 /// </summary>
 internal static class Snow
 {
-    const int MaxFlakes = 1400, Stages = 32, Variants = 3;
+    const int MaxFlakes = 1400, Stages = 32, Variants = 8;
     const int SeeThrough = 6;          // the first stages: a dusting the ground shows through
     const float Medium = 350f;          // flakes in the air at density 1
     const float SecondsPerStage = 13f;  // of snowing, for a tile to go up a stage (at settle 1): ~7 min to white
@@ -50,9 +50,18 @@ internal static class Snow
     static readonly List<Tilemap> floors = new(), blockers = new(), covers = new(), walls = new();
 
     public static int Covered => cells.Count(c => c.Value.Stage > 0);
+    /// <summary>How far toward full cover the map is (0..1): for the caps on trees and the rest.</summary>
+    internal static float Amount => Mathf.Clamp01(depth / Full);
+
+    /// <summary>Just arrived in a scene: everything at once, every frame, for a few seconds (the snow's already
+    /// there when you see the place, not popping in after).</summary>
+    static float freshUntil;
+    static bool hooked;
+    static bool Fresh => Time.unscaledTime < freshUntil;
 
     public static void Tick(float strength, bool outside)
     {
+        if (!hooked) { hooked = true; SceneManager.sceneLoaded += (_, _) => { freshUntil = Time.unscaledTime + 5f; nextScan = 0f; nextSettle = 0f; }; }
         bool airborne = flakes.Any(f => f.Live);
         if (strength > 0f || airborne) Fall(strength);
         else if (root && root.activeSelf) root.SetActive(false);
@@ -63,6 +72,7 @@ internal static class Snow
             Scan();
             Settle();
         }
+        Caps.Tick(depth > 0f && outside ? Amount : 0f);
         Steps();
     }
 
@@ -150,7 +160,7 @@ internal static class Snow
 
         float now = Time.time, dt = Time.deltaTime;
         float avgLife = 2.6f;
-        owed += Medium * Plugin.snowDensity.Value * strength / avgLife * dt;
+        owed += Medium * Weather.SnowAmount * strength / avgLife * dt;
         float h = cam.orthographicSize, w = h * cam.aspect;
         var c = cam.transform.position;
         while (owed >= 1f)
@@ -194,7 +204,7 @@ internal static class Snow
     static void Deepen()
     {
         float dt = Time.deltaTime;
-        if (Weather.Now == Kind.Snow) depth = Mathf.Min(Full, depth + Weather.SnowStrength * Plugin.snowSettle.Value * dt);
+        if (Weather.Now == Kind.Snow) depth = Mathf.Min(Full, depth + Weather.SnowStrength * Weather.Settle * dt);
         else if (depth > 0f) depth = Mathf.Max(0f, depth - Full / MeltSeconds * dt);
     }
 
@@ -206,7 +216,7 @@ internal static class Snow
     static void Settle()
     {
         if (!snowMap || Time.unscaledTime < nextSettle) return;
-        nextSettle = Time.unscaledTime + 0.25f;
+        nextSettle = Time.unscaledTime + (Fresh ? 0f : 0.25f);
         var cam = Camera.main;
         if (!cam) return;
         float h = cam.orthographicSize + Margin, w = cam.orthographicSize * cam.aspect + Margin;
@@ -221,7 +231,7 @@ internal static class Snow
                 if (!cells.TryGetValue(cell, out var s))
                 {
                     if (want == 0) continue;
-                    cells[cell] = s = new Cell { Variant = Mathf.Abs(cell.x * 73856093 ^ cell.y * 19349663) % Variants };
+                    cells[cell] = s = new Cell { Variant = Mathf.Min(Variants - 1, (int)(Hash(cell.x * 3 + 7, cell.y * 3 + 1) * Variants)) };
                 }
                 if (!s.Looked)
                 {
@@ -234,7 +244,19 @@ internal static class Snow
                 if (want == 0) { snowMap.SetTile(cell, null); continue; }
                 if (s.Edges < 0) s.Edges = Edges(cell);
                 snowMap.SetTile(cell, TileFor(s));
+                Turn(cell, s);
             }
+    }
+
+    /// <summary>A tile with snow all round: mirrored and / or turned (by where it is), so the same drawing doesn't line
+    /// up with itself. Edge tiles stay as drawn (their thinning faces the right way).</summary>
+    static void Turn(Vector3Int cell, Cell s)
+    {
+        if (s.Edges != 0) return;
+        int k = (int)(Hash(cell.x * 5 + 101, cell.y * 9 + 77) * 8f) & 7;
+        var m = Matrix4x4.TRS(Vector3.zero, Quaternion.Euler(0f, 0f, 90f * (k & 3)), new Vector3((k & 4) != 0 ? -1f : 1f, 1f, 1f));
+        snowMap.SetTileFlags(cell, TileFlags.None);
+        snowMap.SetTransformMatrix(cell, m);
     }
 
     /// <summary>All of it gone, now (the Insert menu's button).</summary>
@@ -278,7 +300,7 @@ internal static class Snow
     {
         string scene = SceneManager.GetActiveScene().name;
         if (mapFor == scene && Time.unscaledTime < nextScan && snowMap) return;
-        nextScan = Time.unscaledTime + 3f;
+        nextScan = Time.unscaledTime + (Fresh ? 0.2f : 3f);   // (the map's pieces come in quickly at first)
         var all = Object.FindObjectsByType<Tilemap>(FindObjectsSortMode.None).Where(t => t && t != snowMap && !Has(t.name, Ignore) && t.GetComponent<TilemapRenderer>()).ToList();
         int sig = all.Count;
         foreach (var t in all) sig = sig * 31 + t.GetInstanceID();
@@ -423,18 +445,24 @@ internal static class Snow
     // the snow's whites: cool blue-white drifts, bright white, light grey-white hollows, and the odd sparkle
     static readonly Color32 Cool = new(226, 234, 250, 255), Bright = new(243, 247, 255, 255), Soft = new(234, 236, 242, 255), Sparkle = new(255, 255, 255, 255);
 
-    static Color32 Whites(float drift, float speck)
+    internal static Color32 Whites(float drift, float speck)
     {
         if (speck > 0.985f) return Sparkle;
         float v = drift * 0.75f + speck * 0.25f;
         return v < 0.38f ? Cool : v > 0.62f ? Soft : Bright;
     }
 
-    static float Hash(int x, int y)
+    internal static float Hash(int x, int y)
     {
-        uint h = (uint)(x * 374761393 + y * 668265263);
-        h = (h ^ (h >> 13)) * 1274126177u;
-        return (h ^ (h >> 16)) / (float)uint.MaxValue;
+        // well mixed (the old one lined its specks up on a diagonal)
+        unchecked
+        {
+            uint h = (uint)x * 0x8da6b343u ^ (uint)y * 0xd8163841u ^ 0x9e3779b9u;
+            h ^= h >> 16; h *= 0x7feb352du;
+            h ^= h >> 15; h *= 0x846ca68bu;
+            h ^= h >> 16;
+            return h / (float)uint.MaxValue;
+        }
     }
 
     static void Build()
