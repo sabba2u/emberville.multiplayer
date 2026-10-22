@@ -132,7 +132,9 @@ shadows in the water, the starting area too. Cast, wait for the bite, left-click
 `/pet on`, then `/pet` befriends a pet that follows you, fights with you and levels up. 13 kinds (Chicken, Glowbat,
 Lilshrooms, Lil Ticks, Lil Bombers, Spiderling, Bug Fuzz): `/pet list`, `/pet glowbat`, `/pet name ...`,
 `/pet color red`. Everyone sees your pet.
+
 ![clucky](clucky_sm.gif)
+
 
 
 ## Quality of life
