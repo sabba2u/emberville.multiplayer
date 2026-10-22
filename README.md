@@ -1,6 +1,6 @@
 # emberville.multiplayer
 
-![iamge test](hook2_sm.gif)
+
 
 Unofficial online co-op and a set of gameplay mods for **Emberville** (the demo; Unity 6, Mono), as BepInEx 5 plugins.
 Not made or supported by Cygnus Cross.
@@ -61,17 +61,21 @@ Not made or supported by Cygnus Cross.
 - **Boss arena** (the lamp): a walled floor with pillars, spike traps and arrow shooters, and a panel to make mini-bosses
   from the game's creatures (name, colour, size, health, damage). **Boss rush:** 30 bosses, tougher each wave.
 
+
 ## Weapons and summons
 Type the command in chat to get one.
 - **Staff of Clucking (`/clucking`):** right-click summons a battle chicken (a tenth of your Kymia); left-click is a
   normal attack.
+  ![chickens](chickens2_sm.gif)
 - **Staff of the Risen (`/risen`):** creatures that die near you glow green; right-click near one raises it to fight
   for you (a fifth of your Kymia).
+  ![zombie](zombie_sm.gif)
 - With either staff, **middle-click** sends your chickens or risen there (they path around walls and water). Both
   staffs level up as you use them; summons go out in their creature's gore burst.
 - **Hunter's Hook (`/hook`):** right-click throws it (a sixth of your Kymia): it drags a creature to your feet, stunned
   (big guardians pull you to them instead), with a spray of blood. While it's in your hand your whole outfit turns
   Scorpion yellow.
+  ![hook](hook2_sm.gif)
 
 ## Your character
 - **Respec:** `/respec`, or ask Ellie: every stat point back to spend again (level, XP and gear kept).
@@ -81,6 +85,7 @@ Type the command in chat to get one.
   (the boxes sit between the two skulls on the HUD), or hold **Left Alt** (gamepad LT) for a weapon wheel.
 - **Bestiary (N):** every creature you've killed, with its stats and your kill count.
 - **Better Combat:** move while attacking (`/moveattack`), bows that aim in any direction and lock on (`/bowlock`).
+  ![moveandattack](moveandattack_sm.gif)
 
 ## Chests and loot
 - **F** on an item marks it a favourite (a heart on its slot): favourites never get swept into chests.
@@ -107,14 +112,20 @@ Insert > **Weather** (Clear / Rain storm / Snow), or `/rain`, `/snow`, `/clear`.
   the download. Dialogue can run any chat command (`(trigger: "command snow on")`).
 - In co-op everyone shares the host's NPCs and story.
 
+
 ## Fishing
 Every catch brings something up (food, materials, sometimes rare gear), and you can fish wherever there are fish
 shadows in the water, the starting area too. Cast, wait for the bite, left-click quickly.
+
+![fishing](fishing2_sm.gif)
+
 
 ## Pets
 `/pet on`, then `/pet` befriends a pet that follows you, fights with you and levels up. 13 kinds (Chicken, Glowbat,
 Lilshrooms, Lil Ticks, Lil Bombers, Spiderling, Bug Fuzz): `/pet list`, `/pet glowbat`, `/pet name ...`,
 `/pet color red`. Everyone sees your pet.
+![clucky](clucky_sm.gif)
+
 
 ## Quality of life
 - **Mouse walking:** hold the mouse side button to walk toward the mouse; a click walks there.
@@ -124,6 +135,7 @@ Lilshrooms, Lil Ticks, Lil Bombers, Spiderling, Bug Fuzz): `/pet list`, `/pet gl
 - **Your characters are safe:** before joining, the character files are backed up (`Saves/EmbervilleGhost_Backups`).
 - **Typing anywhere** (chat, a chest's name, search boxes) keeps the mods' hotkeys out of it.
 - **Title screen:** Better & Online under the Emberville logo; the Next Fest popup is skipped.
+
 
 ## Keys
 | Key | What |
