@@ -188,6 +188,7 @@ internal static class HunterHook
         if (!cam) return false;
         var mp = Mouse.current.position.ReadValue();
         var aim = cam.ScreenToWorldPoint(new Vector3(mp.x, mp.y, -cam.transform.position.z)); aim.z = 0f;
+        if (Integrations.LockedAim(out var locked)) aim = locked;   // (Better Combat's lock-on: at the creature)
         var hand = Hand(me);
         dir = aim - hand; dir.z = 0f;
         if (dir.sqrMagnitude < 0.01f) return false;

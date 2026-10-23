@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using ImGuiNET;
 using UnityEngine;
 using UnityEngine.Tilemaps;
@@ -25,7 +26,7 @@ internal static class DebugWalls
         On = !On;
         Clear();
         if (On) Build();
-        NetLog.Info(On ? "Walls view: on. Solid tiles: red = wall, yellow = wall top, blue = water; orange boxes = other colliders (/walls again to hide)" : "Walls view: off", toast: true);
+        NetLog.Info(On ? "Walls view: on. Solid tiles: red = wall, yellow = wall top, blue = water; orange boxes = other colliders; under the mouse: the tiles and colliders there (Shift+P logs it; /walls again to hide)" : "Walls view: off", toast: true);
     }
 
     /// <summary>A new place was built: show its solid layer too.</summary>
@@ -89,11 +90,20 @@ internal static class DebugWalls
         overlays.Add(go);
     }
 
-    /// <summary>From Hud.Draw: orange outlines on the other solid colliders around you.</summary>
+    /// <summary>From Hud.Draw: Shift+P pins what's under the mouse (any time); with /walls on, orange outlines on the
+    /// other solid colliders around you and the probe box beside the mouse.</summary>
     public static void Draw()
     {
-        if (!On) return;
         var cam = Camera.main;
+        var kb = UnityEngine.InputSystem.Keyboard.current;
+        if (cam && kb != null && kb.shiftKey.isPressed && kb.pKey.wasPressedThisFrame && !ImGuiUnity.Typing && MouseWorld(cam, out var at))
+        {
+            pinned = LinesAt(at);
+            pinnedWhen = System.DateTime.Now;
+            NetLog.Info("Under the mouse: " + string.Join(" | ", pinned), toast: false);
+            NetLog.Info("Pinned what's under the mouse: Insert > Under the mouse", toast: true);
+        }
+        if (!On) return;
         var me = LocalPlayer.Get();
         if (!cam || !me) return;
         var dl = ImGui.GetBackgroundDrawList();
@@ -108,5 +118,79 @@ internal static class DebugWalls
             var z = cam.WorldToScreenPoint(b.max);
             dl.AddRect(new Vector2(a.x, Screen.height - z.y), new Vector2(z.x, Screen.height - a.y), orange, 0f, ImDrawFlags.None, 1.5f);
         }
+        if (!MouseWorld(cam, out var w)) return;
+        var mp = UnityEngine.InputSystem.Mouse.current.position.ReadValue();
+        string text = string.Join("\n", LinesAt(w));
+        var box = new Vector2(mp.x + 18f, Screen.height - mp.y + 12f);
+        var size = ImGui.CalcTextSize(text);
+        dl.AddRectFilled(box - new Vector2(4f, 3f), box + size + new Vector2(4f, 3f), ImGui.ColorConvertFloat4ToU32(new Vector4(0f, 0f, 0f, 0.75f)), 3f);
+        dl.AddText(box, 0xFFFFFFFF, text);
+    }
+
+    static List<string> pinned;
+    static System.DateTime pinnedWhen;
+
+    static bool MouseWorld(Camera cam, out Vector3 w)
+    {
+        w = default;
+        var mouse = UnityEngine.InputSystem.Mouse.current;
+        if (mouse == null) return false;
+        var mp = mouse.position.ReadValue();
+        w = cam.ScreenToWorldPoint(new Vector3(mp.x, mp.y, -cam.transform.position.z));
+        w.z = 0f;
+        return true;
+    }
+
+    /// <summary>Everything at this spot: the cell, whether our collision made it solid or walkable, the dungeon rooms'
+    /// tiles there layer by layer (the game's layer tag, the tilemap's own name, the tile, the room; the layers we skip
+    /// too), the colliders there (triggers too) and the things drawn there (props, decals).</summary>
+    static List<string> LinesAt(Vector3 w)
+    {
+        var cs = Dungeon.cellSize;
+        var cell = new Vector3Int(Mathf.FloorToInt(w.x / cs.x), Mathf.FloorToInt(w.y / cs.y), 0);
+        string ours = Dungeon.wallCells.Contains(cell) ? "SOLID" : Dungeon.floorCells.Contains(cell) ? "walkable" : "not ours (no room tile)";
+        var why = new List<string>();
+        foreach (var layer in new[] { "wall", "wall top", "water" })
+            if (Dungeon.DebugLayers.TryGetValue(layer, out var set) && set.Contains(cell)) why.Add(layer);
+        var lines = new List<string> { $"cell {cell.x},{cell.y} at {w.x:0.0},{w.y:0.0}: our collision says {ours}{(why.Count > 0 ? " (from " + string.Join(", ", why) + ")" : "")}" };
+        if (Dungeon.DebugCells.TryGetValue(cell, out var here)) lines.AddRange(here.Select(h => "  tile: " + h));
+        else lines.Add("  (no dungeon room tiles here)");
+        var p = new UnityEngine.Vector2(w.x, w.y);
+        foreach (var c in Physics2D.OverlapPointAll(p))
+            if (c) lines.Add($"  collider: {c.GetType().Name} on {Path(c.transform)}{(c.isTrigger ? " (trigger)" : "")}{(c.enabled ? "" : " (off)")}, layer {LayerMask.LayerToName(c.gameObject.layer)}");
+        int drawn = 0;
+        foreach (var r in Object.FindObjectsByType<SpriteRenderer>(FindObjectsSortMode.None))
+        {
+            if (!r || !r.enabled || !r.sprite || !r.gameObject.activeInHierarchy) continue;
+            var b = r.bounds;
+            if (p.x < b.min.x || p.x > b.max.x || p.y < b.min.y || p.y > b.max.y) continue;
+            if (r.GetComponentInParent<PlayerMaster>()) continue;
+            if (++drawn > 8) { lines.Add("  ... more drawn here"); break; }
+            lines.Add($"  drawn: {r.sprite.name} on {Path(r.transform)} ({SortingLayer.IDToName(r.sortingLayerID)}/{r.sortingOrder})");
+        }
+        return lines;
+    }
+
+    static string Path(Transform t)
+    {
+        var parts = new List<string>();
+        for (int i = 0; t && i < 3; i++, t = t.parent) parts.Insert(0, t.name);
+        return string.Join("/", parts);
+    }
+
+    /// <summary>Insert > Under the mouse: what Shift+P pinned.</summary>
+    public static void DrawMenu()
+    {
+        ImGui.TextWrapped("Point at a spot in the world and press Shift+P: what's there is pinned here (and written to the log). " +
+                          "Our collision's verdict, the dungeon rooms' tiles in that cell (the game's layer tag, the tilemap's name, the tile, the room), " +
+                          "the colliders and the things drawn there. /walls also shows it live beside the mouse.");
+        if (pinned == null) { ImGui.TextDisabled("Nothing pinned yet."); return; }
+        ImGui.TextDisabled($"Pinned {pinnedWhen:HH:mm:ss}");
+        ImGui.SameLine();
+        if (ImGui.SmallButton("Copy")) ImGui.SetClipboardText(string.Join("\n", pinned));
+        ImGui.SameLine();
+        if (ImGui.SmallButton("Log it")) NetLog.Info("Under the mouse: " + string.Join(" | ", pinned), toast: true);
+        ImGui.Separator();
+        foreach (var l in pinned) ImGui.TextUnformatted(l);
     }
 }

@@ -32,7 +32,7 @@ public static class ChestLooks
         key = config.Bind("ChestLooks", "Key", Key.V, "Press at a chest to name it and give it a colour");
 
     // the swatches: soft enough that the chest's wood still shows through (they multiply its art)
-    static readonly (string name, string hex)[] Palette =
+    internal static readonly (string name, string hex)[] Palette =
     {
         ("None", ""), ("Red", "FF8A80"), ("Orange", "FFC080"), ("Yellow", "FFF080"), ("Green", "A8F0A0"),
         ("Teal", "90E8E0"), ("Blue", "98C0FF"), ("Purple", "C8A8FF"), ("Pink", "FFA8D8"), ("Grey", "B8B8B8"), ("Dark", "707080"),
@@ -240,6 +240,7 @@ public static class ChestLooks
     {
         if (Time.unscaledTime < nextRefresh) return;
         nextRefresh = Time.unscaledTime + 0.5f;
+        listening.RemoveWhere(c => !c);   // (chests of scenes gone)
         foreach (var chest in UnityEngine.Object.FindObjectsByType<Chest>(FindObjectsSortMode.None))
         {
             if (!chest || string.IsNullOrEmpty(chest.ID)) continue;
@@ -285,11 +286,26 @@ public static class ChestLooks
         try { chest.UpdateTitle(); } catch { }
     }
 
+    static readonly HashSet<Chest> listening = new HashSet<Chest>();
+
     [HarmonyPatch(typeof(Chest), "UpdateTitle"), HarmonyPostfix]
     static void AfterTitle(Chest __instance)
     {
-        if (__instance && !string.IsNullOrEmpty(__instance.ID) && looks.TryGetValue(__instance.ID, out var e) && (e.Name.Length > 0 || e.Takes != 0))
-            Rename(__instance, e);
+        if (!__instance) return;
+        // the game's "Chest" arrives from the localization tables a moment after UpdateTitle (RefreshString finishes
+        // later): our name goes on right after it, in the same frame, not on the next Refresh (a flash of "Chest")
+        if (__instance.title && listening.Add(__instance))
+        {
+            var chest = __instance;
+            chest.title.OnUpdateString.AddListener(_ => RenameIfOurs(chest));
+        }
+        RenameIfOurs(__instance);
+    }
+
+    static void RenameIfOurs(Chest chest)
+    {
+        if (chest && !string.IsNullOrEmpty(chest.ID) && looks.TryGetValue(chest.ID, out var e) && (e.Name.Length > 0 || e.Takes != 0))
+            Rename(chest, e);
     }
 
     static Color Parse(string hex) => ColorUtility.TryParseHtmlString("#" + hex, out var c) ? c : Color.white;

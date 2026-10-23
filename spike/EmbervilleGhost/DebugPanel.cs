@@ -28,6 +28,7 @@ internal static class DebugPanel
             if (ImGui.BeginTabItem("Online / Hosting")) { DrawOnline(plugin); ImGui.EndTabItem(); }
             if (ImGui.BeginTabItem($"Who's connected ({plugin.PlayerCount})###who")) { DrawPlayers(plugin); ImGui.EndTabItem(); }
             if (GreyTab("Pets", Integrations.HasPets)) { Integrations.DrawPets(); ImGui.EndTabItem(); }
+            if (ImGui.BeginTabItem("Font Options")) { StoryText.DrawMenu(); ImGui.EndTabItem(); }
             if (ImGui.BeginTabItem("Mouse Options"))
             {
                 MouseWalk.DrawMenu();
@@ -39,6 +40,7 @@ internal static class DebugPanel
             if (GreyTab("Weather", Integrations.HasWeather)) { Integrations.DrawWeather(); ImGui.EndTabItem(); }
             if (BuildMode.Enabled && ImGui.BeginTabItem("Construction")) { DrawConstruction(plugin); ImGui.EndTabItem(); }
             if (ImGui.BeginTabItem("Dungeon")) { Dungeon.DrawMenu(); ImGui.EndTabItem(); }
+            if (ImGui.BeginTabItem("Under the mouse")) { DebugWalls.DrawMenu(); ImGui.EndTabItem(); }
             if (ImGui.BeginTabItem("Log")) { DrawLog(plugin); ImGui.EndTabItem(); }
             ImGui.EndTabBar();
         }

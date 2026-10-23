@@ -99,10 +99,21 @@ internal static class Integrations
         if (HasCombat && CombatCommand(cmd)) return true;
         if (HasPets && PetsCommand(cmd)) return true;
         if (HasWeather && WeatherCommand(cmd)) return true;
+        if (chestsCommand != null && chestsCommand.Invoke(null, new object[] { cmd }) is bool ok && ok) return true;   // /stash (Better Chests)
         return false;
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)] static bool CombatCommand(string c) => BetterCombat.Plugin.Command(c);
+
+    /// <summary>Better Combat's lock-on: where to aim (the locked creature), if locked.</summary>
+    public static bool LockedAim(out Vector3 at)
+    {
+        at = Vector3.zero;
+        return HasCombat && CombatAim(out at);
+    }
+    [MethodImpl(MethodImplOptions.NoInlining)] static bool CombatAim(out Vector3 at) => BetterCombat.LockOn.AimPoint(out at);
+    static readonly System.Reflection.MethodInfo chestsCommand =
+        HarmonyLib.AccessTools.TypeByName("BetterChests.Plugin") is System.Type ct ? HarmonyLib.AccessTools.Method(ct, "Command", new[] { typeof(string) }) : null;
     [MethodImpl(MethodImplOptions.NoInlining)] static bool PetsCommand(string c) => BetterPetsAndSummons.Plugin.Command(c);
     [MethodImpl(MethodImplOptions.NoInlining)] static bool WeatherCommand(string c) => BetterWeather.Plugin.Command(c);
 

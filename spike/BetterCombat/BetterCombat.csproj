@@ -43,6 +43,7 @@
     <Reference Include="R3"><HintPath>$(Managed)\R3.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="AK.Wwise.Unity.API.WwiseTypes"><HintPath>$(Managed)\AK.Wwise.Unity.API.WwiseTypes.dll</HintPath><Private>false</Private></Reference>
     <!-- ImGui only for the Insert-menu switches, which only the multiplayer mod draws (it ships ImGui.NET). -->
+    <Reference Include="UnityEngine.Physics2DModule"><HintPath>$(Managed)\UnityEngine.Physics2DModule.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="ImGui.NET"><HintPath>..\libs\OverlayDearImGui\ImGui.NET.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="Assembly-CSharp"><HintPath>$(Managed)\Assembly-CSharp.dll</HintPath><Private>false</Private></Reference>
   </ItemGroup>

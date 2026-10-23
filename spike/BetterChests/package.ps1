@@ -32,7 +32,7 @@ Copy-Item (Join-Path $out "BetterChests.dll") "$stage\BepInEx\plugins\BetterChes
 
 @"
 Better Chests v$version
-Quick-stack into chests in the Emberville Demo. Not made or supported by Cygnus Cross.
+Quick-stack, a shared stash and more for chests in the Emberville Demo. Not made or supported by Cygnus Cross.
 
 INSTALL
 1. Find the game folder: Steam > right-click Emberville Demo > Manage > Browse local files.
@@ -46,6 +46,9 @@ onto its stacks and then into free slots while there's room. Each item shows in 
 - Shift+X: the same into every chest nearby.
 - V at a chest: its name, colour and what it takes (weapons only, materials only...).
 - Search boxes over the chest and your bag while a chest is open.
+- Ctrl+click an item while a chest is open: it goes straight across (bag to chest, chest to bag).
+- U (or chat /stash): your shared stash, anywhere: 6 tabs of 30 slots, shared by every character on this PC. Right-click
+  a tab to rename it and give it a colour. It's kept in its own file next to your saves (with a backup).
 - F over an item in your inventory or a chest: a favourite (a heart in its corner). Favourites never go into a
   chest by themselves (X, Shift+X, the chest screen's send buttons); F again to undo.
 Settings: BepInEx\config\spike.emberville.betterchests.cfg ([QuickStack] Key = X).

@@ -82,22 +82,33 @@ internal static class TownPortal
 
     // ---- the button (right edge, half way down) and the channel ----
 
-    static Rect box;
-    static bool hovered;
+    static Rect box, stashBox;
+    static bool hovered, stashHovered;
+
+    /// <summary>Better Chests' shared stash (its Stash.Toggle), if it's installed.</summary>
+    static readonly System.Reflection.MethodInfo stashToggle =
+        HarmonyLib.AccessTools.TypeByName("BetterChests.Stash") is System.Type t ? HarmonyLib.AccessTools.Method(t, "Toggle") : null;
     static float channel = -1f, healthAtStart;
     static Vector3 startedAt;
 
     static void Button(PlayerMaster me)
     {
         var mouse = UnityEngine.InputSystem.Mouse.current;
-        hovered = false;
+        hovered = stashHovered = false;
         if (mouse != null && Application.isFocused && me && box.width > 0 && !PlayerStatusUtil.LocalBusy && !ImGuiUnity.IsOpen)
         {
             var p = mouse.position.ReadValue();
-            hovered = box.Contains(new UnityEngine.Vector2(p.x, Screen.height - p.y));
+            var at = new UnityEngine.Vector2(p.x, Screen.height - p.y);
+            hovered = box.Contains(at);
+            stashHovered = stashToggle != null && stashBox.width > 0 && stashBox.Contains(at);
             if (hovered && mouse.leftButton.wasReleasedThisFrame) Pressed(me);
+            if (stashHovered && mouse.leftButton.wasReleasedThisFrame)
+            {
+                try { stashToggle.Invoke(null, null); }
+                catch (System.Exception e) { NetLog.Warn($"Stash: {e.InnerException?.Message ?? e.Message}", toast: false); }
+            }
         }
-        if (hovered) GameInput.Block("townportal"); else GameInput.Unblock("townportal");
+        if (hovered || stashHovered) GameInput.Block("townportal"); else GameInput.Unblock("townportal");
     }
 
     static void Pressed(PlayerMaster me)
@@ -200,6 +211,13 @@ internal static class TownPortal
     }
 
     // ---- the look: the mage's magic beam effect (Attack_Mage_MagicBeam_Fx), smaller than the dungeon's portal ----
+
+    /// <summary>A portal's look under parent, in this colour (also the custom rooms' teleporters and exits).</summary>
+    internal static void Look(Transform parent, Vector3 at, Color tint)
+    {
+        if (!Beam(parent)) PadFx.Portal(parent, at);
+        foreach (var sr in parent.GetComponentsInChildren<SpriteRenderer>(true)) sr.color = new Color(tint.r, tint.g, tint.b, sr.color.a);
+    }
 
     const float BeamScale = 1f;
     static GameObject beamFx;
@@ -308,6 +326,15 @@ internal static class TownPortal
                 float k = Mathf.Clamp01(channel / Channel);
                 dl.AddRectFilled(new Vector2(a.x, b.y + 3f), new Vector2(a.x + (b.x - a.x) * k, b.y + 7f), ImGui.ColorConvertFloat4ToU32(new Vector4(0.55f, 0.75f, 1f, 1f)));
                 ImGui.Dummy(new Vector2(1f, 6f));
+            }
+            // the shared stash, under it (Better Chests; for now: where they go in the end is still to decide)
+            if (stashToggle != null)
+            {
+                if (stashHovered) ImGui.PushStyleColor(ImGuiCol.Button, ImGui.GetColorU32(ImGuiCol.ButtonHovered));
+                ImGui.Button("Stash", new Vector2(120f, 34f));
+                if (stashHovered) ImGui.PopStyleColor();
+                var sa = ImGui.GetItemRectMin(); var sb = ImGui.GetItemRectMax();
+                stashBox = new Rect(sa.x, sa.y, sb.x - sa.x, sb.y - sa.y);
             }
         }
         ImGui.End();

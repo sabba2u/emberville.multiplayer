@@ -30,7 +30,7 @@ foreach ($mod in $mods) {
 @"
 Emberville Mod Pack v$version
 Everything in one download: the co-op multiplayer mod, Favourite Weapons (F5-F8, the weapon wheel), Better Chests
-(X / Shift+X / V at a chest), Better Combat (bow lock-on, move while attacking), Better Looting (magnet, green arrows) and
+(X / Shift+X / V at a chest, Ctrl+click, the shared stash on U), Better Combat (lock-on on G, bow lock-on, move while attacking), Better Looting (magnet, green arrows) and
 Better Pets and Summons (/pet, the Staff of Clucking, the Staff of the Risen), Better Fishing (a catch from every
 cast, spots at the fish shadows) and Better NPCs and Quests (Ellie and her quest; add your own NPCs and quests with
 text files) and Better Weather (a rain storm: /rain). Not made or supported by Cygnus Cross.
@@ -40,11 +40,15 @@ INSTALL
 2. Unzip everything here into that folder (winhttp.dll and the BepInEx folder end up next to Emberville.exe).
 3. Start the game. Everyone playing together needs the same version.
 
-Each mod's own README is in this zip too: README-EmbervilleMultiplayer.txt, README-EmbervilleFavorites.txt,
+Each mod's own README is in the readme folder: README-EmbervilleMultiplayer.txt, README-EmbervilleFavorites.txt,
 README-BetterChests.txt, README-BetterCombat.txt, README-BetterLooting.txt, README-BetterPetsAndSummons.txt, README-BetterFishing.txt,
 README-BetterNPCsAndQuests.txt, README-BetterWeather.txt.
 To leave one out, delete its folder in BepInEx\plugins.
 "@ | Set-Content "$stage\README-EmbervilleModPack.txt"
+
+# the mods' own READMEs in a readme folder (only the pack's README stays next to the game)
+New-Item -ItemType Directory -Force "$stage\readme" | Out-Null
+Get-ChildItem $stage -Filter "README-*.txt" | Where-Object { $_.Name -ne "README-EmbervilleModPack.txt" } | Move-Item -Destination "$stage\readme" -Force
 
 if (Test-Path $zip) { Remove-Item $zip -Force }
 Compress-Archive -Path "$stage\*" -DestinationPath $zip

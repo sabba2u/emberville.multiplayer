@@ -32,7 +32,7 @@ Copy-Item (Join-Path $out "BetterCombat.dll") "$stage\BepInEx\plugins\BetterComb
 
 @"
 Better Combat v$version
-Bow lock-on and moving while you attack, for the Emberville Demo. Not made or supported by Cygnus Cross.
+Lock-on, bow lock-on and moving while you attack, for the Emberville Demo. Not made or supported by Cygnus Cross.
 
 INSTALL
 1. Find the game folder: Steam > right-click Emberville Demo > Manage > Browse local files.
@@ -41,6 +41,10 @@ INSTALL
    (Options) and its chat takes the commands.
 
 USE
+- Lock-on (G): point at an enemy and press G: your character faces it whatever the mouse does, so you can circle and
+  strafe round it, and swings, spells and arrows go at it. A ring under it shows the lock. G on it again lets go; G
+  pointing at nothing locks the nearest enemy, and again the next one. When it dies the lock moves to the next one
+  close by. Only enemies (creatures, spider eggs), never doors, barrels or furniture. The key: [LockOn] NextKey.
 - Bow lock-on (off to start): arrows from a bow / crossbow curve onto the creature nearest your aim.
   Chat /bowlock (on / off), /bowlock 15 (cone of 15 degrees either side). True aim stays on: arrows leave exactly where
   you aim.

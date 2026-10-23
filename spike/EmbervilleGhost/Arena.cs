@@ -157,7 +157,7 @@ internal static class Arena
         Dungeon.BuildNavMesh(walkable, blocked).ContinueWith(() => { if (root && Singleton<GameManager>.main.CurrentArea != area) root.SetActive(false); }).Forget();
     }
 
-    static void Paint(GameObject grid, string name, HashSet<Vector3Int> cells, TileBase tile, TilemapRenderer like, int orderBump)
+    internal static void Paint(GameObject grid, string name, HashSet<Vector3Int> cells, TileBase tile, TilemapRenderer like, int orderBump)
     {
         if (!tile) return;
         var go = new GameObject(name);
@@ -177,7 +177,7 @@ internal static class Arena
     }
 
     /// <summary>The most used floor tile and wall tile of the dungeon rooms (and the renderers they're drawn with).</summary>
-    static (TileBase ground, TilemapRenderer groundR, TileBase wall, TilemapRenderer wallR, Vector3 cell) RoomTiles()
+    internal static (TileBase ground, TilemapRenderer groundR, TileBase wall, TilemapRenderer wallR, Vector3 cell) RoomTiles()
     {
         Dungeon.AllSettings();
         TileBase g = null, w = null; TilemapRenderer gr = null, wr = null; Vector3 cell = Vector3.one;
@@ -195,7 +195,7 @@ internal static class Arena
         return (g, gr, w, wr, cell);
     }
 
-    static TileBase MostUsed(Tilemap tm)
+    internal static TileBase MostUsed(Tilemap tm)
     {
         var count = new Dictionary<TileBase, int>();
         foreach (var c in tm.cellBounds.allPositionsWithin)

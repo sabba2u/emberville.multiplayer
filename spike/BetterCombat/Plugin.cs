@@ -13,7 +13,7 @@ namespace BetterCombat;
 public class Plugin : BaseUnityPlugin
 {
     public const string Guid = "spike.emberville.bettercombat";
-    public const string Version = "0.1.0";
+    public const string Version = "0.2.0";
     internal static ManualLogSource Logger_;
 
     void Awake()
@@ -22,9 +22,16 @@ public class Plugin : BaseUnityPlugin
         bool firstRun = !System.IO.File.Exists(Config.ConfigFilePath);
         BowAssist.Bind(Config);
         MoveAttack.Bind(Config);
+        LockOn.Bind(Config);
         Migrate.FromGhost(Config, firstRun, "Combat");
         new HarmonyLib.Harmony(Guid).PatchAll(typeof(Plugin).Assembly);
-        Logger.LogInfo($"Better Combat v{Version}: bow lock-on (/bowlock), move while attacking (/moveattack)");
+        Logger.LogInfo($"Better Combat v{Version}: lock-on (G), bow lock-on (/bowlock), move while attacking (/moveattack)");
+    }
+
+    void Update()
+    {
+        try { LockOn.Tick(); }
+        catch (System.Exception e) { Logger.LogWarning(e); }
     }
 
     /// <summary>A chat command ("bowlock", "bowlock 15", "moveattack", "moveattack 70"); true if it was one of ours.</summary>
@@ -42,5 +49,6 @@ public class Plugin : BaseUnityPlugin
     {
         BowAssist.DrawMenu();
         MoveAttack.DrawMenu();
+        LockOn.DrawMenu();
     }
 }

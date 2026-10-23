@@ -120,6 +120,7 @@ internal static class ChestSearch
             }
             typing |= b.Field.isFocused;
         }
+        typing |= Bar.NameField && Bar.NameField.isFocused;   // (the stash tab's name box)
         SetTyping(typing);
     }
 
@@ -211,6 +212,13 @@ internal static class ChestSearch
         new[] { typeof(GameObject), typeof(UnityEngine.EventSystems.BaseEventData) }), HarmonyPrefix]
     static bool KeepTyping(GameObject selected)
     {
+        // (the stash tab's name box too: it's typed in over the open inventory)
+        var tabName = Bar.NameField;
+        if (tabName && tabName.isFocused && selected != tabName.gameObject)
+        {
+            var mm = Mouse.current;
+            return mm != null && (mm.leftButton.wasPressedThisFrame || mm.rightButton.wasPressedThisFrame);
+        }
         foreach (var b in boxes)
         {
             if (!b.Field || !b.Field.isFocused || selected == b.Field.gameObject) continue;

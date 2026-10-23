@@ -12,7 +12,7 @@ namespace BetterChests;
 public class Plugin : BaseUnityPlugin
 {
     public const string Guid = "spike.emberville.betterchests";
-    internal const string Version = "0.1.0";
+    internal const string Version = "0.2.0";
     internal static ManualLogSource Log;
 
     void Awake()
@@ -21,13 +21,21 @@ public class Plugin : BaseUnityPlugin
         QuickStack.Bind(Config);
         Hint.Bind(Config);
         ChestLooks.Bind(Config);
+        Stash.Bind(Config);
         new HarmonyLib.Harmony(Guid).PatchAll(typeof(Plugin).Assembly);
         Log.LogInfo($"Better Chests v{Version}: press {QuickStack.KeyName} at a chest to put in what it already holds, {ChestLooks.KeyName} to name / colour it");
     }
 
+    /// <summary>Chat commands (the multiplayer mod's chat, NPC dialogue): /stash.</summary>
+    public static bool Command(string cmd)
+    {
+        if ((cmd ?? "").Trim().ToLowerInvariant() == "stash") { Stash.Toggle(); return true; }
+        return false;
+    }
+
     void Update()
     {
-        try { QuickStack.Tick(); ChestSearch.Tick(); Favourites.Tick(); }
+        try { QuickStack.Tick(); ChestSearch.Tick(); Favourites.Tick(); Stash.Tick(); }
         catch (System.Exception e) { Log.LogWarning(e); }
     }
 }

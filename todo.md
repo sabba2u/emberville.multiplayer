@@ -1022,6 +1022,14 @@ first "ghost co-op" sketch). Duckov taught all of that; those items are dropped.
 
 ## Later
 
+- **Teleport animation, the rest** (2026-10-22): custom rooms' `Teleport:` pads move you instantly with the game's own
+  "Teleport" animation and sound (`CustomRoom.Blink`: vanish, move, camera snapped with `CamEvent.SetPosition`,
+  reappear), no fade. Still to do:
+  - **Sync it:** other players only see your avatar jump. Send a small message so they see the vanish and reappear
+    (like the hook blood).
+  - **Use it elsewhere:** `/tp`, `/summon` and the town portal still use the fade (`TeleportPlayerFade`). Within one
+    area they could blink instead; across areas or scenes the fade hides the loading.
+
 - Split the dungeon / Descent / arena / Boss Rush features into their own mod, `BetterDungeonsAndBossRushArena`:
   not started on purpose (2026-10-20). Findings and the two ways to do it: `notes/split-better-dungeons.md`.
 - **Better mouse movement**: decided 2026-10-21 to keep it as it is. Mouse walking stays on a side button (mouse 4 by

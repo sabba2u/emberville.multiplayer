@@ -90,6 +90,10 @@ Type the command in chat to get one.
 - **Favourite weapons:** hover a weapon in your inventory and press **F5-F8** to put it on that key; F5-F8 wield it
   (the boxes sit between the two skulls on the HUD), or hold **Left Alt** (gamepad LT) for a weapon wheel.
 - **Bestiary (N):** every creature you've killed, with its stats and your kill count.
+- **Lock-on (G):** point at an enemy and press **G**: you face it whatever the mouse does (circle and strafe round it),
+  and swings, spells and arrows go at it; a ring under it shows the lock. G on it again lets go; G pointing at nothing
+  locks the nearest enemy, again the next one. When it dies the lock moves on to the next one close by. Enemies only
+  (creatures, spider eggs): never doors, barrels or furniture. The Hunter's Hook throws at the locked enemy too.
 - **Better Combat:** move while attacking (`/moveattack`), bows that aim in any direction and lock on (`/bowlock`).
   
   ![moveandattack](moveandattack_sm.gif)
@@ -100,6 +104,11 @@ Type the command in chat to get one.
 - At a chest: **X** puts in everything the chest already holds; **V** customizes it (name, colour, and what it takes:
   items it refuses grey out in your bag).
 - **Search boxes** above your bag and an open chest.
+- **Ctrl+click** an item while a chest is open: it goes straight across (bag to chest, chest to bag).
+- **Shared stash (U, or `/stash`):** a big chest you can open anywhere: 6 tabs of 30 slots, shared by every character
+  on your PC. Right-click a tab to rename it and give it a colour. Kept in its own file next to your saves, with a
+  backup. (There's a Stash button under the Town Portal button too.)
+- A renamed chest shows its own name straight away (no more "Chest" for a moment first).
 - **Better Looting:** the magnet picks up items near you (Insert menu: range and kinds), and a green arrow marks better
   gear.
 
@@ -143,7 +152,11 @@ Lilshrooms, Lil Ticks, Lil Bombers, Spiderling, Bug Fuzz): `/pet list`, `/pet gl
 - **Team buffs:** a buff you cast on yourself also lands on teammates near you (host option).
 - **Keep playing after the demo:** its "Thank you for playing" stop is skipped.
 - **Your characters are safe:** before joining, the character files are backed up (`Saves/EmbervilleGhost_Backups`).
-- **Typing anywhere** (chat, a chest's name, search boxes) keeps the mods' hotkeys out of it.
+- **Typing anywhere** (chat, a chest's name, search boxes, the stash's tab names) keeps the mods' hotkeys out of it.
+- **Font Options** (Insert menu): the story text's size (what NPCs say, speech bubbles, the quest tracker: the boxes
+  grow with it), the size of the words in the world ("Open", "Examine", names over heads), and the font for all the
+  game's text: the game's own Emberfont, Noto Serif, Liberation Sans or Perfect DOS VGA.
+- **Staff tooltips** sit beside the item card, and off the second card when the game shows two side by side.
 - **Title screen:** Better & Online under the Emberville logo; the Next Fest popup is skipped.
 
 
@@ -156,8 +169,11 @@ Lilshrooms, Lil Ticks, Lil Bombers, Spiderling, Bug Fuzz): `/pet list`, `/pet gl
 | O | Online Players |
 | N | Bestiary |
 | F5-F8, hold Left Alt | wield a favourite weapon, weapon wheel |
+| G | lock on to the enemy under the mouse (again: let go); at nothing: the nearest / the next one |
 | F (on an item) | favourite it (heart) |
 | X / V (at a chest) | put matching items in / customize the chest |
+| Ctrl+click (chest open) | move the item across |
+| U | the shared stash |
 | Right-click (gear slot) | dye the item |
 | Right-click (staff / hook) | summon, raise, throw |
 | Middle mouse | ping, draw; with a staff: send your summons |
@@ -168,7 +184,7 @@ Lilshrooms, Lil Ticks, Lil Bombers, Spiderling, Bug Fuzz): `/pet list`, `/pet gl
 ## Commands
 The full list is in [API.md](API.md#chat-commands). The main ones: `/tp`, `/summon`, `/trade`, `/online`, `/sleep`,
 `/respec`, `/rain`, `/snow`, `/clear`, `/hook`, `/clucking`, `/risen`, `/pet`, `/dungeon`, `/estate`, `/repair`,
-`/resources`, `/bowlock`, `/moveattack`; testing: `/nodeath`, `/onehitkill`, `/noclip`, `/devmode`, `/devpanel`.
+`/resources`, `/stash`, `/bowlock`, `/moveattack`; testing: `/nodeath`, `/onehitkill`, `/noclip`, `/devmode`, `/devpanel`.
 
 ## API
 Other BepInEx mods (and NPC dialogue) can drive these mods; the full reference with examples is in [API.md](API.md).

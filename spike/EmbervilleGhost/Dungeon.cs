@@ -504,6 +504,16 @@ internal static class Dungeon
     /// <summary>The last built place's solid cells by the layer they came from (wall / wall top / water), for /walls.</summary>
     internal static readonly Dictionary<string, HashSet<Vector3Int>> DebugLayers = new Dictionary<string, HashSet<Vector3Int>>();
 
+    static string FindRoomName(Transform t)
+    {
+        for (var p = t; p; p = p.parent) if (p.GetComponent<DungeonChunk>()) return p.name;
+        return t.parent ? t.parent.name : t.name;
+    }
+
+    /// <summary>The last built place: every room tile in each world cell ("Layer: tile"), every layer (the ones we skip
+    /// too), for /walls' probe under the mouse.</summary>
+    internal static readonly Dictionary<Vector3Int, List<string>> DebugCells = new Dictionary<Vector3Int, List<string>>();
+
     static readonly List<DungeonBarrierVariation> barriers = new List<DungeonBarrierVariation>();
     static Tile blockTile;
 
@@ -531,6 +541,7 @@ internal static class Dungeon
         mergedGrid.AddComponent<Grid>();
         var tiles = new Dictionary<TilemapMergeLayer, (List<Vector3Int> at, List<TileBase> tile, List<Matrix4x4> m, List<Color> col)>();
 
+        DebugCells.Clear();
         foreach (var (t, at) in sources)
         {
             var tm = t.Tilemap;
@@ -552,6 +563,18 @@ internal static class Dungeon
                         or TilemapMergeLayer.Wall or TilemapMergeLayer.WallCover or TilemapMergeLayer.Water or TilemapMergeLayer.Fence;
             var slot = at + (t.OverridePosition ?? Vector2Int.zero);
             var baseCell = originCell + new Vector3Int(slot.x * chunkSize.x, slot.y * chunkSize.y, 0);
+            {   // (/walls' probe: every layer)
+                tm.CompressBounds();
+                foreach (var c in tm.cellBounds.allPositionsWithin)
+                {
+                    var tile = tm.GetTile(c);
+                    if (!tile) continue;
+                    var to = baseCell + new Vector3Int(c.x, c.y, 0);
+                    if (!DebugCells.TryGetValue(to, out var here)) DebugCells[to] = here = new List<string>(3);
+                    // (the game's layer tag, the tilemap's own name - a pit's is "Void" - the tile, the room)
+                    here.Add($"{t.Layer} [tilemap {tm.name}]: {tile.name} (room {FindRoomName(tm.transform)})");
+                }
+            }
             if (into != null || draw)
             {
                 tm.CompressBounds();

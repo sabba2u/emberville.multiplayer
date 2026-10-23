@@ -69,16 +69,38 @@ internal sealed class StaffTip : MonoBehaviour
     }
 
     /// <summary>The game places its tooltip after SetItem: keep beside it, and inside the screen.</summary>
+    /// <summary>The game places its tooltip after SetItem: keep beside it, inside the screen, and off the other item cards
+    /// (the game shows the hovered item and the one you hold side by side): its right, else its left, else below it.</summary>
     void LateUpdate()
     {
         if (!box) return;
-        var corners = new Vector3[4];
-        box.GetWorldCorners(corners);   // 0 bottom-left, 2 top-right (screen space for an overlay canvas)
+        var mine = ScreenRect(box);
         var canvas = box.GetComponentInParent<Canvas>();
         float scale = canvas ? canvas.rootCanvas.scaleFactor : 1f;
-        bool room = corners[2].x + (Width + Gap) * scale <= Screen.width;
-        panel.anchorMin = panel.anchorMax = new Vector2(room ? 1f : 0f, 1f);
-        panel.pivot = new Vector2(room ? 0f : 1f, 1f);
-        panel.anchoredPosition = new Vector2(room ? Gap : -Gap, 0f);
+        float w = Width * scale, h = panel.sizeDelta.y * scale, gap = Gap * scale;
+        var others = new System.Collections.Generic.List<Rect>();
+        foreach (var win in FindObjectsByType<ItemInfoWindow>(FindObjectsSortMode.None))
+            if (win && win.infoBoxRect && win.infoBoxRect != box && win.infoBoxRect.gameObject.activeInHierarchy) others.Add(ScreenRect(win.infoBoxRect));
+        bool Free(Rect r) => r.xMin >= 0 && r.xMax <= Screen.width && r.yMin >= 0 && r.yMax <= Screen.height && !others.Exists(o => o.Overlaps(r));
+        var right = new Rect(mine.xMax + gap, mine.yMax - h, w, h);
+        var left = new Rect(mine.xMin - gap - w, mine.yMax - h, w, h);
+        if (Free(right)) Place(new Vector2(1f, 1f), new Vector2(0f, 1f), new Vector2(Gap, 0f));
+        else if (Free(left)) Place(new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(-Gap, 0f));
+        else Place(new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(0f, -Gap));   // below it
+    }
+
+    void Place(Vector2 anchor, Vector2 pivot, Vector2 at)
+    {
+        panel.anchorMin = panel.anchorMax = anchor;
+        panel.pivot = pivot;
+        panel.anchoredPosition = at;
+    }
+
+    /// <summary>A rect's place on the screen, in pixels (an overlay canvas: its world corners are screen points).</summary>
+    static Rect ScreenRect(RectTransform rt)
+    {
+        var c = new Vector3[4];
+        rt.GetWorldCorners(c);   // 0 bottom-left, 2 top-right
+        return Rect.MinMaxRect(c[0].x, c[0].y, c[2].x, c[2].y);
     }
 }

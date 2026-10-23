@@ -3,6 +3,7 @@
 /*
 !/.gitignore
 !/README.md
+!/API.md
 !/todo.md
 
 !/spike/
@@ -16,8 +17,11 @@
 !/spike/BetterFishing/
 !/spike/BetterNPCsAndQuests/
 !/spike/BetterWeather/
+!/spike/MapKit/
+!/spike/LoadTimer/
 !/spike/BetterNPCsAndQuests.Tests/
 !/spike/EmbervilleGhost.Tests/
+!/spike/MapKit.Tests/
 !/spike/package-all.ps1
 !/spike/libs/
 
