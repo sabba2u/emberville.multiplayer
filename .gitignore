@@ -23,6 +23,8 @@
 !/spike/EmbervilleGhost.Tests/
 !/spike/MapKit.Tests/
 !/spike/package-all.ps1
+!/spike/package-thunderstore.ps1
+!/spike/thunderstore/
 !/spike/libs/
 
 /spike/libs/*

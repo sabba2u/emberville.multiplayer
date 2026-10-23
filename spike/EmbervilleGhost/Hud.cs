@@ -252,6 +252,7 @@ internal static class Hud
         var cam = UnityEngine.Camera.main;
         var mouse = UnityEngine.InputSystem.Mouse.current;
         if (!cam || mouse == null) return null;
+        if (TiltView.MouseWorld(out var tilted)) return tilted;   // (the tilted view's picture)
         var mp = mouse.position.ReadValue();
         return cam.ScreenToWorldPoint(new UnityEngine.Vector3(mp.x, mp.y, -cam.transform.position.z));
     }

@@ -156,6 +156,10 @@ Lilshrooms, Lil Ticks, Lil Bombers, Spiderling, Bug Fuzz): `/pet list`, `/pet gl
 - **Font Options** (Insert menu): the story text's size (what NPCs say, speech bubbles, the quest tracker: the boxes
   grow with it), the size of the words in the world ("Open", "Examine", names over heads), and the font for all the
   game's text: the game's own Emberfont, Noto Serif, Liberation Sans or Perfect DOS VGA.
+- **Tilted view (experimental, `/tilt` or Insert > View):** the world seen from behind and above at an angle, the
+  floor receding and everything that stands (you, creatures, props, trees) stood up facing you, like a pop-up book.
+  Only the picture changes: the game plays exactly as before, and your aim follows what you see. Tilt and field of view
+  are sliders. The ground's tiles (walls too) stay flat.
 - **Staff tooltips** sit beside the item card, and off the second card when the game shows two side by side.
 - **Title screen:** Better & Online under the Emberville logo; the Next Fest popup is skipped.
 
@@ -184,7 +188,7 @@ Lilshrooms, Lil Ticks, Lil Bombers, Spiderling, Bug Fuzz): `/pet list`, `/pet gl
 ## Commands
 The full list is in [API.md](API.md#chat-commands). The main ones: `/tp`, `/summon`, `/trade`, `/online`, `/sleep`,
 `/respec`, `/rain`, `/snow`, `/clear`, `/hook`, `/clucking`, `/risen`, `/pet`, `/dungeon`, `/estate`, `/repair`,
-`/resources`, `/stash`, `/bowlock`, `/moveattack`; testing: `/nodeath`, `/onehitkill`, `/noclip`, `/devmode`, `/devpanel`.
+`/resources`, `/stash`, `/tilt`, `/bowlock`, `/moveattack`; testing: `/nodeath`, `/onehitkill`, `/noclip`, `/devmode`, `/devpanel`.
 
 ## API
 Other BepInEx mods (and NPC dialogue) can drive these mods; the full reference with examples is in [API.md](API.md).

@@ -25,6 +25,7 @@ Press **Enter**, type the command with a `/` in front, press Enter. `/help` list
 | `/resources [n]` (`/mats`) | 100 (or n) of every material. |
 | `/respec` | Every stat point back to spend again (level, XP and gear kept). |
 | `/stash` | Your shared stash (also the U key): 6 tabs of 30 slots, shared by every character on this PC. |
+| `/tilt` | The tilted 2.5D view on / off (experimental; Insert > View has its sliders). |
 
 ### Dungeons and the descent
 | Command | What it does |

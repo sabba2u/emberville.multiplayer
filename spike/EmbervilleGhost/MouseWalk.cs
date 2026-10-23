@@ -74,6 +74,7 @@ internal static class MouseWalk
         var cam = Camera.main;
         var m = Mouse.current;
         if (!cam || m == null) return false;
+        if (TiltView.MouseWorld(out var tilted)) { at = new Vector2(tilted.x, tilted.y); return true; }   // (the tilted view's picture)
         var p = cam.ScreenToWorldPoint(m.position.ReadValue());
         at = new Vector2(p.x, p.y);
         return true;

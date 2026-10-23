@@ -29,6 +29,7 @@ internal static class DebugPanel
             if (ImGui.BeginTabItem($"Who's connected ({plugin.PlayerCount})###who")) { DrawPlayers(plugin); ImGui.EndTabItem(); }
             if (GreyTab("Pets", Integrations.HasPets)) { Integrations.DrawPets(); ImGui.EndTabItem(); }
             if (ImGui.BeginTabItem("Font Options")) { StoryText.DrawMenu(); ImGui.EndTabItem(); }
+            if (ImGui.BeginTabItem("View")) { TiltView.DrawMenu(); ImGui.EndTabItem(); }
             if (ImGui.BeginTabItem("Mouse Options"))
             {
                 MouseWalk.DrawMenu();

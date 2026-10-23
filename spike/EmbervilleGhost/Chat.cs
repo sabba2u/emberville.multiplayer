@@ -150,6 +150,7 @@ internal static class Chat
             case "dungeon": Dungeon.Command(); return true;
             case "nodeath": NoDeath.Toggle(); return true;   // testing: take no damage
             case "walls": DebugWalls.Toggle(); return true;   // debug: what is solid in a generated place
+            case "tilt": TiltView.Toggle(!TiltView.On); return true;   // the tilted 2.5D view
             case "noclip": NoClip.Toggle(); return true;   // testing: walk through walls
             case "hook": HunterHook.Give(); return true;   // a Hunter's Hook
             case "respec": Respec.Run(); return true;   // every stat point back to spend again
