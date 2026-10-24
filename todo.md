@@ -16,6 +16,32 @@ is only what we learned in Duckov: the techniques, the notes in this file, and t
   floor you can't walk on. Debug with `/walls` (red = tiles we made solid from the rooms' Wall / WallCover / Water
   layers, orange = other colliders near you); fix in `Dungeon.BuildCollision`.
 
+### Open: camera views (v0.3.2, 2026-10-23)
+- **Tilted view** (`TiltView.cs`): stands every sprite except ground art named in `TiltFlatNames`; art laid over a
+  bigger thing (vines on a house) rides on it for the frame; multi-piece things get a temporary Player-layer
+  SortingGroup; Player-layer Fog goes to order -1 while tilted. Untested since the house fixes.
+- **Chase / first person** (`/chase`, `/fps`): untested. Mouse-turned (cursor locked, Alt frees), movement rotated in a
+  `PlayerMaster.GetInput` postfix, the 2D renderer's sort axis turned to the camera's heading (reflection on
+  `Renderer2DData.m_TransparencySortAxis`). `Walls3D.cs` raises BodyCollisions tilemap cells as blocks with the game's
+  Sprite-Lit shader set to `_ZWrite 1` (no 3D shader ships). Watch for: depth not hiding things behind walls, fences
+  turned into walls, wall-face tiles still painted on the floor, name tags / HUD markers placed the flat way.
+
+### Open: lock-on (Better Combat 0.2.1)
+- G now works in the dungeons (it waited for `GameState.Playing`, which can stay `Loading` there); the ring draws on
+  Default/32767. Controller: hold the right trigger (0.6 s) to lock / let go, tap to cycle; presses with a face button
+  (the game's RT+button skills) are ignored. Left trigger is the game's weapon wheel; R3 toggles skills.
+
+### Next: BetterCompanion (design in progress, 2026-10-23)
+- A bot-driven adventurer puppet (built like `RemoteAvatar` / Rory, AI like the pets): follows you, fights, middle
+  mouse sends it (melee: go there and fight; ranged: close enough to your target).
+- `/companion 2` / `/companion 3` copies that game save slot (`player_slotN.evp`, read only) into the mod's own
+  companion save; empty slot: a new adventurer. The companion's save loads automatically; nothing is merged back.
+- F at the companion opens the game's own inventory screen with the **top half (character, gear slots) theirs**
+  (tinted), the bottom half your bag; equipping moves items between your bag and them. Their own bag doesn't show.
+- Own XP and levels (the game's XP tables), stats from their gear. At zero health it falls; hold F 2 s to revive.
+- Still to settle: multiplayer (each player's own companion? everyone sees them?). Then the written design.
+- After that: how the spider boss fight works (one sprite or pieces, animation, ceiling hide/drop triggers).
+
 ### What we carry over from Duckov
 - **Code to copy (game-independent):** `Transport.cs` + `SteamTransport.cs` + `SteamLobby.cs` (LiteNetLib or
   Steam relay, lobbies, invites), `SnapshotBuffer.cs` (100 ms smoothing), `ImGuiUnity.cs` (menu drawn inside the
