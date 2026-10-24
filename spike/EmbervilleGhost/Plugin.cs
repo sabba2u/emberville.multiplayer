@@ -32,7 +32,7 @@ namespace EmbervilleGhost;
 [BepInDependency(Integrations.WeatherGuid, BepInDependency.DependencyFlags.SoftDependency)]
 public class Plugin : BaseUnityPlugin, ITransportListener
 {
-    internal const string Version = "0.3.1";
+    internal const string Version = "0.3.2";
     internal const string ModName = "Sabba's Emberville Multiplayer Mod";
     internal static string Title => $"{ModName} v{Version}";
 
@@ -146,6 +146,8 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         OnlinePlayers.Bind(Config);
         StoryText.Bind(Config);
         TiltView.Bind(Config);
+        Walls3D.Bind(Config);
+        TiltShift.Bind(Config);
         Bestiary.Bind(Config);
         BuildMode.Bind(Config);
         TeamHud.Bind(Config);
@@ -220,6 +222,7 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         TownPortal.Tick();
         StoryText.Tick();   // bigger story text (dialogue, bubbles, the quest tracker)
         TiltView.Tick();    // the tilted 2.5D view (/tilt)
+        TiltShift.Tick();   // the miniature look (/tiltshift)
         Travel.Tick();   // arriving in another scene: on to the exact spot   // the town portal button, its channel, everyone's portal pairs   // dyed gear (and the Hunter's Hook's yellow on every armour piece)
         Dungeon.Tick();      // creatures off the navigation mesh put back on it
         DungeonMap.Tick();   // the dungeon minimap (top left; ~ hides it)

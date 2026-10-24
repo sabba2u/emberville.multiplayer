@@ -17,6 +17,8 @@ namespace BetterCombat;
 /// from the creature): you circle and strafe around it, and swings, spells and arrows (they leave along your facing) go
 /// at it. A ring under it shows the lock. When it dies the lock moves on to the next one close by (or goes); too far
 /// away, or another place: gone. Only you see your ring. F stays the game's interact key.
+/// A controller: hold the right trigger to lock on to the nearest (hold again: let go), tap it for the next one; locked,
+/// you face the creature whatever the right stick does, so arrows and spells go at it.
 /// Lockable: enemies only: anything with the game's Enemy component (every creature, the mushroom huts too; not friendly
 /// NPCs), and spider eggs. Never doors, furniture or barrels.
 /// For other mods (the multiplayer mod's Hunter's Hook): Target and AimPoint.
@@ -51,12 +53,49 @@ public static class LockOn
         var me = Me;
         if (Target && (!me || !Alive(Target) || Far(me, Target, Lose))) { var was = Target; Release(null); if (me && was && !Alive(was)) Lock(Nearest(me, Next, null)); }
         var kb = Keyboard.current;
-        if (me && kb != null && Application.isFocused && Free && kb[cycleKey.Value].wasPressedThisFrame) Pressed(me);
+        if (me && kb != null && Application.isFocused && kb[cycleKey.Value].wasPressedThisFrame)
+        {
+            if (Free) Pressed(me);
+            else Log.Info($"Lock-on: G ignored (game state {Singleton<GameManager>.main?.gameState}, input {(MainInput.Actions.Player.enabled ? "on" : "off")}, a screen open: {UIPanels.HasOpenedPanel})");
+        }
+        Pad(me);
         Ring.Follow(Target);
     }
 
-    static bool Free => Singleton<GameManager>.HasMain && Singleton<GameManager>.main.gameState == GameState.Playing &&
-                        MainInput.Actions.Player.enabled && !UIPanels.HasOpenedPanel;
+    static float padHeld = -1f;
+    static bool padCombo, padDone;
+
+    /// <summary>
+    /// A controller: the right trigger. Held (0.6 s, by itself): lock on to the nearest (held again: let go); while
+    /// locked, a tap: the next one round. The game uses the right trigger held with a face button for the skills, so a
+    /// press that had a face button with it does nothing here.
+    /// </summary>
+    static void Pad(PlayerMaster me)
+    {
+        var pad = Gamepad.current;
+        if (pad == null || !me || !Application.isFocused) { padHeld = -1f; return; }
+        var rt = pad.rightTrigger;
+        if (rt.wasPressedThisFrame && Free) { padHeld = Time.unscaledTime; padCombo = padDone = false; }
+        if (padHeld < 0f) return;
+        if (pad.buttonSouth.isPressed || pad.buttonEast.isPressed || pad.buttonWest.isPressed || pad.buttonNorth.isPressed) padCombo = true;
+        if (rt.isPressed)
+        {
+            if (!padCombo && !padDone && Time.unscaledTime - padHeld >= 0.6f)
+            {
+                padDone = true;   // (held: on, or off)
+                if (Target) Release("let go"); else Lock(Nearest(me, Next, null));
+            }
+            return;
+        }
+        bool tap = !padCombo && !padDone;
+        padHeld = -1f;
+        if (tap && Target) Cycle(me);
+    }
+
+    /// <summary>Playing: the player's controls on and no screen up (the game's state isn't asked: in some places, the
+    /// dungeons among them, it can stay "Loading" while you play).</summary>
+    static bool Free => Singleton<GameManager>.HasMain && Time.timeScale > 0f && MainInput.Actions.Player.enabled && !UIPanels.HasOpenedPanel &&
+                        Singleton<GameManager>.main.gameState is not (GameState.Paused or GameState.Dialogue or GameState.Cutscene or GameState.Customizing or GameState.Gameover);
 
     /// <summary>G: the enemy under the mouse (the locked one: let go), else the next one around.</summary>
     static void Pressed(PlayerMaster me)
@@ -69,8 +108,9 @@ public static class LockOn
     /// <summary>G: the next creature around, nearest first (round and round).</summary>
     static void Cycle(PlayerMaster me)
     {
-        var near = Targets().Where(e => !Far(me, e, Next)).OrderBy(e => Dist(me, e)).ToList();
-        if (near.Count == 0) { Release(null); return; }
+        var all = Targets().ToList();
+        var near = all.Where(e => !Far(me, e, Next)).OrderBy(e => Dist(me, e)).ToList();
+        if (near.Count == 0) { Log.Info($"Lock-on: nothing within {Next:0} ({all.Count} enemies about)", toast: true); Release(null); return; }
         int i = Target ? near.IndexOf(Target) : -1;
         Lock(near[(i + 1) % near.Count]);
     }
@@ -91,7 +131,7 @@ public static class LockOn
     [HarmonyPatch(typeof(PlayerMaster), "GetLookDirection"), HarmonyPrefix]
     static bool Face(PlayerMaster __instance)
     {
-        if (!Target || __instance != Me || MainInput.CurrentScheme == ControllerScheme.Gamepad) return true;
+        if (!Target || __instance != Me) return true;   // (a controller too: locked, the right stick doesn't aim)
         Vector2 d = Middle(Target) - __instance.transform.position;
         if (d.sqrMagnitude < 0.0001f) return true;
         __instance.lookDir = d.normalized;
@@ -168,9 +208,11 @@ internal static class Ring
         if (!e) { if (go) go.SetActive(false); return; }
         if (!go) Build();
         go.SetActive(true);
-        // under its feet, on its own layer just below it
-        var body = e.GetComponentsInChildren<SpriteRenderer>().Where(r => r.enabled && r.sprite).OrderBy(r => r.sortingOrder).FirstOrDefault();
-        if (body) { sr.sortingLayerID = body.sortingLayerID; sr.sortingOrder = body.sortingOrder - 1; }
+        // under its feet: on top of the ground (the "Default" layer's last), under everything standing ("Player" layer).
+        // (Just under the creature's own lowest picture hid it in the dungeons: that's often a shadow on the ground
+        // layer, and the dungeon's floor is drawn over it.)
+        sr.sortingLayerID = SortingLayer.NameToID("Default");
+        sr.sortingOrder = short.MaxValue;
         var col = e.GetComponentInChildren<Collider2D>();
         float width = col ? Mathf.Clamp(col.bounds.size.x * 1.6f, 0.9f, 4f) : 1.2f;
         float pulse = 1f + Mathf.Sin(Time.time * 6f) * 0.06f;

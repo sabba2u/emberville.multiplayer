@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.2
+- **Chase and first-person views (experimental):** `/chase` and `/fps` (or Insert > View): the camera behind you or
+  through your eyes, turned by the mouse (Alt frees the cursor), W walks the way you face, the walls raised as blocks.
+- **Tilt-shift:** `/tiltshift`: the miniature look (a sharp middle band, blurred top and bottom, richer colours).
+- **Tilted view:** houses stand whole (vines and windows stay on them, trees behind sort behind the roof, the world's
+  edge no longer cuts their tops); stairs and rugs stay lying. Reset buttons on the sliders.
+- **Partial controller support:** lock-on on a controller: hold the right trigger to lock on to the nearest enemy (hold
+  again: let go), tap it for the next one. Locked, you face the enemy whatever the right stick does, so arrows and
+  spells go at it.
+- **Lock-on fixes:** G works in the dungeons (it was ignored there), and the lock ring shows on the dungeon floor.
+
 ## 0.3.1
 - **Tilted view (experimental):** `/tilt` or Insert > View: the world from behind and above in perspective, everything
   that stands stood up facing you. Only the picture changes; your aim, mouse walking, pings and the Hunter's Hook follow

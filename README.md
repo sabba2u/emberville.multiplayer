@@ -94,6 +94,8 @@ Type the command in chat to get one.
   and swings, spells and arrows go at it; a ring under it shows the lock. G on it again lets go; G pointing at nothing
   locks the nearest enemy, again the next one. When it dies the lock moves on to the next one close by. Enemies only
   (creatures, spider eggs): never doors, barrels or furniture. The Hunter's Hook throws at the locked enemy too.
+  **Controller (partial support):** hold the **right trigger** to lock on to the nearest enemy (hold again: let go), tap
+  it for the next one; locked, you face it whatever the right stick does, so arrows and spells go at it.
 - **Better Combat:** move while attacking (`/moveattack`), bows that aim in any direction and lock on (`/bowlock`).
   
   ![moveandattack](moveandattack_sm.gif)
@@ -159,7 +161,14 @@ Lilshrooms, Lil Ticks, Lil Bombers, Spiderling, Bug Fuzz): `/pet list`, `/pet gl
 - **Tilted view (experimental, `/tilt` or Insert > View):** the world seen from behind and above at an angle, the
   floor receding and everything that stands (you, creatures, props, trees) stood up facing you, like a pop-up book.
   Only the picture changes: the game plays exactly as before, and your aim follows what you see. Tilt and field of view
-  are sliders. The ground's tiles (walls too) stay flat.
+  are sliders (each with a Reset). Houses stand with their vines and windows on them; stairs, rugs and paths stay lying
+  (`TiltFlatNames` in the config lists the words that keep ground art flat).
+- **Chase and first-person views (experimental, `/chase`, `/fps` or Insert > View):** the camera low behind you, or
+  through your own eyes. The mouse turns the camera (hold **Alt** for the cursor); W walks the way you face, A/D
+  strafe, attacks go straight ahead. The walls are raised as blocks around you. Sliders for distance, angle, eye
+  height, field of view and mouse speed.
+- **Tilt-shift (`/tiltshift` or Insert > View):** the miniature look: a sharp band in the middle, the top and bottom
+  blurred, richer colours. Works with any view.
 - **Staff tooltips** sit beside the item card, and off the second card when the game shows two side by side.
 - **Title screen:** Better & Online under the Emberville logo; the Next Fest popup is skipped.
 
@@ -174,6 +183,7 @@ Lilshrooms, Lil Ticks, Lil Bombers, Spiderling, Bug Fuzz): `/pet list`, `/pet gl
 | N | Bestiary |
 | F5-F8, hold Left Alt | wield a favourite weapon, weapon wheel |
 | G | lock on to the enemy under the mouse (again: let go); at nothing: the nearest / the next one |
+| Right trigger (controller) | hold: lock on to the nearest (hold again: let go); tap: the next one |
 | F (on an item) | favourite it (heart) |
 | X / V (at a chest) | put matching items in / customize the chest |
 | Ctrl+click (chest open) | move the item across |
@@ -188,7 +198,7 @@ Lilshrooms, Lil Ticks, Lil Bombers, Spiderling, Bug Fuzz): `/pet list`, `/pet gl
 ## Commands
 The full list is in [API.md](API.md#chat-commands). The main ones: `/tp`, `/summon`, `/trade`, `/online`, `/sleep`,
 `/respec`, `/rain`, `/snow`, `/clear`, `/hook`, `/clucking`, `/risen`, `/pet`, `/dungeon`, `/estate`, `/repair`,
-`/resources`, `/stash`, `/tilt`, `/bowlock`, `/moveattack`; testing: `/nodeath`, `/onehitkill`, `/noclip`, `/devmode`, `/devpanel`.
+`/resources`, `/stash`, `/tilt`, `/chase`, `/fps`, `/tiltshift`, `/bowlock`, `/moveattack`; testing: `/nodeath`, `/onehitkill`, `/noclip`, `/devmode`, `/devpanel`.
 
 ## API
 Other BepInEx mods (and NPC dialogue) can drive these mods; the full reference with examples is in [API.md](API.md).
