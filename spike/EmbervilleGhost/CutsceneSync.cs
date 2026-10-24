@@ -76,6 +76,7 @@ internal static class CutsceneSync
             return false;
         }
         Played(index, id);
+        DoorSync.CutsceneDoors(__instance, ours: true);
         if (!Plugin.AnyoneElseHere) return true;
         var w = new NetDataWriter();
         w.Put((byte)MsgType.CutsceneStart);
@@ -97,6 +98,7 @@ internal static class CutsceneSync
         if (!target || !me || me.IsDead) return;
         fromTeammate[(index, id)] = Time.unscaledTime;
         Played(index, id);
+        DoorSync.CutsceneDoors(target, ours: false, from);
         if (!target.gameObject.activeInHierarchy) target.gameObject.SetActive(true);   // its trigger never switched it on here
         mirroring++;
         try { AccessTools.Method(type, method, Type.EmptyTypes).Invoke(target, null); }
@@ -141,6 +143,7 @@ internal static class CutsceneSync
             if (!target) continue;
             Played(index, id);
             ended.Add((index, id));
+            DoorSync.CutsceneDoors(target, ours: false, Plugin.OwnerHere);   // (who started it isn't sent: the area owner stands in)
             mirroring++;
             try { Ending(index, target); }
             catch (Exception e) { NetLog.Warn($"Cutscene {target.name}: skipping to its end failed: {e.Message}"); }

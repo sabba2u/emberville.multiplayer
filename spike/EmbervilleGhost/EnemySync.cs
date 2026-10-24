@@ -146,6 +146,7 @@ internal static class EnemySync
             var t = Plugin.AvatarOf(p.Id);
             if (t) positions.Add((p.Id, t.position));
         }
+        if (Integrations.HasCompanion) positions.AddRange(CompanionSync.Positions());   // (a creature by someone's companion runs on their game: it fights the companion there)
 
         foreach (var e in EnemiesManager.AllEnemies)
         {

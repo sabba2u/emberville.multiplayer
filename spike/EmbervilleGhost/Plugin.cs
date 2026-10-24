@@ -30,6 +30,7 @@ namespace EmbervilleGhost;
 [BepInDependency(Integrations.PetsGuid, BepInDependency.DependencyFlags.SoftDependency)]
 [BepInDependency(Integrations.NpcsGuid, BepInDependency.DependencyFlags.SoftDependency)]
 [BepInDependency(Integrations.WeatherGuid, BepInDependency.DependencyFlags.SoftDependency)]
+[BepInDependency(Integrations.CompanionGuid, BepInDependency.DependencyFlags.SoftDependency)]
 public class Plugin : BaseUnityPlugin, ITransportListener
 {
     internal const string Version = "0.3.2";
@@ -118,6 +119,7 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         Pings.Plugin = this;
         HookNet.Plugin = this;
         SummonSync.Plugin = this;
+        CompanionSync.Plugin = this;
         RemotePets.Plugin = this;
         ArenaTraps.Plugin = this;
         BossSync.Plugin = this;
@@ -269,7 +271,7 @@ public class Plugin : BaseUnityPlugin, ITransportListener
 
     void NetTick()
     {
-        if (LocalPlayer.Scene != lastScene) { lastScene = LocalPlayer.Scene; SceneIds.Clear(); EnemySync.SceneChanged(); FxSync.Clear(); AttackFx.Clear(); BossSync.Clear(); StationSync.Clear(); FarmSync.Clear(); Pings.Clear(); HookNet.Clear(); Integrations.ForgetTeammates(); GroundSync.Clear(); InteractSync.Clear(); CutsceneSync.Clear(); }   // ids belong to a scene
+        if (LocalPlayer.Scene != lastScene) { lastScene = LocalPlayer.Scene; SceneIds.Clear(); EnemySync.SceneChanged(); FxSync.Clear(); AttackFx.Clear(); BossSync.Clear(); StationSync.Clear(); FarmSync.Clear(); Pings.Clear(); HookNet.Clear(); Integrations.ForgetTeammates(); GroundSync.Clear(); InteractSync.Clear(); CutsceneSync.Clear(); DoorSync.Clear(); }   // ids belong to a scene
 
         Perf.Begin("1 receive"); transport.Poll(); Perf.End("1 receive");
 
@@ -1169,6 +1171,9 @@ public class Plugin : BaseUnityPlugin, ITransportListener
             case MsgType.WeatherStorm: if (Integrations.HasWeather) WeatherSync.OnStorm(reader); break;
             case MsgType.WeatherStrike: if (Integrations.HasWeather) WeatherSync.OnStrike(reader); break;
             case MsgType.Summons: if (Integrations.HasPets) SummonSync.OnSummons(reader, from); break;
+            case MsgType.CompanionState: if (Integrations.HasCompanion) CompanionSync.OnState(reader, from); break;
+            case MsgType.CompanionLook: if (Integrations.HasCompanion) CompanionSync.OnLook(reader, from); break;
+            case MsgType.CompanionRevive: if (Integrations.HasCompanion) CompanionSync.OnRevive(from); break;
             case MsgType.PathDraw: Pings.OnPath(reader, from); break;
             case MsgType.ChestTake: if (owner) ChestSync.OnTake(reader, from); break;   // shared chests: the area owner's are real
             case MsgType.ChestShared: if (!owner) ChestSync.OnShared(reader); break;
@@ -1369,6 +1374,9 @@ internal enum MsgType : byte
     NpcLook = 153,
     HookBlood = 154,
     WeatherStorm = 155, // whoever changed it -> everyone (host -> each player who joins), reliable: kind (0 clear, 1 rain, 2 snow: Better Weather), its own settings (amount, darkness, settle, lightning every, wind: NaN = the sliders')
+    CompanionState = 160, // owner -> their place, ~10 Hz unreliable (gone: reliable): out?, then x, y, flip, health 0-255, downed, animators (Better Companion)
+    CompanionLook = 161,  // owner -> their place, reliable, when it changes: LookSync bytes (name, parts, colours) of their companion
+    CompanionRevive = 162, // reviver -> the companion's owner, reliable: (nothing) they held F at it for 2 s
     TpAsk = 158,        // player -> the player they want to go to, reliable: (nothing; they answer with SummonTo)
     SummonTo = 159,     // player -> the player they bring over, reliable: their name, Travel.Spot (scene, area, dungeon floor, x, y)
     TownPortal = 157,   // its owner -> everyone (host -> each player who joins), reliable: owner, name, scene, area, in a dungeon?, settings, seed, region, floor, x, y (their town portal pair)

@@ -42,6 +42,24 @@ is only what we learned in Duckov: the techniques, the notes in this file, and t
 - Still to settle: multiplayer (each player's own companion? everyone sees them?). Then the written design.
 - After that: how the spider boss fight works (one sprite or pieces, animation, ceiling hide/drop triggers).
 
+### Note: game FX to reuse (2026-10-24)
+- `Texture2D/Player_ExtraFxAnimations.png` is an atlas full of nice player effects (played by the player rig's
+  `extraFxAnimator`, `PlayerExtraFX_Ctrl`, e.g. the "LevelUp" trigger). Reuse them for future work (companion, skills,
+  buffs). Full catalogue of the game's effects and how to spawn them: `docs/research/2026-10-24-game-fx-catalogue.md`.
+- The player's other atlases (all in `Texture2D/`), worth raiding:
+  - `Player_Fishing`: fishing rods and lines;
+  - `Player_Farm`: the farming animations;
+  - `Player_Hits`: the death animation, and the hit and attack reactions;
+  - `Player_Leftovers`: the corpse;
+  - class skills: `Player_SkillsKnight`, `Player_SkillsMage`, `Player_SkillsWanderer`;
+  - `Player_Swings`, `Player_DHSwings`, `Player_Punches`, `Player_Bow`, `Player_Cast`: attacks per weapon;
+  - `Player_Dash`, `Player_Move`, `Player_Base`.
+- `Portal_Animation_M` (+ `_0`): a portal animation. Useful for the companion appearing or leaving, town portals,
+  teleports.
+- `Skill Progression_UI_New_V5-Recovered2.png`: an unused **Masteries** screen mockup (per weapon type mastery
+  cards with levels, XP bar, primary and secondary skill slots, unlock milestones 4/7/14/23/36/40). A template for
+  when we build our own class or weapon masteries.
+
 ### What we carry over from Duckov
 - **Code to copy (game-independent):** `Transport.cs` + `SteamTransport.cs` + `SteamLobby.cs` (LiteNetLib or
   Steam relay, lobbies, invites), `SnapshotBuffer.cs` (100 ms smoothing), `ImGuiUnity.cs` (menu drawn inside the

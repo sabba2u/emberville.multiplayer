@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+- **Better Companion (new):** an adventurer from one of your other save slots (`/companion 2`; your slot is only
+  read). It follows you and fights with its own gear, level and XP; middle click sends it; enemies fight it back; at
+  zero health hold F to revive it. F at it opens the inventory with its gear on top: dress it from your bag, and
+  spend its attribute points on the character panel. Swaps between a melee and a ranged weapon and dashes in and out
+  of fights. Everyone sees everyone's companion in co-op.
+- **Co-op story gates:** a cutscene's gates (Adeos' entrance gate, the HummingSphere gate) follow the player who set
+  the cutscene off, so they open for teammates when that player's fight is done.
+
 ## 0.3.2
 - **Chase and first-person views (experimental):** `/chase` and `/fps` (or Insert > View): the camera behind you or
   through your eyes, turned by the mouse (Alt frees the cursor), W walks the way you face, the walls raised as blocks.

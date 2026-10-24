@@ -17,7 +17,7 @@ Not made or supported by Cygnus Cross.
 [Playing together](#playing-together) · [Travel: town portal, /tp, /summon](#travel-town-portal-tp-summon) ·
 [The descent and the boss arena](#the-descent-and-the-boss-arena) · [Weapons and summons](#weapons-and-summons) ·
 [Your character](#your-character) · [Chests and loot](#chests-and-loot) · [Weather](#weather) ·
-[NPCs and quests](#npcs-and-quests) · [Fishing](#fishing) · [Pets](#pets) · [Quality of life](#quality-of-life) ·
+[NPCs and quests](#npcs-and-quests) · [Fishing](#fishing) · [Pets](#pets) · [Companion](#companion) · [Quality of life](#quality-of-life) ·
 [Keys](#keys) · [Commands](#commands) · [API](#api) · [Secrets](#secrets-the-dev-panel-test-arenas-and-the-estate) ·
 [Build](#build)
 
@@ -146,6 +146,21 @@ Lilshrooms, Lil Ticks, Lil Bombers, Spiderling, Bug Fuzz): `/pet list`, `/pet gl
 
 ![clucky](clucky_sm.gif)
 
+## Companion
+An adventurer who travels and fights beside you, made from one of your other characters (Better Companion).
+- `/companion 2` copies save slot 2 into your companion: its looks, gear, bag and level. Your real slot is only read;
+  the companion keeps its own save. An empty slot gives a brand-new adventurer. Also `/companion new`, `dismiss`,
+  `call`, and `/companion` for its status.
+- It follows you and fights the way its weapon does: a sword, axe or fists up close, a bow or staff from range. With
+  one of each it swaps by itself, and dashes in to finish an enemy or out of a crowd.
+- **Middle click** sends it there to fight (your lock-on target comes first).
+- Enemies fight it back. At zero health it's down: **hold F** next to it for 2 seconds to get it up (a teammate can
+  too).
+- **F** next to it opens the inventory with its gear on top (tinted teal) and your bag below: drag gear up to dress
+  it, back down to take it. The character panel shows its attributes then: spend its level-up points there.
+- It earns XP from the kills it helps with and levels up on the game's own tables.
+- Everyone sees everyone's companion in co-op.
+
 
 
 ## Quality of life
@@ -197,7 +212,7 @@ Lilshrooms, Lil Ticks, Lil Bombers, Spiderling, Bug Fuzz): `/pet list`, `/pet gl
 
 ## Commands
 The full list is in [API.md](API.md#chat-commands). The main ones: `/tp`, `/summon`, `/trade`, `/online`, `/sleep`,
-`/respec`, `/rain`, `/snow`, `/clear`, `/hook`, `/clucking`, `/risen`, `/pet`, `/dungeon`, `/estate`, `/repair`,
+`/respec`, `/rain`, `/snow`, `/clear`, `/hook`, `/clucking`, `/risen`, `/pet`, `/companion`, `/dungeon`, `/estate`, `/repair`,
 `/resources`, `/stash`, `/tilt`, `/chase`, `/fps`, `/tiltshift`, `/bowlock`, `/moveattack`; testing: `/nodeath`, `/onehitkill`, `/noclip`, `/devmode`, `/devpanel`.
 
 ## API

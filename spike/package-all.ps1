@@ -1,5 +1,5 @@
 # Builds the all-in-one player download: BepInEx + the multiplayer mod + Favourite Weapons + Better Chests + Better Combat
-# + Better Looting + Better Pets and Summons + Better Fishing + Better NPCs and Quests + Better Weather, in one zip
+# + Better Looting + Better Pets and Summons + Better Fishing + Better NPCs and Quests + Better Weather + Better Companion, in one zip
 # you unpack into the Emberville folder.
 #   pwsh spike/package-all.ps1 [-GamePath "K:\...\Emberville Demo"]
 # Output: spike/dist/EmbervilleModPack-v<multiplayer version>.zip
@@ -9,7 +9,7 @@ $ErrorActionPreference = "Stop"
 
 $here = $PSScriptRoot
 $dist = Join-Path $here "dist"
-$mods = "EmbervilleGhost", "EmbervilleFavorites", "BetterChests", "BetterCombat", "BetterLooting", "BetterPetsAndSummons", "BetterFishing", "BetterNPCsAndQuests", "BetterWeather"
+$mods = "EmbervilleGhost", "EmbervilleFavorites", "BetterChests", "BetterCombat", "BetterLooting", "BetterPetsAndSummons", "BetterFishing", "BetterNPCsAndQuests", "BetterWeather", "BetterCompanion"
 $version = [regex]::Match((Get-Content "$here\EmbervilleGhost\Plugin.cs" -Raw), 'const string Version = "([^"]+)"').Groups[1].Value
 $name = "EmbervilleModPack-v$version"
 $stage = Join-Path $dist $name
@@ -21,7 +21,7 @@ New-Item -ItemType Directory -Force $stage | Out-Null
 foreach ($mod in $mods) {
     & "$here\$mod\package.ps1" -GamePath $GamePath | Out-Host
     # each package leaves its staging folder next to its zip: the newest folder for this mod
-    $prefix = @{ EmbervilleGhost = "EmbervilleMultiplayer"; EmbervilleFavorites = "EmbervilleFavorites"; BetterChests = "BetterChests"; BetterCombat = "BetterCombat"; BetterLooting = "BetterLooting"; BetterPetsAndSummons = "BetterPetsAndSummons"; BetterFishing = "BetterFishing"; BetterNPCsAndQuests = "BetterNPCsAndQuests"; BetterWeather = "BetterWeather" }[$mod]
+    $prefix = @{ EmbervilleGhost = "EmbervilleMultiplayer"; EmbervilleFavorites = "EmbervilleFavorites"; BetterChests = "BetterChests"; BetterCombat = "BetterCombat"; BetterLooting = "BetterLooting"; BetterPetsAndSummons = "BetterPetsAndSummons"; BetterFishing = "BetterFishing"; BetterNPCsAndQuests = "BetterNPCsAndQuests"; BetterWeather = "BetterWeather"; BetterCompanion = "BetterCompanion" }[$mod]
     $built = Get-ChildItem $dist -Directory | Where-Object { $_.Name -like "$prefix-v*" } | Sort-Object LastWriteTime | Select-Object -Last 1
     if (-not $built) { throw "No build folder for $mod" }
     Copy-Item "$($built.FullName)\*" $stage -Recurse -Force
@@ -33,7 +33,7 @@ Everything in one download: the co-op multiplayer mod, Favourite Weapons (F5-F8,
 (X / Shift+X / V at a chest, Ctrl+click, the shared stash on U), Better Combat (lock-on on G, bow lock-on, move while attacking), Better Looting (magnet, green arrows) and
 Better Pets and Summons (/pet, the Staff of Clucking, the Staff of the Risen), Better Fishing (a catch from every
 cast, spots at the fish shadows) and Better NPCs and Quests (Ellie and her quest; add your own NPCs and quests with
-text files) and Better Weather (a rain storm: /rain). Not made or supported by Cygnus Cross.
+text files) and Better Weather (a rain storm: /rain) and Better Companion (an adventurer from your other save slot: /companion 2). Not made or supported by Cygnus Cross.
 
 INSTALL
 1. Find the game folder: Steam > right-click Emberville Demo > Manage > Browse local files.
@@ -42,7 +42,7 @@ INSTALL
 
 Each mod's own README is in the readme folder: README-EmbervilleMultiplayer.txt, README-EmbervilleFavorites.txt,
 README-BetterChests.txt, README-BetterCombat.txt, README-BetterLooting.txt, README-BetterPetsAndSummons.txt, README-BetterFishing.txt,
-README-BetterNPCsAndQuests.txt, README-BetterWeather.txt.
+README-BetterNPCsAndQuests.txt, README-BetterWeather.txt, README-BetterCompanion.txt.
 To leave one out, delete its folder in BepInEx\plugins.
 "@ | Set-Content "$stage\README-EmbervilleModPack.txt"
 

@@ -20,12 +20,14 @@ internal static class Integrations
     public const string PetsGuid = "spike.emberville.betterpetsandsummons";
     public const string NpcsGuid = "spike.emberville.betternpcsandquests";
     public const string WeatherGuid = "spike.emberville.betterweather";
+    public const string CompanionGuid = "spike.emberville.bettercompanion";
 
     public static bool HasCombat { get; private set; }
     public static bool HasLooting { get; private set; }
     public static bool HasPets { get; private set; }
     public static bool HasNpcs { get; private set; }
     public static bool HasWeather { get; private set; }
+    public static bool HasCompanion { get; private set; }
 
     /// <summary>From Plugin.Awake (they load first: soft dependencies).</summary>
     public static void Init()
@@ -38,10 +40,12 @@ internal static class Integrations
         if (HasNpcs) NpcHooks();
         HasWeather = Chainloader.PluginInfos.ContainsKey(WeatherGuid);
         if (HasWeather) WeatherSync.Hook();
+        HasCompanion = Chainloader.PluginInfos.ContainsKey(CompanionGuid);
+        if (HasCompanion) CompanionHooks();
         NetLog.Info("Split-out mods: " + string.Join(", ", new List<string> {
             HasCombat ? "Better Combat" : null, HasLooting ? "Better Looting" : null, HasPets ? "Better Pets and Summons" : null,
-            HasNpcs ? "Better NPCs and Quests" : null, HasWeather ? "Better Weather" : null }.FindAll(x => x != null)) +
-            (HasCombat || HasLooting || HasPets || HasNpcs || HasWeather ? "" : "none"), toast: false);
+            HasNpcs ? "Better NPCs and Quests" : null, HasWeather ? "Better Weather" : null, HasCompanion ? "Better Companion" : null }.FindAll(x => x != null)) +
+            (HasCombat || HasLooting || HasPets || HasNpcs || HasWeather || HasCompanion ? "" : "none"), toast: false);
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
@@ -99,11 +103,13 @@ internal static class Integrations
         if (HasCombat && CombatCommand(cmd)) return true;
         if (HasPets && PetsCommand(cmd)) return true;
         if (HasWeather && WeatherCommand(cmd)) return true;
+        if (HasCompanion && CompanionCommand(cmd)) return true;
         if (chestsCommand != null && chestsCommand.Invoke(null, new object[] { cmd }) is bool ok && ok) return true;   // /stash (Better Chests)
         return false;
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)] static bool CombatCommand(string c) => BetterCombat.Plugin.Command(c);
+    [MethodImpl(MethodImplOptions.NoInlining)] static Enemy CombatLocked() => BetterCombat.LockOn.Target ? BetterCombat.LockOn.Target.GetComponent<Enemy>() : null;
 
     /// <summary>Better Combat's lock-on: where to aim (the locked creature), if locked.</summary>
     public static bool LockedAim(out Vector3 at)
@@ -116,6 +122,22 @@ internal static class Integrations
         HarmonyLib.AccessTools.TypeByName("BetterChests.Plugin") is System.Type ct ? HarmonyLib.AccessTools.Method(ct, "Command", new[] { typeof(string) }) : null;
     [MethodImpl(MethodImplOptions.NoInlining)] static bool PetsCommand(string c) => BetterPetsAndSummons.Plugin.Command(c);
     [MethodImpl(MethodImplOptions.NoInlining)] static bool WeatherCommand(string c) => BetterWeather.Plugin.Command(c);
+    [MethodImpl(MethodImplOptions.NoInlining)] static bool CompanionCommand(string c) => BetterCompanion.Plugin.Command(c);
+
+    /// <summary>Better Companion: our chat, busy and typing checks, and which creatures are story NPCs.</summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    static void CompanionHooks()
+    {
+        BetterCompanion.Hooks.Say = Chat.System;
+        BetterCompanion.Hooks.Typing = () => ImGuiUnity.Typing || Chat.IsOpen;
+        BetterCompanion.Hooks.Busy = () => PlayerStatusUtil.LocalBusy;
+        BetterCompanion.Hooks.Ignore = EnemySync.LocalOnly;
+        BetterCompanion.Hooks.RemoteRun = e => !EnemySync.Runs(e);   // (a creature someone else's game runs: theirs to point)
+        BetterCompanion.Hooks.HasRally = true;   // (Pings hands every middle click to Rally)
+        BetterCompanion.Hooks.DrawsHud = true;
+        BetterCompanion.Hooks.DownedNear = CompanionSync.DownedNear;   // (F at a teammate's downed companion: revive, not loot)   // (its name tag: DrawHud → CompanionDraw)
+        if (HasCombat) BetterCompanion.Hooks.LockTarget = CombatLocked;
+    }
 
     /// <summary>Better Weather's Insert tab.</summary>
     public static void DrawWeather()
@@ -158,18 +180,21 @@ internal static class Integrations
     public static void DrawHud()
     {
         if (HasNpcs) NpcLabels();
+        if (HasCompanion) { CompanionDraw(); CompanionSync.Draw(); }
         if (!HasPets) return;
         PetsHud();
         RemotePets.DrawLabels();
         SummonSync.Draw();
     }
 
+    [MethodImpl(MethodImplOptions.NoInlining)] static void CompanionDraw() => BetterCompanion.Plugin.DrawHud();
     [MethodImpl(MethodImplOptions.NoInlining)] static void PetsHud() => BetterPetsAndSummons.Plugin.DrawHud();
 
     // ---- every frame: teammates' pets and summons ----
 
     public static void Tick()
     {
+        if (HasCompanion) CompanionSync.Tick();
         if (!HasPets) return;
         RemotePets.Tick();
         SummonSync.Tick();
@@ -177,6 +202,7 @@ internal static class Integrations
 
     public static void ForgetTeammates()
     {
+        if (HasCompanion) CompanionSync.Clear();
         if (!HasPets) return;
         RemotePets.ForgetAll();
         SummonSync.Clear();
@@ -200,7 +226,8 @@ internal static class Integrations
     public static bool HoldingStaff => HasPets && Holding();
     [MethodImpl(MethodImplOptions.NoInlining)] static bool Holding() => BetterPetsAndSummons.Plugin.HoldingStaff;
 
-    public static void Rally(Vector3 point) { if (HasPets) RallyTo(point); }
+    public static void Rally(Vector3 point) { if (HasPets) RallyTo(point); if (HasCompanion) CompanionSend(point); }
+    [MethodImpl(MethodImplOptions.NoInlining)] static void CompanionSend(Vector3 p) => BetterCompanion.Plugin.Send(p);
     [MethodImpl(MethodImplOptions.NoInlining)] static void RallyTo(Vector3 p) => BetterPetsAndSummons.Plugin.Rally(p);
 
     /// <summary>A descent guardian's death: now and then, a staff among its loot.</summary>

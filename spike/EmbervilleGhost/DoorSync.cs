@@ -35,10 +35,50 @@ internal static class DoorSync
     static bool OwnUse => localUse > 0 || Time.unscaledTime < ownUntil;
 
     /// <summary>May this state change happen here? Puppets only take their own player's use and mirrored changes.</summary>
-    static bool Allowed() => !Connected || !Puppet || OwnUse || mirroring > 0;
+    static bool Allowed(GateDoor d = null)
+    {
+        if (!Connected || mirroring > 0 || OwnUse) return true;   // (our own key or lever on it: always ours to use)
+        if (d && ownScene.Contains(d)) return true;
+        if (d && Starter(d) is int who && who != Plugin.MyId) return false;
+        return !Puppet;
+    }
 
     /// <summary>Should we tell the others? Our own use, or the owner's world changing (not a mirror of someone else).</summary>
-    static bool ShouldSend() => Connected && mirroring == 0 && (OwnUse || !Puppet) && Plugin.AnyoneElseHere;
+    static bool ShouldSend(GateDoor d = null) =>
+        Connected && mirroring == 0 && (d && ownScene.Contains(d) || OwnUse || !Puppet) && Plugin.AnyoneElseHere;
+
+    /// <summary>
+    /// The doors inside a story cutscene (Adeos' entrance gate, the HummingSphere gate...) follow the player whose
+    /// cutscene it is: the cutscene runs on every copy, but only the one who set it off drives them (its gate shuts
+    /// behind them and opens when they're done, for everyone, whoever runs the area); on the others' copies their own
+    /// run of it can't touch them. (Before, only the area owner's copy could, so a gate the starter's fight opened
+    /// stayed shut for teammates, and a late arrival who ran the area could shut it on everyone.)
+    /// </summary>
+    /// If the one who set it off leaves (died and respawned elsewhere, went through a portal, disconnected), their
+    /// doors fall back to the usual rule (the area owner's copy), so nobody is shut in behind them.
+    public static void CutsceneDoors(Component cutscene, bool ours, int starter = -1)
+    {
+        if (!cutscene) return;
+        foreach (var d in cutscene.GetComponentsInChildren<GateDoor>(true))
+        {
+            if (ours) { ownScene.Add(d); theirScene.Remove(d); }
+            else if (!ownScene.Contains(d)) theirScene[d] = starter;
+        }
+    }
+
+    /// <summary>The teammate whose cutscene drives this door, while they're still here; else null.</summary>
+    static int? Starter(GateDoor d)
+    {
+        if (!theirScene.TryGetValue(d, out int who)) return null;
+        string scene = LocalPlayer.Scene, area = LocalPlayer.Area;
+        foreach (var p in Plugin.Players) if (p.Id == who && p.SamePlace(scene, area)) return who;
+        return null;
+    }
+
+    public static void Clear() { ownScene.Clear(); theirScene.Clear(); unlockedByUs.Clear(); }
+
+    static readonly HashSet<GateDoor> ownScene = new HashSet<GateDoor>();
+    static readonly Dictionary<GateDoor, int> theirScene = new Dictionary<GateDoor, int>();
 
     /// <summary>
     /// Our player used something whose events open / close doors and flip switches (a key altar, a lever-like object,
@@ -66,7 +106,7 @@ internal static class DoorSync
 
     static void SendDoor(GateDoor d, DoorOp op, DoorState state)
     {
-        if (!ShouldSend()) return;
+        if (!ShouldSend(d)) return;
         var w = new NetDataWriter();
         w.Put((byte)MsgType.DoorChange);
         w.Put(SceneIds.Of(d));
@@ -120,7 +160,7 @@ internal static class DoorSync
         if (ours) localUse++;
         try
         {
-            if (!Allowed()) return false;
+            if (!Allowed(__instance)) return false;
             SendDoor(__instance, DoorOp.Open, DoorState.Opened);
             return true;
         }
@@ -130,7 +170,7 @@ internal static class DoorSync
     [HarmonyPatch(typeof(GateDoor), nameof(GateDoor.Close)), HarmonyPrefix]
     static bool BeforeClose(GateDoor __instance)
     {
-        if (!Allowed()) return false;
+        if (!Allowed(__instance)) return false;
         SendDoor(__instance, DoorOp.Close, DoorState.Closed);
         return true;
     }
@@ -138,7 +178,7 @@ internal static class DoorSync
     [HarmonyPatch(typeof(GateDoor), nameof(GateDoor.ChangeState)), HarmonyPrefix]
     static bool BeforeChange(GateDoor __instance, DoorState newState)
     {
-        if (!Allowed()) return false;
+        if (!Allowed(__instance)) return false;
         mirroring++;   // ChangeState calls Open / Close itself: send this one message, not those too
         SendDoorOutside(__instance, DoorOp.Change, newState);
         return true;
@@ -150,7 +190,7 @@ internal static class DoorSync
     [HarmonyPatch(typeof(GateDoor), nameof(GateDoor.ForceState)), HarmonyPrefix]
     static bool BeforeForce(GateDoor __instance, DoorState newState)
     {
-        if (!Allowed()) return false;
+        if (!Allowed(__instance)) return false;
         SendDoor(__instance, DoorOp.Force, newState);
         return true;
     }
