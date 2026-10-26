@@ -14,10 +14,11 @@ Not made or supported by Cygnus Cross.
 - Notes and the roadmap: [`todo.md`](todo.md).
 
 ## Contents
-[Playing together](#playing-together) · [Travel: town portal, /tp, /summon](#travel-town-portal-tp-summon) ·
+[Playing together](#playing-together) · [Travel: homes, portals, /tp](#travel-homes-portals-tp) ·
 [The descent and the boss arena](#the-descent-and-the-boss-arena) · [Weapons and summons](#weapons-and-summons) ·
 [Your character](#your-character) · [Chests and loot](#chests-and-loot) · [Weather](#weather) ·
-[NPCs and quests](#npcs-and-quests) · [Fishing](#fishing) · [Pets](#pets) · [Companion](#companion) · [Quality of life](#quality-of-life) ·
+[NPCs and quests](#npcs-and-quests) · [Fishing](#fishing) · [Pets](#pets) · [Companion: an AI adventurer](#companion-an-ai-adventurer) ·
+[The mod menu](#the-mod-menu) · [Quality of life](#quality-of-life) ·
 [Keys](#keys) · [Commands](#commands) · [API](#api) · [Secrets](#secrets-the-dev-panel-test-arenas-and-the-estate) ·
 [Build](#build)
 
@@ -34,8 +35,8 @@ Not made or supported by Cygnus Cross.
   drops (dupe-proof), chests, breakables, ore and trees, doors, levers, key altars, floor buttons, town repairs, the
   clock, story progress and cutscenes, every crafting station, farm plots, building on the estate, NPCs (everyone sees
   the host's NPCs looking the same), the weather.
-- **Party strip** (top): every player with health and Kymia; live character portraits (Insert > Online / Hosting) or
-  their weapon. Right-click a card: teleport, trade, mute. Off-screen teammates get edge arrows; teammates show on the
+- **Party strip** (top): every player with health and Kymia; live character portraits (MODS > Multiplayer) or
+  their weapon. Right-click a card: teleport to them (any scene), **bring them to you**, trade, mute. Off-screen teammates get edge arrows; teammates show on the
   minimap and the world map (M).
 - **Online Players (O):** who's online and where; teleport to them, trade, mute; the host can kick and ban.
 - **Trading:** Online Players > Trade, or `/trade <name>`: drag items into your offer, both tick Ready, the swap happens
@@ -43,13 +44,19 @@ Not made or supported by Cygnus Cross.
 - **Chat** (Enter), pings and drawing on the ground (middle mouse), death announcements.
 - **Dungeon invites:** when a teammate goes into a dungeon or down a floor of the descent, a card offers Join.
 
-## Travel: town portal, /tp, /summon
-- **Town Portal** (button on the right edge, half way down): hold still 3 seconds (moving or being hit stops it). A
-  swirling portal opens where you stand, its twin opens in town (the demo: by the starting door), and you're taken home.
+## Travel: homes, portals, /tp
+- **Homes:** `/sethome` where you stand makes it your home; `/sethome mansion` (any name) saves another place.
+  `/home` or `/tp mansion` takes you back from anywhere, `/homes` lists them, `/delhome mansion` forgets one. Each home
+  leaves a green portal on the ground with its name over it, there every time you come back (even after restarting).
+  Every character has its own homes. Not on dungeon floors or in the boss arena (they're built anew each time).
+- **Town Portal / Home Portal** (the portal picture on the right edge, half way down): hold still 3 seconds (moving or
+  being hit stops it). A swirling portal opens where you stand, its twin opens in town (by the starting door), or
+  beside your home once you've set one (the button then says **Home Portal** and turns green), and you're taken there.
   Step into either end, you or your friends, to go to the other; on a dungeon or descent floor it builds that floor
   again and puts you at the portal. Each player has one pair, with their name over it, until they open a new one.
-- **`/tp <name>`:** go to a player, even onto their dungeon floor. **`/summon <name>`** or **`/summon all`:** bring
-  them to you, now.
+- **Right-click the portal button:** a **Go to** list of your homes and Town; click one to go there now (or Cancel).
+- **`/tp <name>`:** go to one of your homes, or to a player, even onto their dungeon floor. **`/summon <name>`** or
+  **`/summon all`:** bring them to you, now.
 
 ## The descent and the boss arena
 - **The descent:** the full game's dungeon generator ships in the demo; the mod builds the levels. Up the path from the
@@ -60,10 +67,14 @@ Not made or supported by Cygnus Cross.
   floors.
 - **Boss arena** (the lamp): a walled floor with pillars, spike traps and arrow shooters, and a panel to make mini-bosses
   from the game's creatures (name, colour, size, health, damage). **Boss rush:** 30 bosses, tougher each wave.
+- **There is no chicken level:** a button in the arena's panel. Hostile chickens come at you from every side every
+  5 seconds, a little tougher each wave; big chickens every minute, **The Colonel** every 3 minutes; the spike traps
+  wake after a minute, the arrows after three. Survive as long as you can: your time and your best time are kept.
+  Your companion fights the chickens with you.
 
 
 ## Weapons and summons
-Type the command in chat to get one.
+Type the command in chat to get one, or MODS > Better Combat > **New Weapons**.
 - **Staff of Clucking (`/clucking`):** right-click summons a battle chicken (a tenth of your Kymia); left-click is a
   normal attack.
   
@@ -85,6 +96,10 @@ Type the command in chat to get one.
 
 ## Your character
 - **Respec:** `/respec`, or ask Ellie: every stat point back to spend again (level, XP and gear kept).
+- **Respec tab** (MODS > Respec): unlock every screen, class and mastery; give yourself a level's worth of XP; reset
+  attributes or class points; and a table with **−** / **+** / Reset for your level, each class, each weapon and armour
+  mastery, and gathering and crafting (mining, woodcutting, farming, alchemy...). Lowering a mastery takes its perks
+  away again.
 - **Dye your gear:** right-click an equipped item in your inventory's gear slots, pick one of 12 colours, **Dye** (or
   Cancel). The dye stays with the item and your friends see it.
 - **Favourite weapons:** hover a weapon in your inventory and press **F5-F8** to put it on that key; F5-F8 wield it
@@ -109,13 +124,13 @@ Type the command in chat to get one.
 - **Ctrl+click** an item while a chest is open: it goes straight across (bag to chest, chest to bag).
 - **Shared stash (U, or `/stash`):** a big chest you can open anywhere: 6 tabs of 30 slots, shared by every character
   on your PC. Right-click a tab to rename it and give it a colour. Kept in its own file next to your saves, with a
-  backup. (There's a Stash button under the Town Portal button too.)
+  backup. (There's a chest button under the portal button too.)
 - A renamed chest shows its own name straight away (no more "Chest" for a moment first).
 - **Better Looting:** the magnet picks up items near you (Insert menu: range and kinds), and a green arrow marks better
   gear.
 
 ## Weather
-Insert > **Weather** (Clear / Rain storm / Snow), or `/rain`, `/snow`, `/clear`. One weather for everyone; outside only.
+`/rain`, `/snow`, `/clear`. One weather for everyone; outside only.
 - **Rain:** pixel rain across the screen, slanted by a shifting, gusting wind; splashes on the ground (under trees and
   props), rings on open water; lightning strikes now and then with a flash; the sky goes dark.
 - **Snow:** drifting flakes; the ground whitens over a few minutes (32 stages, the first see-through, thinning toward
@@ -146,22 +161,39 @@ Lilshrooms, Lil Ticks, Lil Bombers, Spiderling, Bug Fuzz): `/pet list`, `/pet gl
 
 ![clucky](clucky_sm.gif)
 
-## Companion
-An adventurer who travels and fights beside you, made from one of your other characters (Better Companions).
-- `/companion 2` copies save slot 2 into your companion: its looks, gear, bag and level. Your real slot is only read;
-  the companion keeps its own save. An empty slot gives a brand-new adventurer. Also `/companion new`, `dismiss`,
-  `call`, and `/companion` for its status.
-- It follows you and fights the way its weapon does: a sword, axe or fists up close, a bow or staff from range. With
-  one of each it swaps by itself, and dashes in to finish an enemy or out of a crowd.
-- **Middle click** sends it there to fight (your lock-on target comes first).
-- Enemies fight it back. At zero health it's down: **hold F** next to it for 2 seconds to get it up (a teammate can
+## Companion: an AI adventurer
+A second adventurer who plays beside you, run by an AI (Better Companions). It isn't a pet or a puppet: it's a real
+second player character, and the AI plays it the way you would, pushing its stick and pressing its buttons, so the
+game itself moves it, swings its weapon, fires its arrows and spells, spends its Kymia and dodges.
+- **Get one** (MODS > **Companions**, or chat): **clone** one of your other characters (pick the save slot by name,
+  "Slot 2: Cohh (level 12)": its looks, gear, bag and level), **start a new one**, or take a ready-made one:
+  **Sabba** the knight (sword), **Ellie** the mage (staff) or **Rory** the archer (bow). In chat: `/companion 2`,
+  `/companion new`, `/companion dismiss`, `/companion call`, and `/companion` for its status.
+- **How it fights:** it follows you, and fights the way its weapon does: up close with a sword, axe or fists, from
+  range with a bow or staff. It carries a melee and a ranged favourite and swaps between them by itself, dashes in to
+  finish an enemy or out of a crowd, and uses **its own skills** (from its own skill tree: attack skills on an enemy in
+  reach, a dash to close in or catch up, buffs when a fight starts). It walks the game's own paths around cliffs and
+  water, and if it gets cut off from you it comes straight to you.
+- **Tell it where:** **middle-click** sends it there to fight (your lock-on target first); **Shift+middle-click** makes
+  it hold that spot and guard it.
+- **Enemies fight it back.** At zero health it's down: **hold F** next to it for 2 seconds to get it up (a teammate can
   too).
-- **F** next to it opens the inventory with its gear on top (tinted teal) and your bag below: drag gear up to dress
-  it, back down to take it. The character panel shows its attributes then: spend its level-up points there.
-- It earns XP from the kills it helps with and levels up on the game's own tables.
+- **Its card** (top, with the party): its portrait, health and Kymia, and its skills with their cooldowns. Right-click
+  the card: heal it with one of your potions, or trade.
+- **Gear and growth:** **F** next to it (or Trade) opens your bag with its gear beside it: drag gear across to dress
+  it. It earns XP from the kills it helps with, levels up past the game's cap, and has its own **Stats** and class
+  screen to spend its points (its skill tree is its own copy, not yours).
+- **MODS > Companions:** its status, **rename** it, send it home / call it / follow / trade / heal, and **your other
+  companions**: every companion you've had is kept; **Swap in** brings one back (or Delete). A **Respec** section for
+  the companion too (its level, classes and masteries, up and down).
+- Companions are kept in their own files, outside the game's saves: a clone of your character doesn't write its XP
+  back to that character.
 - Everyone sees everyone's companion in co-op.
 
-
+## The mod menu
+**Insert**, or the **MODS** button on the title screen and the Esc menu (just above Options). Its tabs:
+**Multiplayer** (hosting, the party strip and who's connected), **Font Options**, **Mouse Options**, **Better Combat**,
+**Better Looting**, **Companions**, **Respec**, **Pets** and **Log**. Close it with Insert again or the [x].
 
 ## Quality of life
 - **Mouse walking:** hold the mouse side button to walk toward the mouse; a click walks there.
@@ -170,20 +202,22 @@ An adventurer who travels and fights beside you, made from one of your other cha
 - **Keep playing after the demo:** its "Thank you for playing" stop is skipped.
 - **Your characters are safe:** before joining, the character files are backed up (`Saves/EmbervilleGhost_Backups`).
 - **Typing anywhere** (chat, a chest's name, search boxes, the stash's tab names) keeps the mods' hotkeys out of it.
-- **Font Options** (Insert menu): the story text's size (what NPCs say, speech bubbles, the quest tracker: the boxes
+- **Font Options** (MODS menu): the story text's size (what NPCs say, speech bubbles, the quest tracker: the boxes
   grow with it), the size of the words in the world ("Open", "Examine", names over heads), and the font for all the
   game's text: the game's own Emberfont, Noto Serif, Liberation Sans or Perfect DOS VGA.
-- **Tilted view (experimental, `/tilt` or Insert > View):** the world seen from behind and above at an angle, the
+- **Tilted view (experimental, `/tilt`):** the world seen from behind and above at an angle, the
   floor receding and everything that stands (you, creatures, props, trees) stood up facing you, like a pop-up book.
   Only the picture changes: the game plays exactly as before, and your aim follows what you see. Tilt and field of view
   are sliders (each with a Reset). Houses stand with their vines and windows on them; stairs, rugs and paths stay lying
   (`TiltFlatNames` in the config lists the words that keep ground art flat).
-- **Chase and first-person views (experimental, `/chase`, `/fps` or Insert > View):** the camera low behind you, or
+- **Chase and first-person views (experimental, `/chase` or `/fps`):** the camera low behind you, or
   through your own eyes. The mouse turns the camera (hold **Alt** for the cursor); W walks the way you face, A/D
   strafe, attacks go straight ahead. The walls are raised as blocks around you. Sliders for distance, angle, eye
   height, field of view and mouse speed.
-- **Tilt-shift (`/tiltshift` or Insert > View):** the miniature look: a sharp band in the middle, the top and bottom
+- **Tilt-shift (`/tiltshift`):** the miniature look: a sharp band in the middle, the top and bottom
   blurred, richer colours. Works with any view.
+- **Death never gets stuck:** a hit landing during your death animation no longer leaves you standing at zero health
+  with no death screen.
 - **Staff tooltips** sit beside the item card, and off the second card when the game shows two side by side.
 - **Title screen:** Better & Online under the Emberville logo; the Next Fest popup is skipped.
 
@@ -192,7 +226,7 @@ An adventurer who travels and fights beside you, made from one of your other cha
 | Key | What |
 |---|---|
 | F9 / F10 | host (IP or Steam) / join (again: disconnect) |
-| Insert | the mods' menu (every switch and slider) |
+| Insert (or the MODS button) | the mods' menu (every switch and slider) |
 | Enter | chat (and `/commands`) |
 | O | Online Players |
 | N | Bestiary |
@@ -205,13 +239,13 @@ An adventurer who travels and fights beside you, made from one of your other cha
 | U | the shared stash |
 | Right-click (gear slot) | dye the item |
 | Right-click (staff / hook) | summon, raise, throw |
-| Middle mouse | ping, draw; with a staff: send your summons |
+| Middle mouse | ping, draw; with a staff: send your summons; send your companion (Shift: guard there) |
 | Mouse side button | walk toward the mouse |
-| Town Portal button (right edge) | a portal home |
+| Portal button (right edge) | a portal home; right-click: go to one of your homes |
 | Delete | the status line (top left) |
 
 ## Commands
-The full list is in [API.md](API.md#chat-commands). The main ones: `/tp`, `/summon`, `/trade`, `/online`, `/sleep`,
+The full list is in [API.md](API.md#chat-commands). The main ones: `/tp`, `/summon`, `/sethome`, `/home`, `/homes`, `/delhome`, `/trade`, `/online`, `/sleep`,
 `/respec`, `/rain`, `/snow`, `/clear`, `/hook`, `/clucking`, `/risen`, `/pet`, `/companion`, `/dungeon`, `/estate`, `/repair`,
 `/resources`, `/stash`, `/tilt`, `/chase`, `/fps`, `/tiltshift`, `/bowlock`, `/moveattack`; testing: `/nodeath`, `/onehitkill`, `/noclip`, `/devmode`, `/devpanel`.
 
@@ -243,7 +277,7 @@ Requirements: .NET SDK, Emberville installed with BepInEx 5.4.23 (`winhttp.dll`,
 dotnet build spike/EmbervilleGhost -c Release -p:GamePath="<path to Emberville Demo>"
 ```
 Each mod is its own project in `spike/` (EmbervilleGhost = multiplayer, EmbervilleFavorites, BetterChests, BetterCombat,
-BetterLooting, BetterPetsAndSummons, BetterFishing, BetterNPCsAndQuests, BetterWeather); a build copies the DLL into the
+BetterLooting, BetterPetsAndSummons, BetterFishing, BetterNPCsAndQuests, BetterWeather, BetterCompanions); a build copies the DLL into the
 game's `BepInEx/plugins`. The game's own DLLs are referenced from `<GamePath>/Emberville_Data/Managed` (not included).
 
 **Release zip:** `pwsh spike/package-all.ps1` makes `spike/dist/EmbervilleModPack-v<version>.zip` (BepInEx and every
@@ -252,6 +286,8 @@ mod, each with its own README).
 **Testing on one PC:** launch `Emberville.exe` twice (don't load the same character in both).
 
 ## Not included
-No game code or assets: the decompiled reference used for research stays local (`reference/`, git-ignored).
+No game code: the decompiled reference used for research stays local (`reference/`, git-ignored). The only game art
+is two small button icons cut from the game's own sprites (`spike/EmbervilleGhost/Assets/Images`: the chest and the
+portal swirl).
 `spike/libs/OverlayDearImGui`: ImGui.NET + cimgui (MIT). `spike/libs/Steamworks`: Steamworks.NET (MIT) + Valve's
 redistributable `steam_api64.dll`.
