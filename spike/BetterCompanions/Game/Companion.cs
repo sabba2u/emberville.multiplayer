@@ -305,7 +305,7 @@ internal static class Companion
         {
             if (e == cantReach && Time.time < cantReachUntil) continue;
             if (!e || !e.isActiveAndEnabled || e.IsDead || !e.CanTakeDamage || Hooks.Ignore(e)) continue;
-            if (e.enemyType == EnemyType.None) continue;   // (fauna: chickens and the like are enemies too)
+            if (e.enemyType == EnemyType.None && !Hooks.Hostile(e)) continue;   // (fauna: chickens and the like are enemies too; unless it's after you)
             float d = Vector2.Distance(e.transform.position, Body.Position);
             if (d > range || Vector2.Distance(e.transform.position, me.transform.position) > Rules.Leash) continue;
             if (d < bestD) { bestD = d; best = e; }

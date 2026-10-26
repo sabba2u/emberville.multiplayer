@@ -729,7 +729,7 @@ internal static class Delve
                 PadKind.Arena => "Boss arena (practice)",
                 PadKind.Home => "Back to town",
                 PadKind.Finish => "The bottom! Leave the descent",
-                _ => deepest.Value > 1 ? $"The descent (deepest: floor {deepest.Value})" : "The descent"
+                _ => "The descent"
             };
             var s = cam.WorldToScreenPoint(p.transform.position + Vector3.up * (labelHeight.TryGetValue(p.gameObject, out float lh) ? lh : 1.3f));
             if (s.z < 0) continue;

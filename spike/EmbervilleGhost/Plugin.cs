@@ -148,6 +148,7 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         Session.Bind(Config);
         OnlinePlayers.Bind(Config);
         StoryText.Bind(Config);
+        Arena.BindChickens(Config);
         TiltView.Bind(Config);
         Walls3D.Bind(Config);
         TiltShift.Bind(Config);
@@ -226,6 +227,7 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         NpcLooks.Tick();   // the host's NPCs (and Rory) look the same on every game
         GearDye.Tick();
         TownPortal.Tick();
+        ModsButton.Tick();   // the MODS buttons (main menu, Esc menu): the Insert menu
         StoryText.Tick();   // bigger story text (dialogue, bubbles, the quest tracker)
         TiltView.Tick();    // the tilted 2.5D view (/tilt)
         TiltShift.Tick();   // the miniature look (/tiltshift)

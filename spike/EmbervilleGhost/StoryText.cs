@@ -9,8 +9,7 @@ using UnityEngine.UI;
 namespace EmbervilleGhost;
 
 /// <summary>
-/// Insert > Font Options (and the same three rows in Options > Accessibility): the story text's size, the in-world
-/// labels' size, and the font.
+/// Insert > Font Options: the story text's size, the in-world labels' size, and the font.
 /// Story text (- [12] +): what NPCs say in the dialogue window (Ellie, the game's own NPCs), the
 /// answers you pick, the names; speech bubbles (Rory's, the game's TextBox); the quest tracker on the side. 12 is the
 /// game's own size; each step is a twelfth bigger or smaller. The text itself grows (each TextMeshPro's size, or its
@@ -181,16 +180,6 @@ internal static class StoryText
         foreach (var k in keys) if (gone(k)) (dead ??= new List<TMP_Text>()).Add(k);
         if (dead != null) foreach (var d in dead) { orig.Remove(d); sized.Remove(d); }
     }
-
-    // ---- Options > Accessibility (OptionsRows) ----
-
-    /// <summary>The dialogue text's own size: as seen in a world, else 12 (the game's, at the menu before any world).</summary>
-    internal static int BaseSize { get { LearnBase(); return baseSize > 0f ? Mathf.RoundToInt(baseSize) : 12; } }
-    internal static int StorySize { get => size.Value > 0 ? size.Value : BaseSize; set => size.Value = value == BaseSize ? 0 : value; }
-    internal static int LabelPct { get => Mathf.Clamp(labelScale.Value, 50, 300); set => labelScale.Value = value; }
-    internal static string FontName { get => fontName.Value ?? ""; set => fontName.Value = value ?? ""; }
-    internal static List<string> FontNames() => Fonts().Keys.OrderBy(n => n).ToList();
-    internal static bool Bound => size != null;
 
     // ---- Insert menu ----
 

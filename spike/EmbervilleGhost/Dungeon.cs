@@ -831,9 +831,16 @@ internal static class Dungeon
         int genSeed = Delve.SeedOf(where);
         var rng = new System.Random(genSeed ^ where.Region);
         int groups = 0;
-        foreach (var spawnArea in root.GetComponentsInChildren<EnemySpawnArea>(true))
+        // each spawn area rolls its chance (as the game does); but a floor with few areas could roll none at all and
+        // stand empty: at least 60% of them (all, when there are two or fewer) get creatures, the skipped ones by lot
+        var areas = root.GetComponentsInChildren<EnemySpawnArea>(true).Where(a => a && a.GetComponent<PolygonCollider2D>()).ToList();
+        var chosen = areas.Where(a => rng.NextDouble() < a.Chance + Delve.ExtraChance(where.Floor)).ToList();
+        int least = areas.Count <= 2 ? areas.Count : Mathf.CeilToInt(areas.Count * 0.6f);
+        var skipped = areas.Except(chosen).OrderBy(_ => rng.Next()).ToList();
+        int added = 0;
+        while (chosen.Count < least && skipped.Count > 0) { chosen.Add(skipped[0]); skipped.RemoveAt(0); added++; }
+        foreach (var spawnArea in chosen)
         {
-            if (rng.NextDouble() >= spawnArea.Chance + Delve.ExtraChance(where.Floor)) continue;
             var shape = spawnArea.GetComponent<PolygonCollider2D>();
             var collection = spawnArea.Type switch
             {
@@ -856,7 +863,8 @@ internal static class Dungeon
             groups++;
         }
         sleepingCreatures = sleeping.Sum(x => x.creatures.Count);
-        NetLog.Info($"Dungeon: {groups} spawn areas, {sleepingCreatures} creatures waiting (they appear as you come near; at most {Delve.MaxEnemies} at once)", toast: false);
+        NetLog.Info($"Dungeon: {groups} of {areas.Count} spawn areas{(added > 0 ? $" ({added} added: too few rolled)" : "")}, {sleepingCreatures} creatures waiting (they appear as you come near; at most {Delve.MaxEnemies} at once)", toast: false);
+        if (sleepingCreatures == 0) NetLog.Warn($"Dungeon: floor {where.Floor} has no creatures ({areas.Count} spawn areas, biome {biome.name})", toast: false);
         nextWake = 0f;
     }
 
@@ -878,8 +886,11 @@ internal static class Dungeon
             foreach (var p in Plugin.Players)
                 if (p.SamePlace(LocalPlayer.Scene, LocalPlayer.Area)) near.Add(p.LastPosition);
         if (near.Count == 0) return;
+        // (each creature once: the pool hands a killed one out again, so it can be on the list more than once, and
+        // counting it each time filled the limit with ghosts: nothing more came)
+        spawned.RemoveAll(go => !go);
         int alive = 0;
-        foreach (var go in spawned) if (go && go.activeInHierarchy && go.GetComponent<Enemy>() is Enemy e && !e.IsDead) alive++;
+        foreach (var go in spawned.Distinct()) if (go.activeInHierarchy && go.GetComponent<Enemy>() is Enemy e && !e.IsDead) alive++;
         int max = Delve.MaxEnemies > 0 ? Delve.MaxEnemies : int.MaxValue;
         for (int i = sleeping.Count - 1; i >= 0 && alive < max; i--)
         {
@@ -904,7 +915,7 @@ internal static class Dungeon
                     go.transform.position = Utils.RandomInsidePolygon(shape);
                     go.GetComponent<Enemy>().ForceAlive();
                     go.SetActive(true);
-                    spawned.Add(go);
+                    if (!spawned.Contains(go)) spawned.Add(go);
                     alive++;
                 }
             }

@@ -149,6 +149,7 @@ internal static class Integrations
         BetterCompanions.Hooks.DrawsHud = true;
         BetterCompanions.Hooks.Popup = (at, title, items) => GameUi.Popup(at, 6f, title, items);   // (its Class button's picker)
         BetterCompanions.Hooks.DownedNear = CompanionSync.DownedNear;   // (F at a teammate's downed companion: revive, not loot)   // (its name tag: DrawHud → CompanionDraw)
+        BetterCompanions.Hooks.Hostile = Arena.IsHen;   // (the chicken level's chickens: foes, though fauna)
         if (HasCombat) BetterCompanions.Hooks.LockTarget = CombatLocked;
     }
 
@@ -165,7 +166,19 @@ internal static class Integrations
     public static void DrawCombat()
     {
         if (HasCombat) CombatMenu(); else Missing("Better Combat (bow lock-on, move while attacking)");
+        // the mods' own weapons, into your bag
+        ImGuiNET.ImGui.SeparatorText("New Weapons");
+        if (!HasPets) ImGuiNET.ImGui.BeginDisabled();
+        if (ImGuiNET.ImGui.Button("Give me the Staff of Clucking")) GiveCluck();
+        ImGuiNET.ImGui.SameLine();
+        if (ImGuiNET.ImGui.Button("Give me the Staff of the Risen")) GiveRisen();
+        if (!HasPets) ImGuiNET.ImGui.EndDisabled();
+        ImGuiNET.ImGui.SameLine();
+        if (ImGuiNET.ImGui.Button("Give me the Hunter's Hook")) HunterHook.Give();
+        if (!HasPets) ImGuiNET.ImGui.TextDisabled("(the staffs come with Better Pets and Summons)");
     }
+    [MethodImpl(MethodImplOptions.NoInlining)] static void GiveCluck() => BetterPetsAndSummons.Plugin.GiveCluckStaff();
+    [MethodImpl(MethodImplOptions.NoInlining)] static void GiveRisen() => BetterPetsAndSummons.Plugin.GiveRisenStaff();
 
     public static void DrawLooting()
     {
@@ -187,6 +200,43 @@ internal static class Integrations
     [MethodImpl(MethodImplOptions.NoInlining)] static void LootingMenu() => BetterLooting.Plugin.DrawMenu();
     [MethodImpl(MethodImplOptions.NoInlining)] static void CombatMenu() => BetterCombat.Plugin.DrawMenu();
     [MethodImpl(MethodImplOptions.NoInlining)] static void PetsMenu() => BetterPetsAndSummons.Plugin.DrawMenu();
+
+    static float slowLogAt;
+
+    public static void DrawCompanion()
+    {
+        if (!HasCompanion) { Missing("Better Companions (a companion: one of your characters, fighting beside you)"); return; }
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        CompanionMenu();
+        double menuMs = watch.Elapsed.TotalMilliseconds;
+        ImGuiNET.ImGui.SeparatorText("Respec");
+        var t = CompanionRespec();
+        if (t == null) ImGuiNET.ImGui.TextDisabled("Call your companion to change its levels here.");
+        else Respec.Draw(t);
+        double allMs = watch.Elapsed.TotalMilliseconds;
+        if (allMs > 4 && Time.unscaledTime > slowLogAt)
+        {
+            slowLogAt = Time.unscaledTime + 2f;
+            NetLog.Info($"Companions tab: {allMs:0.0} ms a frame (its menu {menuMs:0.0}, respec {allMs - menuMs:0.0})", toast: false);
+        }
+    }
+    [MethodImpl(MethodImplOptions.NoInlining)] static void CompanionMenu() => BetterCompanions.Plugin.DrawMenu();
+
+    /// <summary>Its levels by hand (Respec), for Insert > Companions: null when it has no real body out.</summary>
+    public static Respec.Target CompanionRespec() => HasCompanion ? RespecOf() : null;
+    [MethodImpl(MethodImplOptions.NoInlining)] static Respec.Target RespecOf()
+    {
+        var p = BetterCompanions.Plugin.CompanionPlayer;
+        var data = BetterCompanions.Plugin.CompanionData;
+        if (!p || data == null) return null;
+        return new Respec.Target
+        {
+            Id = "companion", Who = data.playerName, P = p, Data = data,
+            Save = BetterCompanions.Plugin.SaveCompanion,
+            SkillsChanged = BetterCompanions.Plugin.CompanionSkillsChanged,
+            KillXp = BetterCompanions.Plugin.CompanionKillXp,
+        };
+    }
 
     // ---- the HUD (ImGui) ----
 

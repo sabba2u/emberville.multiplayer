@@ -141,7 +141,7 @@ internal static class ImGuiUnity
     /// <summary>A text field of ours has the keyboard (as of the last frame).</summary>
     public static bool Typing { get; private set; }
 
-    static void SetOpen(bool open)
+    internal static void SetOpen(bool open)
     {
         if (open == IsOpen) return;
         IsOpen = open;

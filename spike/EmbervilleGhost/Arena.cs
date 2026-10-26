@@ -17,7 +17,7 @@ namespace EmbervilleGhost;
 /// health and damage; spawn it (or plain creatures), clear them, leave. Reached from the second pad next to the
 /// descent's pad. Just for you (it's somewhere nobody else is).
 /// </summary>
-internal static class Arena
+internal static partial class Arena
 {
     static readonly Vector3 Origin = new Vector3(-4000f, 4000f, 0f);
     static readonly (float x, float y)[] Pillars = { (0.13f, 0.82f), (0.87f, 0.82f), (0.33f, 0.52f), (0.67f, 0.52f), (0.13f, 0.2f), (0.87f, 0.2f) };
@@ -60,6 +60,7 @@ internal static class Arena
     public static void Leave()
     {
         if (!Active || busy) return;
+        EndChickens("over (you left)");
         var gm = Singleton<GameManager>.main;
         var old = root;
         DeathSafety.Forget(old);   // the creatures go with the arena, after the teleport (removing them mid-fade froze it)
@@ -230,6 +231,7 @@ internal static class Arena
         }
         if (hovered || ImGuiUnity.Typing && Active) GameInput.Block("arena"); else GameInput.Unblock("arena");
         Rush();
+        Chickens();
         Engage();
     }
 
@@ -266,6 +268,7 @@ internal static class Arena
 
     static void StartRush()
     {
+        EndChickens("stopped");
         ClearSpawned();
         rushWave = 0;
         rushBoss = null;
@@ -359,7 +362,13 @@ internal static class Arena
         ImGui.SameLine();
         if (folded)
         {
-            if (rushWave > 0)
+            if (chickensOn)
+            {
+                ImGui.TextColored(new Vector4(1f, 0.8f, 0.35f, 1f), $"No chicken level: {Clock(Survived)}");
+                ImGui.SameLine();
+                if (ImGui.SmallButton("Stop##chickens")) EndChickens("stopped");
+            }
+            else if (rushWave > 0)
             {
                 ImGui.TextColored(new Vector4(1f, 0.55f, 0.3f, 1f), $"Rush: wave {rushWave}/{MiniBoss.Presets.Length}");
                 ImGui.SameLine();
@@ -374,6 +383,7 @@ internal static class Arena
             ImGui.SameLine();
             if (ImGui.SmallButton("Leave")) Leave();
             if (ImGui.IsItemHovered()) ImGui.SetTooltip("Back to the pads. Loot still on the floor here is lost!");
+            if (!chickensOn && rushWave == 0 && ImGui.SmallButton("There is no chicken level")) StartChickens();   // (its own row)
             FoldEnd();
             return;
         }
@@ -406,6 +416,18 @@ internal static class Arena
         ImGui.TextDisabled("(in front of you)");
 
         ImGui.Separator();
+        if (chickensOn)
+        {
+            ImGui.TextColored(new Vector4(1f, 0.8f, 0.35f, 1f), $"There is no chicken level: {Clock(Survived)} (wave {chickenWave})");
+            ImGui.SameLine();
+            if (ImGui.SmallButton("Stop##chickens2")) EndChickens("stopped");
+        }
+        else
+        {
+            if (ImGui.Button("There is no chicken level")) StartChickens();
+            ImGui.SameLine();
+            ImGui.TextDisabled(bestChickens.Value > 0f ? $"survive the chickens (best: {Clock(bestChickens.Value)})" : "survive the chickens as long as you can");
+        }
         if (rushWave == 0)
         {
             if (ImGui.Button("  BOSS RUSH  ")) StartRush();

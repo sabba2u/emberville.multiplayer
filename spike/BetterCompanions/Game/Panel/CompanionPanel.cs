@@ -228,7 +228,7 @@ internal static partial class CompanionPanel
         {
             tab.onClick = new Button.ButtonClickedEvent();
             tab.onClick.AddListener(() => { try { Attributes.Open(); } catch (System.Exception e) { Log.Warn($"Companion panel: {e}"); } });
-            foreach (var t in tab.GetComponentsInChildren<TextMeshProUGUI>(true)) t.text = "Attributes";
+            foreach (var t in tab.GetComponentsInChildren<TextMeshProUGUI>(true)) t.text = "Stats";
         }
         // the Inventory tab: its Class (the game's class screen, showing its class; no class yet: the picker)
         var mine = ui.buttonMainItems ? Twin<Button>(ui.buttonMainItems, inv) : null;

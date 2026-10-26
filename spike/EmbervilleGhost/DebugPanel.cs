@@ -17,7 +17,11 @@ internal static class DebugPanel
         var plugin = Hud.Plugin;
         ImGui.SetNextWindowPos(new Vector2(60, 90), ImGuiCond.FirstUseEver);
         ImGui.SetNextWindowSize(new Vector2(560, 420), ImGuiCond.FirstUseEver);
-        if (!ImGui.Begin($"{Plugin.Title}###menu"))
+        // the title bar: how to close it, and its X for the mouse
+        bool open = true;
+        bool shown = ImGui.Begin($"{Plugin.Title}   (press the {ImGuiUnity.MenuKey.Value} button to close)###menu", ref open);
+        if (!open) ImGuiUnity.SetOpen(false);
+        if (!shown || !open)
         {
             ImGui.End();
             return;
@@ -25,11 +29,16 @@ internal static class DebugPanel
 
         if (ImGui.BeginTabBar("menuTabs"))
         {
-            if (ImGui.BeginTabItem("Online / Hosting")) { DrawOnline(plugin); ImGui.EndTabItem(); }
-            if (ImGui.BeginTabItem($"Who's connected ({plugin.PlayerCount})###who")) { DrawPlayers(plugin); ImGui.EndTabItem(); }
-            if (GreyTab("Pets", Integrations.HasPets)) { Integrations.DrawPets(); ImGui.EndTabItem(); }
+            if (ImGui.BeginTabItem("Multiplayer###online"))
+            {
+                DrawOnline(plugin);
+                // who's connected, under a line of its own
+                ImGui.Spacing();
+                ImGui.SeparatorText($"Who's connected ({plugin.PlayerCount})");
+                DrawPlayers(plugin);
+                ImGui.EndTabItem();
+            }
             if (ImGui.BeginTabItem("Font Options")) { StoryText.DrawMenu(); ImGui.EndTabItem(); }
-            if (ImGui.BeginTabItem("View")) { TiltView.DrawMenu(); ImGui.EndTabItem(); }
             if (ImGui.BeginTabItem("Mouse Options"))
             {
                 MouseWalk.DrawMenu();
@@ -37,13 +46,11 @@ internal static class DebugPanel
             }
             if (GreyTab("Better Combat", Integrations.HasCombat)) { Integrations.DrawCombat(); ImGui.EndTabItem(); }
             if (GreyTab("Better Looting", Integrations.HasLooting)) { Integrations.DrawLooting(); ImGui.EndTabItem(); }
-            if (GreyTab("NPCs & Quests", Integrations.HasNpcs)) { Integrations.DrawNpcs(); ImGui.EndTabItem(); }
-            if (GreyTab("Weather", Integrations.HasWeather)) { Integrations.DrawWeather(); ImGui.EndTabItem(); }
-            if (BuildMode.Enabled && ImGui.BeginTabItem("Construction")) { DrawConstruction(plugin); ImGui.EndTabItem(); }
-            if (ImGui.BeginTabItem("Dungeon")) { Dungeon.DrawMenu(); ImGui.EndTabItem(); }
-            if (ImGui.BeginTabItem("Under the mouse")) { DebugWalls.DrawMenu(); ImGui.EndTabItem(); }
-            if (ImGui.BeginTabItem("UI Inspector")) { UiInspector.DrawMenu(); ImGui.EndTabItem(); }
+            if (GreyTab("Companions", Integrations.HasCompanion)) { Integrations.DrawCompanion(); ImGui.EndTabItem(); }
+            if (ImGui.BeginTabItem("Respec")) { Respec.DrawYou(); ImGui.EndTabItem(); }
+            if (GreyTab("Pets", Integrations.HasPets)) { Integrations.DrawPets(); ImGui.EndTabItem(); }
             if (ImGui.BeginTabItem("Log")) { DrawLog(plugin); ImGui.EndTabItem(); }
+            if (BuildMode.Enabled && ImGui.BeginTabItem("Construction")) { DrawConstruction(plugin); ImGui.EndTabItem(); }
             ImGui.EndTabBar();
         }
 
@@ -97,7 +104,7 @@ internal static class DebugPanel
     {
         var me = LocalPlayer.Get();
         ImGui.Text($"Me: P{plugin.MyId + 1}   {LocalPlayer.Scene} / {LocalPlayer.Area}" + (me ? $"   at {me.transform.position}" : "   (no player)"));
-        if (!plugin.Connected) { ImGui.TextDisabled("Not connected: host or join on the Online / Hosting tab."); return; }
+        if (!plugin.Connected) { ImGui.TextDisabled("Not connected: host or join above."); return; }
         ImGui.Separator();
         foreach (var p in plugin.Players)
         {

@@ -322,6 +322,7 @@ internal static class Hud
         UiInspector.Draw();   // Menu > UI Inspector: outlines and what's under the mouse
         Dungeon.Loading.Draw();   // building a dungeon floor: what it's doing
         Arena.Draw();        // the boss arena's panel
+        Arena.DrawChickens();   // its chicken run's timer
         HostWindow.Draw();
         OnlinePlayers.Draw();
         Bestiary.Draw();

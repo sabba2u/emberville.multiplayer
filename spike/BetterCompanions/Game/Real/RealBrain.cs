@@ -419,7 +419,7 @@ internal static class RealBrain
         {
             if (e == cantReach && Time.time < cantReachUntil) continue;
             if (!e || !e.isActiveAndEnabled || e.IsDead || !e.CanTakeDamage || Hooks.Ignore(e)) continue;
-            if (e.enemyType == EnemyType.None) continue;   // (fauna)
+            if (e.enemyType == EnemyType.None && !Hooks.Hostile(e)) continue;   // (fauna, unless it's after you)
             float d = Vector2.Distance(e.transform.position, p.transform.position);
             if (d > range || Vector2.Distance(e.transform.position, owner) > leash) continue;
             if (d < bestD) { bestD = d; best = e; }

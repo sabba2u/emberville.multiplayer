@@ -22,7 +22,8 @@ internal static class Session
     public static ConfigEntry<bool> DefaultSharedXp, DefaultInstancedLoot, DefaultPvp, DefaultShareBuffs;
 
     public static bool SharedXp = true;
-    public static bool InstancedLoot;
+    /// <summary>Weapons / armour / gear drops are there once for every player. Default on.</summary>
+    public static bool InstancedLoot = true;
     /// <summary>Players can hurt each other (PlayerHits). Default off.</summary>
     public static bool Pvp;
     /// <summary>Self-buffs also land on teammates nearby (TeamBuffs). Default on.</summary>
@@ -31,9 +32,17 @@ internal static class Session
     public static void Bind(ConfigFile config)
     {
         DefaultSharedXp = config.Bind("Session", "SharedXp", true, "Host default: everyone in the area gets the XP of a kill");
-        DefaultInstancedLoot = config.Bind("Session", "InstancedLoot", false, "Host default: weapons/armour/gear drops are there once for every player (materials stay shared)");
+        DefaultInstancedLoot = config.Bind("Session", "InstancedLoot", true, "Host default: weapons/armour/gear drops are there once for every player (materials stay shared)");
         DefaultPvp = config.Bind("Session", "Pvp", false, "Host default: players can hurt each other");
         DefaultShareBuffs = config.Bind("Session", "ShareBuffs", true, "Host default: a buff a player casts on themselves also lands on teammates near them");
+        // once: the defaults as they are now (instanced loot on, PvP off) over what an older version left in the file
+        var defaults = config.Bind("Session", "DefaultsVersion", 0, "(the mod's own: which defaults this file has had; leave it)");
+        if (defaults.Value < 2)
+        {
+            DefaultInstancedLoot.Value = true;
+            DefaultPvp.Value = false;
+            defaults.Value = 2;
+        }
         ShareBuffs = DefaultShareBuffs.Value;
         SharedXp = DefaultSharedXp.Value;
         InstancedLoot = DefaultInstancedLoot.Value;

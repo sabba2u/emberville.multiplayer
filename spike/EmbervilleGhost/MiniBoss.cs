@@ -179,9 +179,9 @@ internal static class MiniBoss
 
     // ---- spawning ----
 
-    public static Enemy Spawn(Look look, Vector3 at, Transform parent = null)
+    public static Enemy Spawn(Look look, Vector3 at, Transform parent = null, Enemy from = null)
     {
-        var prefab = Find(look.Base);
+        var prefab = from ? from : Find(look.Base);
         if (!prefab) { NetLog.Warn($"Boss: no creature called {look.Base}", toast: true); return null; }
         if (Plugin != null && Plugin.Connected) EnemySync.ExpectSpawn(prefab.gameObject.name);   // ours to run and announce, even where someone else owns the area
         var go = Object.Instantiate(prefab.gameObject, at, Quaternion.identity, parent);
@@ -196,9 +196,9 @@ internal static class MiniBoss
     }
 
     /// <summary>Plain creature (arena): no boss looks.</summary>
-    public static Enemy SpawnPlain(string baseId, Vector3 at, Transform parent = null)
+    public static Enemy SpawnPlain(string baseId, Vector3 at, Transform parent = null, Enemy from = null)
     {
-        var prefab = Find(baseId);
+        var prefab = from ? from : Find(baseId);
         if (!prefab) return null;
         if (Plugin != null && Plugin.Connected) EnemySync.ExpectSpawn(prefab.gameObject.name);
         var go = Object.Instantiate(prefab.gameObject, at, Quaternion.identity, parent);

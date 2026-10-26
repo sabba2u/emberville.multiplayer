@@ -111,12 +111,12 @@ internal static class TeamHud
         string name = string.IsNullOrEmpty(p.CharacterName) ? p.Tag : p.CharacterName;
         ImGui.TextDisabled(p.Name);
         ImGui.Separator();
-        bool here = p.HaveState && p.Scene == LocalPlayer.Scene;
         // The options are picked in Tick from the mouse itself (ImGui's own clicks didn't reach this window):
         // here they're drawn and their boxes remembered.
         bool muted = OnlinePlayers.IsMuted(p.Name);
         items.Clear();
-        Item(here ? $"Teleport to {name}" : $"Teleport to {name}  (another scene)", here ? 1 : 0);
+        Item($"Teleport to {name}", 1);   // (anywhere: their game says where they are, another scene too)
+        Item($"Bring {name} to me", 4);   // (past gates and doors they're locked out by)
         Item($"Trade with {name}", 2);
         Item(muted ? $"Unmute {name}" : $"Mute {name}", 3);
         var wp = ImGui.GetWindowPos(); var ws = ImGui.GetWindowSize();
@@ -149,8 +149,9 @@ internal static class TeamHud
         foreach (var it in items)
         {
             if (!it.Box.Contains(new UnityEngine.Vector2(at.x, at.y)) || it.Action == 0) continue;
-            NetLog.Info($"Party menu: {(it.Action == 1 ? "teleport to" : it.Action == 2 ? "trade with" : "mute / unmute")} {p.Name}");
-            if (it.Action == 1) DebugPanel.TeleportTo(p);
+            NetLog.Info($"Party menu: {(it.Action == 1 ? "teleport to" : it.Action == 2 ? "trade with" : it.Action == 4 ? "bring" : "mute / unmute")} {p.Name}");
+            if (it.Action == 1) Travel.TeleportTo(p);
+            else if (it.Action == 4) Travel.Summon(p);
             else if (it.Action == 2) Trade.Invite(p.Id);
             else OnlinePlayers.SetMuted(p.Name, !OnlinePlayers.IsMuted(p.Name));
             menuFor = -1;

@@ -100,6 +100,44 @@ public class Plugin : BaseUnityPlugin
         }
     }
     /// <summary>Its card's menu: the Heal button's words (and whether it can be pressed), healing it with your potion, trading.</summary>
+    /// <summary>Insert > Companions (the multiplayer mod's menu).</summary>
+    public static void DrawMenu() => CompanionMenu.Draw();
+
+    // ---- its levels by hand (the multiplayer mod's Respec, in Insert > Companions) ----
+
+    /// <summary>Its body (the real one: null with the old body, or none out) and its save.</summary>
+    public static PlayerMaster CompanionPlayer => RealPlayer.Current;
+    public static PlayerData CompanionData => CompanionSave.Data;
+    public static void SaveCompanion() => CompanionSave.Write();
+
+    /// <summary>XP as a kill gives it: to its level, its class, the weapon in hand, the armour worn.</summary>
+    public static void CompanionKillXp(int xp)
+    {
+        var p = RealPlayer.Current;
+        var data = CompanionSave.Data;
+        if (!p || data == null) return;
+        var stats = p.characterStats;
+        var key = stats.baseClass.playerClassType;
+        data.GetPlayerExperience(key);   // (first: AddXP on a key it hasn't got goes wrong)
+        data.AddXP(key, xp);
+        var cls = stats.equippedClass;
+        if (cls) { data.GetPlayerExperience(cls.playerClassType); data.AddXP(cls.playerClassType, xp); }
+        if (p.currentWeapon) { data.GetPlayerExperience(p.currentWeapon.weaponCategory); data.AddXP(p.currentWeapon.weaponCategory, xp); }
+        RealPlayer.ArmorXP(data, stats, xp);
+    }
+
+    /// <summary>Its tree changed (a respec): its skills from its save again, its power slots and class screen too.</summary>
+    public static void CompanionSkillsChanged()
+    {
+        var p = RealPlayer.Current;
+        if (!p || !p.SkillHandler) return;
+        foreach (var s in p.SkillHandler.availableSkills.Keys.ToList())
+            try { p.SkillHandler.RemoveSkill(s, update: false); } catch (System.Exception e) { Log.Warn($"Companion skills: {s.name}: {e.Message}"); }
+        try { RealSkills.Load(p); } catch (System.Exception e) { Log.Warn($"Companion skills: {e.Message}"); }
+        CompanionPanel.Powers.Refresh();
+        if (CompanionPanel.Classes.On) CompanionPanel.Classes.Refresh();
+    }
+
     public static (string label, bool can) HealOption() => CardActions.HealOption();
     public static string Heal() => CardActions.Heal();
     public static void Trade() => CardActions.Trade();

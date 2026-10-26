@@ -17,6 +17,9 @@ public static class Hooks
     public static Func<Enemy, bool> Ignore = e => e && e.name.StartsWith("NPC_");
     /// <summary>The creature the player has locked on to (Better Combat), which the companion goes for first.</summary>
     public static Func<Enemy> LockTarget = () => null;
+
+    /// <summary>Fauna that's out to get you all the same (the arena's chickens): the companion fights it too.</summary>
+    public static Func<Enemy, bool> Hostile = _ => false;
     /// <summary>True when the multiplayer mod hands us its middle clicks (Plugin.Send); else we read them ourselves.</summary>
     public static bool HasRally;
     /// <summary>True when the multiplayer mod's HUD draws the companion's name tag (Plugin.DrawHud); else CompanionLabel does.</summary>

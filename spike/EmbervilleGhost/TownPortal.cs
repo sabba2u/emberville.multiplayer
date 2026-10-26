@@ -309,7 +309,8 @@ internal static class TownPortal
 
     public static void Draw()
     {
-        if (!LocalPlayer.Get() || PlayerStatusUtil.LocalBusy) { box = default; return; }
+        // (none in the boss arena: its panel is on that side, and a town portal out of a fight there is no use)
+        if (!LocalPlayer.Get() || PlayerStatusUtil.LocalBusy || Arena.Active) { box = stashBox = default; return; }
         var vp = ImGui.GetMainViewport();
         ImGui.SetNextWindowPos(new Vector2(vp.WorkPos.x + vp.WorkSize.x - 12f, vp.WorkPos.y + vp.WorkSize.y * 0.5f), ImGuiCond.Always, new Vector2(1f, 0.5f));
         ImGui.SetNextWindowBgAlpha(0.6f);

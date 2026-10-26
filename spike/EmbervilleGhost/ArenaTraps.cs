@@ -81,9 +81,11 @@ internal static class ArenaTraps
     }
 
     /// <summary>The rush's wave: spikes from wave 5, arrows from wave 10 (announced when they come on).</summary>
-    public static void ForWave(int wave)
+    public static void ForWave(int wave) => Switch(wave >= SpikesFrom, wave >= ShootersFrom);
+
+    /// <summary>Spikes and arrows on or off (announced as they come on).</summary>
+    public static void Switch(bool spikes, bool arrows)
     {
-        bool spikes = wave >= SpikesFrom, arrows = wave >= ShootersFrom;
         if (spikes && spikeGroup && !spikesOn) NetLog.Warn("The spike traps wake up!", toast: true);
         if (arrows && shooterGroup && !arrowsOn) NetLog.Warn("The arrow shooters start firing!", toast: true);
         bool changed = spikes != spikesOn || arrows != arrowsOn;

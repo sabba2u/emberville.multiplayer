@@ -47,8 +47,8 @@ public class Plugin : BaseUnityPlugin
     /// <summary>The switches, for the multiplayer mod's Insert menu (it draws ImGui).</summary>
     public static void DrawMenu()
     {
-        BowAssist.DrawMenu();
+        LockOn.DrawMenu();   // (first: the main one)
         MoveAttack.DrawMenu();
-        LockOn.DrawMenu();
+        BowAssist.DrawMenu();
     }
 }

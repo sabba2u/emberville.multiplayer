@@ -191,8 +191,10 @@ public static class LockOn
 
     public static void DrawMenu()
     {
+        ImGui.SeparatorText($"Lock-on ({cycleKey.Value}; right trigger on a controller)");
         bool on = enabled.Value;
         if (ImGui.Checkbox("Lock-on: point at an enemy, G to lock (you face it, attacks go at it); G at nothing: the nearest / the next one", ref on)) enabled.Value = on;
+        ImGui.TextDisabled("Controller: hold the right trigger to lock on to the nearest (hold again: let go); tap it for the next one.");
         if (Target) ImGui.TextDisabled($"Locked on: {Target.name}");
     }
 }

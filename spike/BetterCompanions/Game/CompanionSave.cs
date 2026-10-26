@@ -87,16 +87,15 @@ internal static class CompanionSave
         System.IO.File.Copy(path, path + ".bak", overwrite: true);
     }
 
-    /// <summary>Before a companion is replaced (/companion N, /companion new): a dated copy that later saves don't touch.</summary>
-    static void KeepReplaced()
+    /// <summary>Before a companion is replaced (/companion N, /companion new): it goes to your other companions (the roster).</summary>
+    static void KeepReplaced() => CompanionRoster.Keep();
+
+    /// <summary>Its file changed under it (a swap from the roster): read again.</summary>
+    public static void Reread()
     {
-        if (PlayingSlot == 0) return;
-        string stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
-        foreach (var name in new[] { File(PlayingSlot), MetaFile(PlayingSlot) })
-        {
-            string path = SaveLoad.GetPath(name);
-            if (System.IO.File.Exists(path)) System.IO.File.Copy(path, $"{path}.replaced-{stamp}.bak", overwrite: true);
-        }
+        Dirty = false;
+        Data = null;
+        Load();
     }
 
     /// <summary>The save's items from the companion's loaded items (what it wears and its bag).</summary>
@@ -121,7 +120,7 @@ internal static class CompanionSave
         if (copy == null) return $"Companion: save slot {slot} is empty or damaged; your companion is unchanged.";
         KeepReplaced();
         Data = copy;
-        Meta = new CompanionMeta { sourceSlot = slot };
+        Meta = new CompanionMeta { sourceSlot = slot, real = true };   // (the real body: its class, powers, the game's own moves)
         Write();
         Changed?.Invoke();
         Log.Info($"Companion: copied slot {slot} ({Data.playerName}, level {Level})");
@@ -134,11 +133,41 @@ internal static class CompanionSave
         if (PlayingSlot == 0) return "Companion: load a character first.";
         KeepReplaced();
         Data = new PlayerData { playerName = "Adventurer" };
-        Meta = new CompanionMeta { sourceSlot = fromEmptySlot };
+        Meta = new CompanionMeta { sourceSlot = fromEmptySlot, real = true };
         Write();
         Changed?.Invoke();
         Log.Info("Companion: a new adventurer");
         return fromEmptySlot > 0 ? $"Companion: slot {fromEmptySlot} is empty, so a new adventurer joins you." : "Companion: a new adventurer joins you.";
+    }
+
+    /// <summary>The ready-made companions: a name, a class (learned and on), and a weapon of its kind in hand.</summary>
+    public static readonly (string name, PlayerClassType cls, WeaponCategory weapon, string what)[] Presets =
+    {
+        ("Sabba", PlayerClassType.Knight, WeaponCategory.OneHandedSwords, "a knight"),
+        ("Ellie", PlayerClassType.Mage, WeaponCategory.MagicStaffs, "a mage"),
+        ("Rory", PlayerClassType.Archer, WeaponCategory.Bows, "an archer"),
+    };
+
+    /// <summary>A ready-made companion (level 1, as a new one, with its class and a weapon). The one out goes to the roster.</summary>
+    public static string StartPreset(int i)
+    {
+        if (PlayingSlot == 0) return "Companion: load a character first.";
+        var (name, cls, cat, what) = Presets[i];
+        KeepReplaced();
+        Data = new PlayerData { playerName = name, equippedClass = cls };
+        string id = cls.GetEmbervilleID();
+        Data.KnownClasses.Add(id);
+        Data.LearnedClasses.Add(id);
+        // a weapon of its kind, worn: the plainest the game has in memory (none loaded: bare-handed for now)
+        var weapon = Resources.FindObjectsOfTypeAll<CollectableWeapon>()
+            .Where(w => w && w.weapon && w.weapon.weaponCategory == cat && !string.IsNullOrEmpty(w.addressKey))
+            .OrderBy(w => w.maxDamageRange.y).ThenBy(w => w.name).FirstOrDefault();
+        if (weapon) Data.playerInventory.Add(new SavedItem { Key = weapon.addressKey, Amount = 1, Section = InventorySection.Gear, SlotIndex = -1, Values = new ItemRandomValues(weapon, 0) });
+        Meta = new CompanionMeta { real = true };
+        Write();
+        Changed?.Invoke();
+        Log.Info($"Companion: {name}, {what} ({cls}, {(weapon ? weapon.name : "no weapon loaded")})");
+        return $"Companion: {name}, {what}, joins you" + (weapon ? "." : $" (bare-handed: no {cat} in memory yet; give one through Trade).");
     }
 
     /// <summary>Its character level: its base class's XP (as the character screen shows it), not its combat class's.</summary>
@@ -156,5 +185,6 @@ internal static class CompanionSave
     }
 
     public static string Describe() => Data == null ? "none" :
-        $"{Data.playerName}, level {Level}, " + (Meta.sourceSlot > 0 ? $"copied from slot {Meta.sourceSlot}" : "a new adventurer");
+        $"{Data.playerName}, level {Level}, " + (Meta.sourceSlot > 0 ? $"copied from slot {Meta.sourceSlot}" :
+            Data.equippedClass != PlayerClassType.None ? $"{Data.equippedClass}" : "a new adventurer");
 }

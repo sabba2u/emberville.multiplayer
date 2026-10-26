@@ -53,6 +53,10 @@ public class Plugin : BaseUnityPlugin
     /// <summary>The pet's settings, for the multiplayer mod's Insert menu (ImGui).</summary>
     public static void DrawMenu() => Pet.DrawMenu();
 
+    /// <summary>The two staffs, into your bag (the multiplayer mod's Better Combat tab: New Weapons).</summary>
+    public static void GiveCluckStaff() => CluckStaff.Give();
+    public static void GiveRisenStaff() => RisenStaff.Give();
+
     /// <summary>Name tags and health bars over our pet and summons (ImGui, drawn by the multiplayer mod's HUD).</summary>
     public static void DrawHud() { Pet.DrawLabels(); CluckStaff.Draw(); RisenStaff.Draw(); }
 
