@@ -18,7 +18,7 @@ Not made or supported by Cygnus Cross.
 [The descent and the boss arena](#the-descent-and-the-boss-arena) · [Weapons and summons](#weapons-and-summons) ·
 [Your character](#your-character) · [Chests and loot](#chests-and-loot) · [Weather](#weather) ·
 [NPCs and quests](#npcs-and-quests) · [Fishing](#fishing) · [Pets](#pets) · [Companion: an AI adventurer](#companion-an-ai-adventurer) ·
-[The mod menu](#the-mod-menu) · [Quality of life](#quality-of-life) ·
+[Better Streaming](#better-streaming-twitch-plays-along) · [The mod menu](#the-mod-menu) · [Quality of life](#quality-of-life) ·
 [Keys](#keys) · [Commands](#commands) · [API](#api) · [Secrets](#secrets-the-dev-panel-test-arenas-and-the-estate) ·
 [Build](#build)
 
@@ -192,10 +192,29 @@ game itself moves it, swings its weapon, fires its arrows and spells, spends its
   back to that character.
 - Everyone sees everyone's companion in co-op.
 
+## Better Streaming: Twitch plays along
+For streamers: your Twitch chat sets off effects in your game, with the viewer's name on screen ("Twitch raid incoming
+by xxJoexx", their message under it).
+- **Connect:** MODS > **Streaming** > **Connect Twitch**. The game shows a short code; enter it on twitch.tv (the link
+  is right there). No password is ever typed in the game; **Sign out** ends it.
+- **Cheers:** a word in the cheer picks the effect (`cheer500 raid`), else the exact amount; bigger cheers make raids
+  bigger. Effects so far: **Raid** (creatures that fit the area, around you), **Chicken raid** (waves of hostile
+  chickens), **Heal**, **Poison** (down to 1 health, never further), **Instant death**, **Chain lightning** (every enemy on screen zapped for 30 s), **Freeze** (frozen solid
+  for 5 s) and the **Mystery chest** (a chest beside you: full of loot, or a trap that springs a raid when opened).
+  `!effects` in chat lists them with prices. Bits need a Twitch Affiliate or Partner channel.
+- **Fair play:** the **chaos dial** (Chill to Mayhem) sets how often a mean effect may land; the rest wait in a queue
+  shown on screen ("3 curses incoming..."). Nice ones skip the queue, and nothing lands in a cutscene, a menu or while
+  dead. **Chat can kill you for real** (then a breather from mean effects); switch on **Twitch deaths are free** in
+  the tab and you get up where you fell instead, bag intact.
+- **Try it first:** every effect has a free **Test** button, and **Simulate a cheer** runs a pretend cheer through the
+  same rules. Prices, caps, times and which effects are on are all in the tab.
+- Coming next: drunk, mirror world, upside down and other screen and control effects; Spin the Wheel and Roll the Dice;
+  channel-point rewards and chat votes.
+
 ## The mod menu
 **Insert**, or the **MODS** button on the title screen and the Esc menu (just above Options). Its tabs:
 **Multiplayer** (hosting, the party strip and who's connected), **Font Options**, **Mouse Options**, **Better Combat**,
-**Better Looting**, **Companions**, **Respec**, **Pets** and **Log**. Close it with Insert again or the [x].
+**Better Looting**, **Companions**, **Respec**, **Pets**, **Streaming** and **Log**. Close it with Insert again or the [x].
 
 ## Quality of life
 - **Mouse walking:** hold the mouse side button to walk toward the mouse; a click walks there.
@@ -279,7 +298,7 @@ Requirements: .NET SDK, Emberville installed with BepInEx 5.4.23 (`winhttp.dll`,
 dotnet build spike/EmbervilleGhost -c Release -p:GamePath="<path to Emberville Demo>"
 ```
 Each mod is its own project in `spike/` (EmbervilleGhost = multiplayer, EmbervilleFavorites, BetterChests, BetterCombat,
-BetterLooting, BetterPetsAndSummons, BetterFishing, BetterNPCsAndQuests, BetterWeather, BetterCompanions); a build copies the DLL into the
+BetterLooting, BetterPetsAndSummons, BetterFishing, BetterNPCsAndQuests, BetterWeather, BetterCompanions, BetterStreaming); a build copies the DLL into the
 game's `BepInEx/plugins`. The game's own DLLs are referenced from `<GamePath>/Emberville_Data/Managed` (not included).
 
 **Release zip:** `pwsh spike/package-all.ps1` makes `spike/dist/EmbervilleModPack-v<version>.zip` (BepInEx and every

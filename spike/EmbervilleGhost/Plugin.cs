@@ -116,6 +116,7 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         Delve.Plugin = this;
         Dungeon.Init();
         StorySync.Plugin = this;
+        QuestSync.Plugin = this;
         TeamBuffs.Plugin = this;
         Pings.Plugin = this;
         HookNet.Plugin = this;
@@ -131,6 +132,7 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         NpcLooks.Plugin = this;
         WeatherSync.Plugin = this;
         TownPortal.Plugin = this;
+        AdeosGate.Plugin = this;
         Travel.Plugin = this;
         Chat.Plugin = this;
         HookSounds.Init(Config);
@@ -144,10 +146,13 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         MenuBanner.Plugin = this;
         CoopDeath.Plugin = this;
         Session.Plugin = this;
+        PartyScale.Plugin = this;
         HostWindow.Plugin = this;
         Session.Bind(Config);
         OnlinePlayers.Bind(Config);
+        Emotes.Bind(Config);
         StoryText.Bind(Config);
+        DebugPanel.Bind(Config);
         Arena.BindChickens(Config);
         TiltView.Bind(Config);
         Walls3D.Bind(Config);
@@ -227,8 +232,10 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         NpcLooks.Tick();   // the host's NPCs (and Rory) look the same on every game
         GearDye.Tick();
         TownPortal.Tick();
+        AdeosGate.Tick();   // the Adeos room: a teammate at the shut gate is let in
         Homes.Tick();   // your /sethome places' portals
         DeathGuard.Tick();   // a death a stun interrupted: die properly
+        Emotes.Tick();   // the emote wheel (hold Y)
         ModsButton.Tick();   // the MODS buttons (main menu, Esc menu): the Insert menu
         StoryText.Tick();   // bigger story text (dialogue, bubbles, the quest tracker)
         TiltView.Tick();    // the tilted 2.5D view (/tilt)
@@ -303,6 +310,7 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         GuestWorld.Tick();
         PlaceSync.Tick();
         StorySync.Tick();
+        QuestSync.Tick();   // one quest log for the party
 
         Perf.Begin("2 world");
         if (MyId >= 0)
@@ -777,6 +785,7 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         var w = new NetDataWriter();
         w.Put((byte)MsgType.Welcome);
         w.Put(id);
+        w.Put(Version);   // (the mod's version: a joiner on another one leaves, told why)
         peer.Send(w, DeliveryMethod.ReliableOrdered);
         Session.SendTo(id);   // the host's rules (shared XP, instanced loot)
         PlaceSync.SendBuiltTo(id);   // what's been built anywhere (B)
@@ -792,10 +801,18 @@ public class Plugin : BaseUnityPlugin, ITransportListener
     void OnWelcome(NetDataReader reader)
     {
         MyId = reader.GetInt();
+        string hostVersion = reader.AvailableBytes > 0 ? reader.GetString() : "";   // (none: from before 0.4.0)
+        if (hostVersion != Version)
+        {
+            WrongVersion(hostVersion, Version);
+            Stop();
+            return;
+        }
         Status = $"connected as P{MyId + 1}";
         var who = new NetDataWriter();
         who.Put((byte)MsgType.Identity);
         who.Put(OnlinePlayers.MyGuid);   // the host's bans follow this, not our name
+        who.Put(Version);
         hostPeer?.Send(who, DeliveryMethod.ReliableOrdered);
         NetLog.Success($"You are P{MyId + 1}");
         if (rejoining)
@@ -871,6 +888,13 @@ public class Plugin : BaseUnityPlugin, ITransportListener
     {
         string guid = r.GetString();
         guids[from] = guid;
+        string theirs = r.AvailableBytes > 0 ? r.GetString() : "";   // (none: from before 0.4.0)
+        if (theirs != Version)
+        {
+            NetLog.Warn($"{NameOf(from)} has {(theirs == "" ? "an older version" : "v" + theirs)} of the mod (you have v{Version}): sent away", toast: true);
+            Kick(from, ban: false, silent: true, why: VersionText(Version, theirs));
+            return;
+        }
         if (!OnlinePlayers.IsBanned(guid)) return;
         NetLog.Warn($"A banned player tried to join ({NameOf(from)}): sent away");
         Kick(from, ban: false, silent: true, why: "You're banned from this host's games.");
@@ -899,6 +923,18 @@ public class Plugin : BaseUnityPlugin, ITransportListener
             if (idPeers.TryGetValue(pendingKicks[i].id, out var peer)) peer.Disconnect();
             pendingKicks.RemoveAt(i--);
         }
+    }
+
+    /// <summary>What a joiner on another version is told (the host's version, theirs; empty: from before 0.4.0).</summary>
+    static string VersionText(string host, string mine) =>
+        $"The host has v{(host == "" ? "0.3.2 or older" : host)} of the Emberville mod pack and you have v{(mine == "" ? "0.3.2 or older" : mine)}. " +
+        "Everyone playing together needs the same version: download it from the Releases page (github.com/sabba2u/emberville.multiplayer).";
+
+    static void WrongVersion(string host, string mine)
+    {
+        string why = VersionText(host, mine);
+        NetLog.Warn(why, toast: true);
+        GameUi.Message("Different versions", why);
     }
 
     void OnKicked(NetDataReader r)
@@ -1214,7 +1250,8 @@ public class Plugin : BaseUnityPlugin, ITransportListener
             case MsgType.Repaired: InteractSync.OnRepaired(reader); break;   // repairs: the repairer pays, everyone sees it
             case MsgType.InteractSnapshot: if (!owner) InteractSync.OnSnapshot(reader); break;   // floor buttons: down while anyone stands on one   // building: whoever builds sends it
             case MsgType.EstateUnlock: if (from == 0) DebugPanel.UnlockEstate(); break;   // the host's call
-            case MsgType.StoryFlag: StorySync.OnFlag(reader, from); break;   // story progress: anyone's counts for all
+            case MsgType.StoryFlag: StorySync.OnFlag(reader, from); break;
+            case MsgType.QuestState: QuestSync.OnState(reader, from); break;   // a player's quests: merged, forward only   // story progress: anyone's counts for all
             case MsgType.EggSpawn: BossSync.OnEggSpawn(reader, from); break;   // eggs: whoever's boss laid it owns it
             case MsgType.EggHit: BossSync.OnEggHit(reader, from); break;
             case MsgType.EggDamaged: BossSync.OnEggDamaged(reader); break;
@@ -1385,6 +1422,7 @@ internal enum MsgType : byte
     WeatherStorm = 155, // whoever changed it -> everyone (host -> each player who joins), reliable: kind (0 clear, 1 rain, 2 snow: Better Weather), its own settings (amount, darkness, settle, lightning every, wind: NaN = the sliders')
     CompanionState = 160, // owner -> their place, ~10 Hz unreliable (gone: reliable): out?, then x, y, flip, health 0-255, downed, animators (Better Companions)
     CompanionLook = 161,  // owner -> their place, reliable, when it changes: LookSync bytes (name, parts, colours) of their companion
+    QuestState = 163,    // a player -> everyone (ToAll), reliable, on a change and every 10 s: quests (id, state, step), objectives (id, done, count) (QuestSync)
     CompanionRevive = 162, // reviver -> the companion's owner, reliable: (nothing) they held F at it for 2 s
     TpAsk = 158,        // player -> the player they want to go to, reliable: (nothing; they answer with SummonTo)
     SummonTo = 159,     // player -> the player they bring over, reliable: their name, Travel.Spot (scene, area, dungeon floor, x, y)

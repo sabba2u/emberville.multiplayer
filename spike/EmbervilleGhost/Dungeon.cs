@@ -869,6 +869,30 @@ internal static class Dungeon
     }
 
     static readonly List<(PolygonCollider2D shape, List<Enemy> creatures, int seed)> sleeping = new List<(PolygonCollider2D, List<Enemy>, int)>();
+    static int leftCount;
+    static float leftAt = -10f;
+
+    /// <summary>Creatures still on this floor: the ones alive on it now (anyone's: the creature sync's too), and the ones
+    /// still waiting in spawn areas nobody has come near (known where this copy spawns them). Counted twice a second.</summary>
+    public static int CreaturesLeft
+    {
+        get
+        {
+            if (Time.unscaledTime - leftAt < 0.5f) return leftCount;
+            leftAt = Time.unscaledTime;
+            int n = 0;
+            var b = bounds;
+            b.Expand(new Vector3(4f, 4f, 1000f));
+            foreach (var e in EnemiesManager.AllEnemies)
+            {
+                if (!e || e.IsDead || !e.gameObject.activeInHierarchy || e.enemyType == EnemyType.None || e.name.StartsWith("NPC_")) continue;
+                var p = e.transform.position;
+                if (b.Contains(new Vector3(p.x, p.y, b.center.z))) n++;
+            }
+            foreach (var s in sleeping) n += s.creatures.Count;
+            return leftCount = n;
+        }
+    }
     static int sleepingCreatures;
     static float nextWake;
     const float WakeRange = 28f;

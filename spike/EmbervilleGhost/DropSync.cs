@@ -342,6 +342,16 @@ internal static class DropSync
         return true;
     }
 
+    /// <summary>The game's own data: some loot tables hold an empty entry (a crate in the starting area), and dropping
+    /// "nothing" threw, which also lost the rest of that dropper's drops. An empty one is skipped; the rest still fall.</summary>
+    [HarmonyPatch(typeof(ItemDropper), nameof(ItemDropper.InternalDropToWorld)), HarmonyPrefix]
+    static bool SkipEmptyDrop(ItemData item, float totalAngle, ref float __result)
+    {
+        if (item) return true;
+        __result = totalAngle;
+        return false;
+    }
+
     [HarmonyPatch(typeof(ItemDropper), nameof(ItemDropper.Drop)), HarmonyFinalizer]
     static void DropperDropDone() => allowLocal = false;
 

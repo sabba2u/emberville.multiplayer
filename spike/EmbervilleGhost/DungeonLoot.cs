@@ -120,6 +120,27 @@ internal static class DungeonLoot
         NetLog.Info($"Dungeon loot: {n} chests ({decorCount} were decorative ones, now real; +{i} of the rooms' own)", toast: false);
     }
 
+    /// <summary>One chest of ours out in the world (Better Streaming's mystery chest): not saved, rolled like a floor's
+    /// chest when it's set up; empty: nothing in it. Null: no chest to copy.</summary>
+    internal static Chest MakeChest(Vector3 at, string id, int seed, int floor, bool empty)
+    {
+        var prefab = ChestPrefab();
+        if (!prefab) return null;
+        Preload();
+        var go = Object.Instantiate(prefab.gameObject, at, Quaternion.identity);
+        go.name = "EG_" + id;
+        var chest = go.GetComponent<Chest>();
+        chest.chestID = id;
+        chest.saveChest = false;
+        chest.mirrorChest = false;
+        chest.shareContent = ChestShare.None;
+        chest.isInitialized = false;
+        chest.isOpened = chest.alreadyOpened = false;
+        planned[chest] = (empty ? int.MinValue : seed, floor);
+        go.SetActive(true);
+        return chest;
+    }
+
     static int decorCount;
 
     /// <summary>
@@ -198,7 +219,7 @@ internal static class DungeonLoot
         {
             if (!planned.TryGetValue(__instance, out var plan)) return true;
             planned.Remove(__instance);
-            var items = Roll(new System.Random(plan.seed), plan.floor);
+            var items = plan.seed == int.MinValue ? new List<InventoryItem>() : Roll(new System.Random(plan.seed), plan.floor);   // (MinValue: a trap, empty)
             if (items == null) return true;   // the catalogue didn't load: the chest's own loot table
             var manager = Singleton<ChestManager>.main;
             if (manager.HasID(__instance.chestID)) return false;

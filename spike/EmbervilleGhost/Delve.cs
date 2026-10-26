@@ -707,6 +707,11 @@ internal static class Delve
             {
                 if (floor > 0) ImGui.TextColored(new Vector4(1f, 0.7f, 0.35f, 1f), $"Floor {floor}{(floors.Value > 0 ? $" of {floors.Value}" : "")}   creatures {HealthMul(floor):0.##}x health, {DamageMul(floor):0.##}x damage");
                 else ImGui.TextColored(new Vector4(1f, 0.7f, 0.35f, 1f), "Generated dungeon");
+                // how many are still on the floor (cleared: green)
+                int left = Dungeon.CreaturesLeft;
+                ImGui.SameLine();
+                if (left > 0) ImGui.TextColored(new Vector4(1f, 0.45f, 0.4f, 1f), $"   {left} {(left == 1 ? "creature" : "creatures")} left");
+                else ImGui.TextColored(new Vector4(0.5f, 1f, 0.5f, 1f), "   floor cleared!");
                 ImGui.SameLine();
                 if (leaveHovered) ImGui.PushStyleColor(ImGuiCol.Button, ImGui.GetColorU32(ImGuiCol.ButtonHovered));
                 ImGui.SmallButton(Dungeon.Busy ? "  ...  " : "Leave: back to where you came in");

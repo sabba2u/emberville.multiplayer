@@ -185,6 +185,9 @@ internal static class Chat
         return false;
     }
 
+    /// <summary>An emote (the wheel): said as a chat line, so it's over your head on everyone's screen.</summary>
+    internal static void Emote(string text) => Send(text);
+
     static void Send(string text)
     {
         text = text.Trim();

@@ -1,0 +1,72 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Better Streaming: BepInEx 5 plugin. Twitch chat (Bits, channel points, votes) sets off effects in the streamer's game.
+       Standalone: works with or without the multiplayer mod (EmbervilleGhost), which draws its menu and spawns raids. -->
+
+  <PropertyGroup>
+    <TargetFramework>net472</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>BetterStreaming</AssemblyName>
+    <RootNamespace>BetterStreaming</RootNamespace>
+    <Nullable>disable</Nullable>
+    <NoWarn>CS1591;CS8981;CS0618</NoWarn>
+    <GamePath Condition="'$(GamePath)' == ''">K:\__games\steamapps\common\Emberville Demo</GamePath>
+    <Managed>$(GamePath)\Emberville_Data\Managed</Managed>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+    <!-- Lets us read the game's internal/private fields without reflection. -->
+    <PackageReference Include="Krafs.Publicizer" Version="2.2.1" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="..\BetterStreaming.Tests\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Publicize Include="Assembly-CSharp" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="BepInEx"><HintPath>$(GamePath)\BepInEx\core\BepInEx.dll</HintPath><Private>false</Private></Reference>
+    <!-- ImGui for the streamer's panel and the overlay, which the multiplayer mod draws (it ships ImGui.NET). -->
+    <Reference Include="ImGui.NET"><HintPath>..\libs\OverlayDearImGui\ImGui.NET.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="0Harmony"><HintPath>$(GamePath)\BepInEx\core\0Harmony.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="netstandard"><HintPath>$(Managed)\netstandard.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine"><HintPath>$(Managed)\UnityEngine.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.CoreModule"><HintPath>$(Managed)\UnityEngine.CoreModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.JSONSerializeModule"><HintPath>$(Managed)\UnityEngine.JSONSerializeModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.TextRenderingModule"><HintPath>$(Managed)\UnityEngine.TextRenderingModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.UI"><HintPath>$(Managed)\UnityEngine.UI.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.UIModule"><HintPath>$(Managed)\UnityEngine.UIModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Unity.TextMeshPro"><HintPath>$(Managed)\Unity.TextMeshPro.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Unity.InputSystem"><HintPath>$(Managed)\Unity.InputSystem.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Unity.Localization"><HintPath>$(Managed)\Unity.Localization.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UniTask"><HintPath>$(Managed)\UniTask.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="R3"><HintPath>$(Managed)\R3.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="R3.Unity"><HintPath>$(Managed)\R3.Unity.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="ObservableCollections"><HintPath>$(Managed)\ObservableCollections.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="AK.Wwise.Unity.API.WwiseTypes"><HintPath>$(Managed)\AK.Wwise.Unity.API.WwiseTypes.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Unity.Addressables"><HintPath>$(Managed)\Unity.Addressables.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Unity.ResourceManager"><HintPath>$(Managed)\Unity.ResourceManager.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.AnimationModule"><HintPath>$(Managed)\UnityEngine.AnimationModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.Physics2DModule"><HintPath>$(Managed)\UnityEngine.Physics2DModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.AudioModule"><HintPath>$(Managed)\UnityEngine.AudioModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.AIModule"><HintPath>$(Managed)\UnityEngine.AIModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.IMGUIModule"><HintPath>$(Managed)\UnityEngine.IMGUIModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Unity.Behavior"><HintPath>$(Managed)\Unity.Behavior.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="SerializableGUID"><HintPath>$(Managed)\SerializableGUID.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.ParticleSystemModule"><HintPath>$(Managed)\UnityEngine.ParticleSystemModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Newtonsoft.Json"><HintPath>$(Managed)\Newtonsoft.Json.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="System.Net.Http" />
+    <Reference Include="Assembly-CSharp"><HintPath>$(Managed)\Assembly-CSharp.dll</HintPath><Private>false</Private></Reference>
+  </ItemGroup>
+
+  <!-- Copy the plugin into the game's BepInEx/plugins folder after each build. -->
+  <Target Name="DeployToGame" AfterTargets="Build">
+    <Copy SourceFiles="$(OutDir)BetterStreaming.dll" DestinationFolder="$(GamePath)\BepInEx\plugins\BetterStreaming" SkipUnchangedFiles="true" />
+  </Target>
+
+</Project>

@@ -185,7 +185,7 @@ internal static partial class Arena
 
     /// <summary>The game's chicken: its prefab (the boss maker's list leaves chickens out, and the scene's are named just
     /// "Chicken"), else one standing in the scene. None in memory: the biomes are loaded (they carry it) and looked again.</summary>
-    static Enemy Chicken()
+    internal static Enemy Chicken()
     {
         if (chicken) return chicken;
         chicken = FindChicken();

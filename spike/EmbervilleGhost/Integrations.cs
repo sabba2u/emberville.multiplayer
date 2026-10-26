@@ -21,6 +21,7 @@ internal static class Integrations
     public const string NpcsGuid = "spike.emberville.betternpcsandquests";
     public const string WeatherGuid = "spike.emberville.betterweather";
     public const string CompanionGuid = "spike.emberville.bettercompanions";
+    public const string StreamingGuid = "spike.emberville.betterstreaming";
 
     public static bool HasCombat { get; private set; }
     public static bool HasLooting { get; private set; }
@@ -28,6 +29,7 @@ internal static class Integrations
     public static bool HasNpcs { get; private set; }
     public static bool HasWeather { get; private set; }
     public static bool HasCompanion { get; private set; }
+    public static bool HasStreaming { get; private set; }
 
     /// <summary>From Plugin.Awake (they load first: soft dependencies).</summary>
     public static void Init()
@@ -42,11 +44,13 @@ internal static class Integrations
         if (HasWeather) WeatherSync.Hook();
         HasCompanion = Chainloader.PluginInfos.ContainsKey(CompanionGuid);
         if (HasCompanion) CompanionHooks();
+        HasStreaming = Chainloader.PluginInfos.ContainsKey(StreamingGuid);
+        if (HasStreaming) StreamingHooks();
         if (translations != null) TranslationsHooks();
         NetLog.Info("Split-out mods: " + string.Join(", ", new List<string> {
             HasCombat ? "Better Combat" : null, HasLooting ? "Better Looting" : null, HasPets ? "Better Pets and Summons" : null,
-            HasNpcs ? "Better NPCs and Quests" : null, HasWeather ? "Better Weather" : null, HasCompanion ? "Better Companions" : null }.FindAll(x => x != null)) +
-            (HasCombat || HasLooting || HasPets || HasNpcs || HasWeather || HasCompanion ? "" : "none"), toast: false);
+            HasNpcs ? "Better NPCs and Quests" : null, HasWeather ? "Better Weather" : null, HasCompanion ? "Better Companions" : null, HasStreaming ? "Better Streaming" : null }.FindAll(x => x != null)) +
+            (HasCombat || HasLooting || HasPets || HasNpcs || HasWeather || HasCompanion || HasStreaming ? "" : "none"), toast: false);
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
@@ -150,9 +154,35 @@ internal static class Integrations
         BetterCompanions.Hooks.DrawsHud = true;
         BetterCompanions.Hooks.Popup = (at, title, items) => GameUi.Popup(at, 6f, title, items);   // (its Class button's picker)
         BetterCompanions.Hooks.DownedNear = CompanionSync.DownedNear;   // (F at a teammate's downed companion: revive, not loot)   // (its name tag: DrawHud → CompanionDraw)
-        BetterCompanions.Hooks.Hostile = Arena.IsHen;   // (the chicken level's chickens: foes, though fauna)
+        BetterCompanions.Hooks.Hostile = e => Arena.IsHen(e) || StreamRaids.IsTwitch(e);   // (the chicken level's chickens: foes, though fauna)
         if (HasCombat) BetterCompanions.Hooks.LockTarget = CombatLocked;
     }
+
+    /// <summary>Better Streaming: we draw its tab and overlay, and spawn its raids.</summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    static void StreamingHooks()
+    {
+        BetterStreaming.Hooks.DrawsUi = () => true;
+        BetterStreaming.Hooks.SpawnRaid = StreamRaids.Raid;
+        BetterStreaming.Hooks.ChickenRaid = StreamRaids.Chickens;
+        BetterStreaming.Hooks.SpawnChest = StreamRaids.Chest;
+        BetterStreaming.Hooks.IsBoss = MiniBoss.IsBoss;
+        BetterStreaming.Hooks.IsTwitchCreature = StreamRaids.IsTwitch;
+        BetterStreaming.Hooks.IsFriendly = EnemySync.LocalOnly;   // (pets, summons, companions' own: chain lightning leaves them)
+        BetterStreaming.Hooks.Say = Chat.System;
+    }
+
+    /// <summary>Better Streaming's tab.</summary>
+    public static void DrawStreaming()
+    {
+        if (HasStreaming) StreamingMenu(); else Missing("Better Streaming (your Twitch chat sets off effects in your game)");
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)] static void StreamingMenu() => BetterStreaming.Plugin.DrawMenu();
+    [MethodImpl(MethodImplOptions.NoInlining)] static void StreamingHud() => BetterStreaming.Plugin.DrawHud();
+
+    /// <summary>Better Streaming's overlay (banners, the effects panel): shown even in menus, it's for the stream.</summary>
+    public static void DrawStreamingHud() { if (HasStreaming) StreamingHud(); }
 
     /// <summary>Better Weather's Insert tab.</summary>
     public static void DrawWeather()
@@ -259,6 +289,7 @@ internal static class Integrations
     public static void Tick()
     {
         if (HasCompanion) CompanionSync.Tick();
+        StreamRaids.Tick();   // (Better Streaming's raids: the chickens walked at you)
         if (!HasPets) return;
         RemotePets.Tick();
         SummonSync.Tick();

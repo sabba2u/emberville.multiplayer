@@ -109,7 +109,7 @@ internal static class MiniBoss
     }
 
     /// <summary>"Mob_Acolyte_Sorcerer_01" -> "Mob_Acolyte_Sorcerer" (the numbered copies are the same creature).</summary>
-    static string BaseName(string n)
+    internal static string BaseName(string n)
     {
         int u = n.LastIndexOf('_');
         return u > 0 && int.TryParse(n.Substring(u + 1), out _) ? n.Substring(0, u) : n;

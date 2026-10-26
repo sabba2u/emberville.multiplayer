@@ -313,6 +313,7 @@ internal static class Hud
         MouseWalk.Draw();
         MapMates.Draw();   // the world map is a menu: not hidden with the rest
         Chat.Draw();
+        Emotes.Draw();
         MenuBanner.Draw();
         JoinWindow.Draw();
         Delve.DrawSetup();   // the descent's setup box (clickable)
@@ -329,6 +330,7 @@ internal static class Hud
         FreeBuild.Draw();    // build mode's panel where the game has no build bar
         Trade.Draw();
         Toasts.Draw();
+        Integrations.DrawStreamingHud();   // (Better Streaming: banners and its panel, for the stream)
         if (ImGuiUnity.IsOpen) DebugPanel.Draw();
     }
 }

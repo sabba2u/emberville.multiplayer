@@ -27,31 +27,23 @@ internal static class DebugPanel
             return;
         }
 
-        if (ImGui.BeginTabBar("menuTabs"))
+        // the tabs, in your order: drag one along the bar to move it (kept in the config)
+        if (ImGui.BeginTabBar("menuTabs", ImGuiTabBarFlags.Reorderable))
         {
-            if (ImGui.BeginTabItem("Multiplayer###online"))
+            var shownTabs = new System.Collections.Generic.List<(string id, float x)>();
+            foreach (var t in Ordered())
             {
-                DrawOnline(plugin);
-                // who's connected, under a line of its own
-                ImGui.Spacing();
-                ImGui.SeparatorText($"Who's connected ({plugin.PlayerCount})");
-                DrawPlayers(plugin);
-                ImGui.EndTabItem();
+                if (t.Show != null && !t.Show()) continue;
+                bool installed = t.Installed == null || t.Installed();
+                // (a tab whose mod isn't installed: greyed; it still opens, to say what it needs)
+                if (!installed) ImGui.PushStyleColor(ImGuiCol.Text, ImGui.GetColorU32(ImGuiCol.TextDisabled));
+                bool selected = ImGui.BeginTabItem(t.Label);
+                if (!installed) ImGui.PopStyleColor();
+                shownTabs.Add((t.Id, ImGui.GetItemRectMin().x));
+                if (selected) { t.Draw(plugin); ImGui.EndTabItem(); }
             }
-            if (ImGui.BeginTabItem("Font Options")) { StoryText.DrawMenu(); ImGui.EndTabItem(); }
-            if (ImGui.BeginTabItem("Mouse Options"))
-            {
-                MouseWalk.DrawMenu();
-                ImGui.EndTabItem();
-            }
-            if (GreyTab("Better Combat", Integrations.HasCombat)) { Integrations.DrawCombat(); ImGui.EndTabItem(); }
-            if (GreyTab("Better Looting", Integrations.HasLooting)) { Integrations.DrawLooting(); ImGui.EndTabItem(); }
-            if (GreyTab("Companions", Integrations.HasCompanion)) { Integrations.DrawCompanion(); ImGui.EndTabItem(); }
-            if (ImGui.BeginTabItem("Respec")) { Respec.DrawYou(); ImGui.EndTabItem(); }
-            if (GreyTab("Pets", Integrations.HasPets)) { Integrations.DrawPets(); ImGui.EndTabItem(); }
-            if (ImGui.BeginTabItem("Log")) { DrawLog(plugin); ImGui.EndTabItem(); }
-            if (BuildMode.Enabled && ImGui.BeginTabItem("Construction")) { DrawConstruction(plugin); ImGui.EndTabItem(); }
             ImGui.EndTabBar();
+            Remember(shownTabs);
         }
 
         ImGui.End();
@@ -60,13 +52,67 @@ internal static class DebugPanel
 
     // ---- the tabs ----
 
-    /// <summary>A tab whose mod may not be installed: greyed then (it still opens, to say what it needs).</summary>
-    static bool GreyTab(string label, bool installed)
+    sealed class Tab
     {
-        if (!installed) ImGui.PushStyleColor(ImGuiCol.Text, ImGui.GetColorU32(ImGuiCol.TextDisabled));
-        bool open = ImGui.BeginTabItem(label);
-        if (!installed) ImGui.PopStyleColor();
-        return open;
+        public string Id, Label;
+        public Func<bool> Show, Installed;   // (null: always shown / installed)
+        public Action<Plugin> Draw;
+    }
+
+    /// <summary>Every tab, in the order they come by default (a new one goes where it sits here).</summary>
+    static readonly Tab[] Tabs =
+    {
+        new Tab { Id = "online", Label = "Multiplayer###online", Draw = p =>
+        {
+            DrawOnline(p);
+            // who's connected, under a line of its own
+            ImGui.Spacing();
+            ImGui.SeparatorText($"Who's connected ({p.PlayerCount})");
+            DrawPlayers(p);
+        } },
+        new Tab { Id = "fonts", Label = "Font Options", Draw = _ => StoryText.DrawMenu() },
+        new Tab { Id = "mouse", Label = "Mouse Options", Draw = _ => MouseWalk.DrawMenu() },
+        new Tab { Id = "combat", Label = "Better Combat", Installed = () => Integrations.HasCombat, Draw = _ => Integrations.DrawCombat() },
+        new Tab { Id = "looting", Label = "Better Looting", Installed = () => Integrations.HasLooting, Draw = _ => Integrations.DrawLooting() },
+        new Tab { Id = "companions", Label = "Companions", Installed = () => Integrations.HasCompanion, Draw = _ => Integrations.DrawCompanion() },
+        new Tab { Id = "respec", Label = "Respec", Draw = _ => Respec.DrawYou() },
+        new Tab { Id = "pets", Label = "Pets", Installed = () => Integrations.HasPets, Draw = _ => Integrations.DrawPets() },
+        new Tab { Id = "streaming", Label = "Streaming", Installed = () => Integrations.HasStreaming, Draw = _ => Integrations.DrawStreaming() },
+        new Tab { Id = "log", Label = "Log", Draw = DrawLog },
+        new Tab { Id = "construction", Label = "Construction", Show = () => BuildMode.Enabled, Draw = DrawConstruction },
+    };
+
+    static BepInEx.Configuration.ConfigEntry<string> tabOrder;
+
+    public static void Bind(BepInEx.Configuration.ConfigFile config) =>
+        tabOrder = config.Bind("Menu", "TabOrder", "", "The Insert menu's tabs, in your order (drag a tab along the bar to change it; empty: the default order)");
+
+    /// <summary>The tabs in the saved order; any not in it (new ones) where they come by default.</summary>
+    static System.Collections.Generic.List<Tab> Ordered()
+    {
+        var saved = (tabOrder?.Value ?? "").Split(',');
+        var list = new System.Collections.Generic.List<Tab>(Tabs);
+        int Rank(Tab t) { int i = Array.IndexOf(saved, t.Id); return i >= 0 ? i : saved.Length + Array.IndexOf(Tabs, t); }
+        list.Sort((a, b) => Rank(a).CompareTo(Rank(b)));
+        return list;
+    }
+
+    /// <summary>After the bar is drawn: if a tab was dragged (their places on screen no longer in the saved order), keep
+    /// the new order. Tabs not shown now (Construction outside build mode) keep their place.</summary>
+    static void Remember(System.Collections.Generic.List<(string id, float x)> shown)
+    {
+        if (tabOrder == null || shown.Count < 2) return;
+        var byPlace = new System.Collections.Generic.List<(string id, float x)>(shown);
+        byPlace.Sort((a, b) => a.x.CompareTo(b.x));
+        bool moved = false;
+        for (int i = 0; i < shown.Count; i++) if (shown[i].id != byPlace[i].id) { moved = true; break; }
+        if (!moved) return;
+        // the full order: the shown tabs in their new places, the hidden ones where they were
+        var all = Ordered().ConvertAll(t => t.Id);
+        var shownIds = shown.ConvertAll(s => s.id);
+        int k = 0;
+        for (int i = 0; i < all.Count; i++) if (shownIds.Contains(all[i])) all[i] = byPlace[k++].id;
+        tabOrder.Value = string.Join(",", all);
     }
 
     static void DrawOnline(Plugin plugin)

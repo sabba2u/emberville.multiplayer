@@ -142,3 +142,13 @@ ChestLooks.Changed += (id, name, hex, takes) => { };   // on every local edit
 
 ### Combat: `BetterCombat` (guid `spike.emberville.bettercombat`)
 `BowAssist.SetAngle(degrees)`, `BowAssist.Toggle()`, `MoveAttack.Command("70")`, `Plugin.Command("bowlock")`.
+
+### Streaming: `BetterStreaming` (guid `spike.emberville.betterstreaming`)
+`Hooks` (set by the multiplayer mod; on its own Better Streaming connects and runs heal, poison, instant death and
+chain lightning, and raids say they need the pack):
+- `Hooks.DrawsUi`: true when another mod draws `Plugin.DrawMenu()` (the Streaming tab) and `Plugin.DrawHud()` (banners,
+  the effects panel).
+- `Hooks.SpawnRaid(around, count, toughness, viewer) → bool`, `Hooks.ChickenRaid(around, waves, toughness, viewer) → bool`:
+  the raids' creatures.
+- `Hooks.IsTwitchCreature(object) → bool`: a creature Twitch sent (a death to it costs nothing).
+- `Hooks.Say(text)`: a message for the player.
