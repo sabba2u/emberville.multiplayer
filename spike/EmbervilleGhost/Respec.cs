@@ -80,7 +80,8 @@ internal static class Respec
         var p = t.P;
         var data = t.Data;
         var stats = p.characterStats;
-        if (!stats || !stats.baseClass) { ImGui.TextDisabled("(not loaded yet)"); return; }
+        // (a companion that's only just joined: its stats come a moment later)
+        if (!stats || !stats.baseClass || stats.baseClassXP == null || stats.primStatDict == null) { ImGui.TextDisabled("(not loaded yet)"); return; }
         object baseKey = stats.baseClass.playerClassType;
         var cls = stats.equippedClass;
 

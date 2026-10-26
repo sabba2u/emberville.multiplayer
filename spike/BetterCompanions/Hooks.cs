@@ -31,4 +31,7 @@ public static class Hooks
     /// <summary>A small menu of the game's buttons growing up from a screen point (the multiplayer mod's UI kit): title, then
     /// (label, on click, enabled) each; returns it (to close: destroy it). Null without that mod.</summary>
     public static Func<UnityEngine.Vector2, string, (string label, Action onClick, bool enabled)[], UnityEngine.Object> Popup;
+    /// <summary>The game's whole item catalogue once it's loaded (the multiplayer mod loads it), else null: then only the
+    /// items already in memory are to hand.</summary>
+    public static Func<System.Collections.Generic.IReadOnlyList<ItemData>> Catalogue = () => null;
 }

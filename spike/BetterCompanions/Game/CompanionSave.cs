@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using BetterCompanions.Core;
@@ -146,28 +147,79 @@ internal static class CompanionSave
         ("Sabba", PlayerClassType.Knight, WeaponCategory.OneHandedSwords, "a knight"),
         ("Ellie", PlayerClassType.Mage, WeaponCategory.MagicStaffs, "a mage"),
         ("Rory", PlayerClassType.Archer, WeaponCategory.Bows, "an archer"),
+        ("GraveBear", PlayerClassType.Wanderer, WeaponCategory.TwoHandedSwords, "a wanderer"),
     };
 
-    /// <summary>A ready-made companion (level 1, as a new one, with its class and a weapon). The one out goes to the roster.</summary>
+    /// <summary>
+    /// How each ready-made one looks and dresses (playerSetup, as the customization screen saves it: hair, facial hair,
+    /// face extras, skin, hair colour, facial hair colour, clothes colour, body type 0 = man / 1 = woman), and the weight of
+    /// its clothes. Ellie and Rory as the NPCs of that name are (each a copy of your character): Ellie with hairdo 2 and a
+    /// woman's body, in light clothes; Rory with the hairdo three along from yours, in light leathers. Sabba: a blond man
+    /// in heavy armour. GraveBear: a dark-haired man, a wanderer in medium armour and a cloak.
+    /// </summary>
+    static List<int> PresetLooks(int i)
+    {
+        var mine = GameData.playerData?.playerSetup;
+        var you = mine != null && mine.Count >= 8 ? new List<int>(mine) : new List<int> { 0, 0, 0, 0, 0, 0, 0, 0 };
+        switch (i)
+        {
+            case 0: return new List<int> { 0, 0, 0, 0, 1, 1, 5, 0 };   // Sabba: blond (hair colour 1), blue clothes
+            case 1: you[0] = 2; you[1] = 0; you[7] = 1; return you;    // Ellie: hairdo 2, no beard, a woman
+            case 2: you[0] += 3; you[7] = 0; return you;               // Rory: three hairdos along from yours
+            default: return new List<int> { 5, 0, 0, 2, 8, 8, 14, 0 };  // GraveBear: dark hair (hair colour 8), black clothes
+        }
+    }
+
+    static readonly GearWeight[] PresetWeight = { GearWeight.Heavy, GearWeight.Light, GearWeight.Light, GearWeight.Medium };
+    static readonly GearSlot[][] PresetSlots =
+    {
+        new[] { GearSlot.UpperBody, GearSlot.LowerBody },                  // (no helmet: his hair shows)
+        new[] { GearSlot.UpperBody, GearSlot.LowerBody, GearSlot.Cloak },
+        new[] { GearSlot.UpperBody, GearSlot.LowerBody },
+        new[] { GearSlot.UpperBody, GearSlot.LowerBody, GearSlot.Cloak },
+    };
+
+    /// <summary>The items to hand: the game's catalogue once loaded, else what's in memory.</summary>
+    static List<ItemData> ItemsToHand()
+    {
+        IEnumerable<ItemData> all = Hooks.Catalogue?.Invoke();
+        if (all == null || !all.Any()) all = Resources.FindObjectsOfTypeAll<ItemData>();
+        return all.Where(d => d && !string.IsNullOrEmpty(d.addressKey)).GroupBy(d => d.addressKey).Select(g => g.First()).OrderBy(d => d.name).ToList();
+    }
+
+    static void Wear(ItemData d) =>
+        Data.playerInventory.Add(new SavedItem { Key = d.addressKey, Amount = 1, Section = InventorySection.Gear, SlotIndex = -1, Values = new ItemRandomValues(d, 0) });
+
+    /// <summary>A ready-made companion (level 1, as a new one, with its class, its looks, clothes and a weapon). The one
+    /// out goes to the roster.</summary>
     public static string StartPreset(int i)
     {
         if (PlayingSlot == 0) return "Companion: load a character first.";
         var (name, cls, cat, what) = Presets[i];
         KeepReplaced();
-        Data = new PlayerData { playerName = name, equippedClass = cls };
+        Data = new PlayerData { playerName = name, equippedClass = cls, playerSetup = PresetLooks(i) };
         string id = cls.GetEmbervilleID();
         Data.KnownClasses.Add(id);
         Data.LearnedClasses.Add(id);
-        // a weapon of its kind, worn: the plainest the game has in memory (none loaded: bare-handed for now)
-        var weapon = Resources.FindObjectsOfTypeAll<CollectableWeapon>()
-            .Where(w => w && w.weapon && w.weapon.weaponCategory == cat && !string.IsNullOrEmpty(w.addressKey))
+        var items = ItemsToHand();
+        // a weapon of its kind, worn: the plainest there is (none to hand: bare-handed for now)
+        var weapon = items.OfType<CollectableWeapon>().Where(w => w.weapon && w.weapon.weaponCategory == cat)
             .OrderBy(w => w.maxDamageRange.y).ThenBy(w => w.name).FirstOrDefault();
-        if (weapon) Data.playerInventory.Add(new SavedItem { Key = weapon.addressKey, Amount = 1, Section = InventorySection.Gear, SlotIndex = -1, Values = new ItemRandomValues(weapon, 0) });
+        if (weapon) Wear(weapon);
+        // clothes: the first of its weight for each slot (as the NPCs pick theirs), else any for that slot
+        var armour = items.OfType<CollectableArmor>().Where(a => a.gear != null && a.gear.layerIndex >= 0).ToList();
+        int dressed = 0;
+        foreach (var slot in PresetSlots[i])
+        {
+            var piece = armour.FirstOrDefault(a => a.Weight == PresetWeight[i] && (a.gear.gearSlot & slot) != 0) ?? armour.FirstOrDefault(a => (a.gear.gearSlot & slot) != 0);
+            if (piece) { Wear(piece); dressed++; }
+        }
         Meta = new CompanionMeta { real = true };
         Write();
         Changed?.Invoke();
-        Log.Info($"Companion: {name}, {what} ({cls}, {(weapon ? weapon.name : "no weapon loaded")})");
-        return $"Companion: {name}, {what}, joins you" + (weapon ? "." : $" (bare-handed: no {cat} in memory yet; give one through Trade).");
+        Log.Info($"Companion: {name}, {what} ({cls}, {(weapon ? weapon.name : "no weapon to hand")}, {dressed} pieces of clothing)");
+        return $"Companion: {name}, {what}, joins you" + (weapon ? "." : $" (bare-handed: no {cat} to hand yet; give one through Trade).")
+            + (dressed == 0 ? " (No clothes to hand yet: the item list is still loading. Try again in a moment.)" : "");
     }
 
     /// <summary>Its character level: its base class's XP (as the character screen shows it), not its combat class's.</summary>

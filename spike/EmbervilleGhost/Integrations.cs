@@ -141,6 +141,7 @@ internal static class Integrations
     static void CompanionHooks()
     {
         BetterCompanions.Hooks.Say = Chat.System;
+        BetterCompanions.Hooks.Catalogue = () => { DungeonLoot.Preload(); return DungeonLoot.Pool; };   // (the ready-made companions' clothes)
         BetterCompanions.Hooks.Typing = () => ImGuiUnity.Typing || Chat.IsOpen;
         BetterCompanions.Hooks.Busy = () => PlayerStatusUtil.LocalBusy;
         BetterCompanions.Hooks.Ignore = EnemySync.LocalOnly;
