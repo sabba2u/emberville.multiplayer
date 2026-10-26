@@ -21,6 +21,8 @@ namespace EmbervilleGhost;
 /// (settings, seed, region, floor): going back builds it again, as joining a friend's floor does, and puts you at the
 /// portal (Dungeon.ArriveNextAt); coming home leaves it for the town end (Dungeon.LeaveTo). Elsewhere in the starting
 /// area's scene (another of its areas) it's that area and spot. Other scenes: not yet.
+/// With a /sethome "home" (Homes), the pair's home end is there instead of town (beside the home's own portal).
+/// Right-click on the button: your homes (and town) as a list, to go to one straight away.
 /// The look is the game's own portal (the dungeon portal room's swirl: PadFx.Portal). Everyone's pairs are shared
 /// (TownPortal message, the host passes them on to whoever joins).
 /// </summary>
@@ -36,6 +38,7 @@ internal static class TownPortal
     {
         public int Owner; public string Name;
         public string Scene, Area; public bool InDungeon; public Dungeon.Where Where; public Vector3 At;
+        public string HomeScene = "", HomeArea = ""; public Vector3 HomeAt;   // its owner's /sethome (empty: town)
         public GameObject Far, Town; public bool FarArmed, TownArmed; public float FarStood, TownStood;
     }
 
@@ -74,6 +77,11 @@ internal static class TownPortal
     static bool InTown => LocalPlayer.Scene == HomeScene && !Dungeon.Active && LocalPlayer.Get() && LocalPlayer.Area == homeArea &&
                           ((UnityEngine.Vector2)(LocalPlayer.Get().transform.position - HomeSpot)).magnitude < 8f;
 
+    /// <summary>This pair's home end: its owner's /sethome beside their home's own portal, else town (in its row).</summary>
+    static bool HomeEndHere(Link l) => string.IsNullOrEmpty(l.HomeScene) ? TownHere
+        : !Dungeon.Active && LocalPlayer.Scene == l.HomeScene && LocalPlayer.Area == l.HomeArea;
+    static Vector3 HomeEndAt(Link l) => string.IsNullOrEmpty(l.HomeScene) ? TownSpot(l.Owner) : l.HomeAt + new Vector3(RowStep, 0f, 0f);
+
     static Vector3 TownSpot(int owner)
     {
         int slot = links.Keys.OrderBy(k => k).ToList().IndexOf(owner);
@@ -82,7 +90,6 @@ internal static class TownPortal
 
     // ---- the button (right edge, half way down) and the channel ----
 
-    static Rect box, stashBox;
     static bool hovered, stashHovered;
 
     /// <summary>Better Chests' shared stash (its Stash.Toggle), if it's installed.</summary>
@@ -95,27 +102,64 @@ internal static class TownPortal
     {
         var mouse = UnityEngine.InputSystem.Mouse.current;
         hovered = stashHovered = false;
-        if (mouse != null && Application.isFocused && me && box.width > 0 && !PlayerStatusUtil.LocalBusy && !ImGuiUnity.IsOpen)
+        bool shown = Buttons(me);
+        if (shown && mouse != null && Application.isFocused && !ImGuiUnity.IsOpen)
         {
             var p = mouse.position.ReadValue();
-            var at = new UnityEngine.Vector2(p.x, Screen.height - p.y);
-            hovered = box.Contains(at);
-            stashHovered = stashToggle != null && stashBox.width > 0 && stashBox.Contains(at);
+            hovered = Over(portalBtn, p);
+            stashHovered = stashToggle != null && stashBtn.Root && stashBtn.Root.gameObject.activeSelf && Over(stashBtn, p);
             if (hovered && mouse.leftButton.wasReleasedThisFrame) Pressed(me);
+            if (hovered && mouse.rightButton.wasReleasedThisFrame) Places(new UnityEngine.Vector2(p.x, p.y));
             if (stashHovered && mouse.leftButton.wasReleasedThisFrame)
             {
                 try { stashToggle.Invoke(null, null); }
                 catch (System.Exception e) { NetLog.Warn($"Stash: {e.InnerException?.Message ?? e.Message}", toast: false); }
             }
         }
-        if (hovered || stashHovered) GameInput.Block("townportal"); else GameInput.Unblock("townportal");
+        // the places list: a click anywhere else (or Esc) closes it
+        if (places && mouse != null && !hovered && (mouse.leftButton.wasPressedThisFrame || mouse.rightButton.wasPressedThisFrame) &&
+            !RectTransformUtility.RectangleContainsScreenPoint(places, mouse.position.ReadValue(), GameUi.Root && GameUi.Root.renderMode != RenderMode.ScreenSpaceOverlay ? GameUi.Root.worldCamera : null))
+            ClosePlaces();
+        if (places && UnityEngine.InputSystem.Keyboard.current?.escapeKey.wasPressedThisFrame == true) ClosePlaces();
+        bool overPlaces = places && mouse != null && RectTransformUtility.RectangleContainsScreenPoint(places, mouse.position.ReadValue(),
+            GameUi.Root && GameUi.Root.renderMode != RenderMode.ScreenSpaceOverlay ? GameUi.Root.worldCamera : null);
+        if (hovered || stashHovered || overPlaces) GameInput.Block("townportal"); else GameInput.Unblock("townportal");
+    }
+
+    static RectTransform places;
+
+    /// <summary>Right-click on the button: your /sethome places (and town) to go to now.</summary>
+    static void Places(UnityEngine.Vector2 at)
+    {
+        ClosePlaces();
+        var items = new List<(string, System.Action, bool)>();
+        foreach (var n in Homes.Names())
+        {
+            string name = n;
+            items.Add((name == "home" ? "Home" : name, () => { ClosePlaces(); Homes.Go(name); }, true));
+        }
+        items.Add(("Town", () => { ClosePlaces(); Travel.Go(new Travel.Spot { Scene = HomeScene, Area = homeArea, At = HomeSpot + new Vector3(0f, -1.3f, 0f) }); }, true));
+        if (items.Count == 1) items.Insert(0, ("(no homes yet: /sethome)", null, false));
+        items.Add(("Cancel", ClosePlaces, true));
+        places = GameUi.Popup(at, 10f, "Go to", items.ToArray());
+    }
+
+    static void ClosePlaces()
+    {
+        if (places) Object.Destroy(places.gameObject);
+        places = null;
     }
 
     static void Pressed(PlayerMaster me)
     {
         if (channel >= 0f) { channel = -1f; NetLog.Info("Town portal: cancelled", toast: true); return; }
         if (Dungeon.Busy) return;
-        if (InTown) { NetLog.Info("You're already in town", toast: true); return; }
+        if (Homes.Get("home") is Travel.Spot h)
+        {
+            if (!Dungeon.Active && LocalPlayer.Scene == h.Scene && LocalPlayer.Area == h.Area && ((UnityEngine.Vector2)(me.transform.position - h.At)).magnitude < 8f)
+            { NetLog.Info("You're already home", toast: true); return; }
+        }
+        else if (InTown) { NetLog.Info("You're already in town", toast: true); return; }
 
         channel = 0f;
         healthAtStart = me.CurrentHealthPoints;
@@ -147,6 +191,7 @@ internal static class TownPortal
             At = me.transform.position + new Vector3(0f, 1.1f, 0f),
         };
         if (l.InDungeon) l.Where = Dungeon.Current.Value;
+        if (Homes.Get("home") is Travel.Spot h) { l.HomeScene = h.Scene; l.HomeArea = h.Area; l.HomeAt = h.At; }   // (to your /sethome)
         Set(l);
         Send(l);
         Home(l);
@@ -162,8 +207,9 @@ internal static class TownPortal
     {
         l.TownArmed = false;
         // (the starting area: from anywhere, another scene too; its area found by the spot if we've never been)
-        var to = new Travel.Spot { Scene = HomeScene, Area = homeArea, At = TownSpot(l.Owner) + new Vector3(0f, -1.3f, 0f) };
-        if (Travel.Go(to)) NetLog.Info($"Through {l.Name}'s portal: to town", toast: true);
+        bool own = !string.IsNullOrEmpty(l.HomeScene);
+        var to = new Travel.Spot { Scene = own ? l.HomeScene : HomeScene, Area = own ? l.HomeArea : homeArea, At = HomeEndAt(l) + new Vector3(0f, -1.3f, 0f) };
+        if (Travel.Go(to)) NetLog.Info($"Through {l.Name}'s portal: {(own ? "home" : "to town")}", toast: true);
     }
 
     /// <summary>To this pair's far end (in front of it).</summary>
@@ -182,9 +228,9 @@ internal static class TownPortal
 
     static void Show(Link l, PlayerMaster me)
     {
-        bool far = FarHere(l), town = TownHere;
+        bool far = FarHere(l), town = HomeEndHere(l);
         Keep(ref l.Far, far, l.At, $"EG_TownPortal_{l.Owner}_far", Tint(l.Owner));
-        Keep(ref l.Town, town, TownSpot(l.Owner), $"EG_TownPortal_{l.Owner}_town", Tint(l.Owner));
+        Keep(ref l.Town, town, HomeEndAt(l), $"EG_TownPortal_{l.Owner}_town", Tint(l.Owner));
         if (!me || Dungeon.Busy || PlayerStatusUtil.LocalBusy || ImGuiUnity.Typing) return;
         if (far && Stepped(me, l.Far, ref l.FarArmed, ref l.FarStood)) Home(l);
         else if (town && Stepped(me, l.Town, ref l.TownArmed, ref l.TownStood)) Away(l);
@@ -305,41 +351,86 @@ internal static class TownPortal
         sentTo.Clear();   // (the host: everyone hears of it again)
     }
 
-    // ---- the button and the names (ImGui) ----
+    // ---- the buttons (the game's own UI: a framed picture, its name under it) ----
+
+    sealed class Side { public RectTransform Root; public UnityEngine.UI.Image Frame, Pic; public TMPro.TextMeshProUGUI Caption; }
+    static RectTransform column, channelFill;
+    static Side portalBtn, stashBtn;
+    // (the game's frame, a shade darker; lit up under the mouse. No frame sprite loaded: a plain dark box)
+    static Color FrameColour(Side b) => b.Frame.sprite ? new Color(0.8f, 0.8f, 0.8f, 1f) : new Color(0.13f, 0.11f, 0.1f, 0.96f);
+    static Color FrameLit(Side b) => b.Frame.sprite ? Color.white : new Color(0.32f, 0.24f, 0.17f, 0.98f);
+
+    static bool Over(Side b, UnityEngine.Vector2 mouse) => b != null && b.Root &&
+        RectTransformUtility.RectangleContainsScreenPoint(b.Root, mouse, GameUi.Root.renderMode == RenderMode.ScreenSpaceOverlay ? null : GameUi.Root.worldCamera);
+
+    /// <summary>Every frame: the buttons there (or not: no player, a menu up, the boss arena), up to date. True: shown.</summary>
+    static bool Buttons(PlayerMaster me)
+    {
+        // (none in the boss arena: its panel is on that side, and a town portal out of a fight there is no use)
+        bool want = me && !PlayerStatusUtil.LocalBusy && !Arena.Active;
+        if (!want) { if (column) column.gameObject.SetActive(false); return false; }
+        if (!column) Build();
+        column.gameObject.SetActive(true);
+        portalBtn.Caption.text = channel >= 0f ? $"Opening... {Mathf.CeilToInt(Channel - channel)}" : Homes.Has("home") ? "Home Portal" : "Town Portal";
+        // (the portal's own colours: green with a /sethome home, as the home portals are)
+        if (portalBtn.Pic.sprite) portalBtn.Pic.color = Homes.Has("home") ? new Color(0.55f, 1f, 0.75f) : Color.white;
+        portalBtn.Frame.color = hovered ? FrameLit(portalBtn) : FrameColour(portalBtn);
+        channelFill.parent.gameObject.SetActive(channel >= 0f);
+        if (channel >= 0f) channelFill.anchorMax = new UnityEngine.Vector2(Mathf.Clamp01(channel / Channel), 1f);
+        stashBtn.Root.gameObject.SetActive(stashToggle != null);
+        stashBtn.Frame.color = stashHovered ? FrameLit(stashBtn) : FrameColour(stashBtn);
+        return true;
+    }
+
+    static void Build()
+    {
+        column = GameUi.Rect("EG_SideButtons", GameUi.Root.transform);
+        column.anchorMin = column.anchorMax = column.pivot = new UnityEngine.Vector2(1f, 0.5f);
+        column.anchoredPosition = new UnityEngine.Vector2(-14f, 0f);
+        var v = column.gameObject.AddComponent<UnityEngine.UI.VerticalLayoutGroup>();
+        v.spacing = 8; v.childAlignment = TextAnchor.MiddleCenter;
+        v.childControlWidth = v.childControlHeight = true; v.childForceExpandWidth = v.childForceExpandHeight = false;
+        var fit = column.gameObject.AddComponent<UnityEngine.UI.ContentSizeFitter>();
+        fit.horizontalFit = fit.verticalFit = UnityEngine.UI.ContentSizeFitter.FitMode.PreferredSize;
+        portalBtn = MakeSide("Portal", "portal.png");
+        // the channel: a bar under the portal button, filling
+        var bar = GameUi.Rect("Channel", column);
+        GameUi.Fixed(bar, 104, 5);
+        bar.gameObject.AddComponent<UnityEngine.UI.Image>().color = new Color(0f, 0f, 0f, 0.6f);
+        channelFill = GameUi.Rect("Fill", bar);
+        channelFill.anchorMin = UnityEngine.Vector2.zero; channelFill.anchorMax = new UnityEngine.Vector2(0f, 1f);
+        channelFill.offsetMin = channelFill.offsetMax = UnityEngine.Vector2.zero;
+        channelFill.gameObject.AddComponent<UnityEngine.UI.Image>().color = new Color(0.55f, 0.75f, 1f, 1f);
+        stashBtn = MakeSide("Stash", "stash.png");
+        stashBtn.Caption.text = "Stash";
+    }
+
+    static Side MakeSide(string name, string picture)
+    {
+        var b = new Side { Root = GameUi.Rect("EG_Side_" + name, column) };
+        GameUi.Fixed(b.Root, 104, 92);
+        b.Frame = GameUi.Img(b.Root.gameObject, "UI_Hud_CommonElements_10", new Color(0.13f, 0.11f, 0.1f, 0.96f), 1.5f);
+        var pic = GameUi.Rect("Picture", b.Root);
+        pic.anchorMin = new UnityEngine.Vector2(0f, 0.3f); pic.anchorMax = UnityEngine.Vector2.one;
+        pic.offsetMin = new UnityEngine.Vector2(14f, 0f); pic.offsetMax = new UnityEngine.Vector2(-14f, -10f);
+        var img = b.Pic = pic.gameObject.AddComponent<UnityEngine.UI.Image>();
+        img.sprite = GameUi.FileSprite(picture);
+        img.preserveAspect = true;
+        img.raycastTarget = false;
+        if (!img.sprite) img.color = new Color(0f, 0f, 0f, 0f);
+        b.Caption = GameUi.Label(b.Root, name, 15, GameUi.Text, TMPro.TextAlignmentOptions.Center);
+        var cr = b.Caption.rectTransform;
+        cr.anchorMin = UnityEngine.Vector2.zero; cr.anchorMax = new UnityEngine.Vector2(1f, 0.3f);
+        cr.offsetMin = new UnityEngine.Vector2(2f, 6f); cr.offsetMax = new UnityEngine.Vector2(-2f, 0f);
+        b.Caption.raycastTarget = false;
+        return b;
+    }
+
+    // ---- the names over the portals (ImGui) ----
 
     public static void Draw()
     {
-        // (none in the boss arena: its panel is on that side, and a town portal out of a fight there is no use)
-        if (!LocalPlayer.Get() || PlayerStatusUtil.LocalBusy || Arena.Active) { box = stashBox = default; return; }
-        var vp = ImGui.GetMainViewport();
-        ImGui.SetNextWindowPos(new Vector2(vp.WorkPos.x + vp.WorkSize.x - 12f, vp.WorkPos.y + vp.WorkSize.y * 0.5f), ImGuiCond.Always, new Vector2(1f, 0.5f));
-        ImGui.SetNextWindowBgAlpha(0.6f);
-        if (ImGui.Begin("##townportal", ImGuiWindowFlags.NoDecoration | ImGuiWindowFlags.NoInputs | ImGuiWindowFlags.AlwaysAutoResize | ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.NoFocusOnAppearing | ImGuiWindowFlags.NoNav))
-        {
-            if (hovered) ImGui.PushStyleColor(ImGuiCol.Button, ImGui.GetColorU32(ImGuiCol.ButtonHovered));
-            ImGui.Button(channel >= 0f ? $"Opening... {Mathf.CeilToInt(Channel - channel)}" : "Town Portal", new Vector2(120f, 34f));
-            if (hovered) ImGui.PopStyleColor();
-            var a = ImGui.GetItemRectMin(); var b = ImGui.GetItemRectMax();
-            box = new Rect(a.x, a.y, b.x - a.x, b.y - a.y);
-            if (channel >= 0f)
-            {
-                var dl = ImGui.GetWindowDrawList();
-                float k = Mathf.Clamp01(channel / Channel);
-                dl.AddRectFilled(new Vector2(a.x, b.y + 3f), new Vector2(a.x + (b.x - a.x) * k, b.y + 7f), ImGui.ColorConvertFloat4ToU32(new Vector4(0.55f, 0.75f, 1f, 1f)));
-                ImGui.Dummy(new Vector2(1f, 6f));
-            }
-            // the shared stash, under it (Better Chests; for now: where they go in the end is still to decide)
-            if (stashToggle != null)
-            {
-                if (stashHovered) ImGui.PushStyleColor(ImGuiCol.Button, ImGui.GetColorU32(ImGuiCol.ButtonHovered));
-                ImGui.Button("Stash", new Vector2(120f, 34f));
-                if (stashHovered) ImGui.PopStyleColor();
-                var sa = ImGui.GetItemRectMin(); var sb = ImGui.GetItemRectMax();
-                stashBox = new Rect(sa.x, sa.y, sb.x - sa.x, sb.y - sa.y);
-            }
-        }
-        ImGui.End();
-        // names over the portals
+        if (!LocalPlayer.Get()) return;
         var cam = Camera.main;
         if (!cam) return;
         var bg = ImGui.GetBackgroundDrawList();
@@ -368,6 +459,7 @@ internal static class TownPortal
         w.Put(l.InDungeon);
         w.Put(l.Where.Settings ?? ""); w.Put(l.Where.Seed); w.Put(l.Where.Region); w.Put(l.Where.Floor);
         w.Put(l.At.x); w.Put(l.At.y);
+        w.Put(l.HomeScene ?? ""); w.Put(l.HomeArea ?? ""); w.Put(l.HomeAt.x); w.Put(l.HomeAt.y);   // (last: older copies stop reading before it)
         return w;
     }
 
@@ -378,6 +470,7 @@ internal static class TownPortal
         var l = new Link { Owner = r.GetInt(), Name = r.GetString(), Scene = r.GetString(), Area = r.GetString(), InDungeon = r.GetBool() };
         l.Where = new Dungeon.Where(r.GetString(), r.GetInt(), r.GetInt(), r.GetInt());
         l.At = new Vector3(r.GetFloat(), r.GetFloat(), 0f);
+        if (r.AvailableBytes > 0) { l.HomeScene = r.GetString(); l.HomeArea = r.GetString(); l.HomeAt = new Vector3(r.GetFloat(), r.GetFloat(), 0f); }
         if (Online && l.Owner == Plugin.MyId) return;   // (our own, back again)
         Set(l);
     }

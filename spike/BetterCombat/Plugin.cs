@@ -13,7 +13,7 @@ namespace BetterCombat;
 public class Plugin : BaseUnityPlugin
 {
     public const string Guid = "spike.emberville.bettercombat";
-    public const string Version = "0.2.1";
+    public const string Version = "0.2.2";
     internal static ManualLogSource Logger_;
 
     void Awake()

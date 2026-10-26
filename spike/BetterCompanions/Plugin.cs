@@ -14,7 +14,7 @@ namespace BetterCompanions;
 public class Plugin : BaseUnityPlugin
 {
     public const string Guid = "spike.emberville.bettercompanions";
-    public const string Version = "0.1.0";
+    public const string Version = "0.2.0";
     internal static ManualLogSource Logger_;
     static BepInEx.Configuration.ConfigEntry<int> copyFrom;
 

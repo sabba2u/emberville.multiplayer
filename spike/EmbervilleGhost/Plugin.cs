@@ -34,7 +34,7 @@ namespace EmbervilleGhost;
 [BepInDependency("spike.emberville.bettertranslations", BepInDependency.DependencyFlags.SoftDependency)]   // (Better Translations: /lang)
 public class Plugin : BaseUnityPlugin, ITransportListener
 {
-    internal const string Version = "0.3.2";
+    internal const string Version = "0.4.0";
     internal const string ModName = "Sabba's Emberville Multiplayer Mod";
     internal static string Title => $"{ModName} v{Version}";
 
@@ -227,6 +227,8 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         NpcLooks.Tick();   // the host's NPCs (and Rory) look the same on every game
         GearDye.Tick();
         TownPortal.Tick();
+        Homes.Tick();   // your /sethome places' portals
+        DeathGuard.Tick();   // a death a stun interrupted: die properly
         ModsButton.Tick();   // the MODS buttons (main menu, Esc menu): the Insert menu
         StoryText.Tick();   // bigger story text (dialogue, bubbles, the quest tracker)
         TiltView.Tick();    // the tilted 2.5D view (/tilt)

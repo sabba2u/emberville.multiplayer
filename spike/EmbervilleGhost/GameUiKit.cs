@@ -71,6 +71,34 @@ internal static partial class GameUi
         return s;
     }
 
+    /// <summary>A picture of ours (Assets/Images next to the DLL), crisp (pixel art); null if it isn't there.</summary>
+    public static Sprite FileSprite(string file)
+    {
+        string key = "file:" + file;
+        if (sprites.TryGetValue(key, out var s) && s) return s;
+        s = null;
+        try
+        {
+            string path = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(typeof(GameUi).Assembly.Location), "Assets", "Images", file);
+            if (System.IO.File.Exists(path))
+            {
+                var tex = new Texture2D(2, 2, TextureFormat.RGBA32, false) { filterMode = FilterMode.Point, wrapMode = TextureWrapMode.Clamp };
+                // (by reflection: the Span overload next to it doesn't compile for this framework)
+                var load = typeof(ImageConversion).GetMethod("LoadImage", new[] { typeof(Texture2D), typeof(byte[]), typeof(bool) });
+                if (load != null && (bool)load.Invoke(null, new object[] { tex, System.IO.File.ReadAllBytes(path), false }))
+                {
+                    UnityEngine.Object.DontDestroyOnLoad(tex);
+                    s = UnityEngine.Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f), 32f);
+                    UnityEngine.Object.DontDestroyOnLoad(s);
+                }
+            }
+            if (!s) NetLog.Warn($"Our picture {file} isn't there ({path})", toast: false);
+        }
+        catch (Exception e) { NetLog.Warn($"Our picture {file}: {e.Message}", toast: false); }
+        sprites[key] = s;
+        return s;
+    }
+
     static void Fonts()
     {
         if (font) return;
