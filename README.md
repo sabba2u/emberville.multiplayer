@@ -167,8 +167,10 @@ second player character, and the AI plays it the way you would, pushing its stic
 game itself moves it, swings its weapon, fires its arrows and spells, spends its Kymia and dodges.
 - **Get one** (MODS > **Companions**, or chat): **clone** one of your other characters (pick the save slot by name,
   "Slot 2: Cohh (level 12)": its looks, gear, bag and level), **start a new one**, or take a ready-made one:
-  **Sabba** the knight (sword), **Ellie** the mage (staff) or **Rory** the archer (bow). In chat: `/companion 2`,
-  `/companion new`, `/companion dismiss`, `/companion call`, and `/companion` for its status.
+  **Sabba** the blond knight (sword, heavy armour), **Ellie** the mage (staff), **Rory** the archer (bow) or
+  **GraveBear** the dark-haired wanderer (two-handed sword, medium armour and a cloak), each dressed and armed for their
+  class. In chat: `/companion 2`, `/companion new`, `/companion dismiss`, `/companion call`, and `/companion` for its
+  status.
 - **How it fights:** it follows you, and fights the way its weapon does: up close with a sword, axe or fists, from
   range with a bow or staff. It carries a melee and a ranged favourite and swaps between them by itself, dashes in to
   finish an enemy or out of a crowd, and uses **its own skills** (from its own skill tree: attack skills on an enemy in
