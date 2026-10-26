@@ -42,6 +42,7 @@ internal static class DebugPanel
             if (BuildMode.Enabled && ImGui.BeginTabItem("Construction")) { DrawConstruction(plugin); ImGui.EndTabItem(); }
             if (ImGui.BeginTabItem("Dungeon")) { Dungeon.DrawMenu(); ImGui.EndTabItem(); }
             if (ImGui.BeginTabItem("Under the mouse")) { DebugWalls.DrawMenu(); ImGui.EndTabItem(); }
+            if (ImGui.BeginTabItem("UI Inspector")) { UiInspector.DrawMenu(); ImGui.EndTabItem(); }
             if (ImGui.BeginTabItem("Log")) { DrawLog(plugin); ImGui.EndTabItem(); }
             ImGui.EndTabBar();
         }

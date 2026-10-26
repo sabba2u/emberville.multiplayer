@@ -31,7 +31,19 @@ is only what we learned in Duckov: the techniques, the notes in this file, and t
   Default/32767. Controller: hold the right trigger (0.6 s) to lock / let go, tap to cycle; presses with a face button
   (the game's RT+button skills) are ignored. Left trigger is the game's weapon wheel; R3 toggles skills.
 
-### Next: BetterCompanion (design in progress, 2026-10-23)
+### Open: Favourites hover texts (weapon wheel and F5-F8 bar, 2026-10-25)
+- **Alt weapon wheel:** the item tooltip draws under the wheel's slots, and the staffs' / hook's side boxes (Better
+  Pets and Summons' `StaffTip`, the multiplayer mod's `SideTip`) under them too or left over from the last weapon.
+- **F5-F8 bar:** the same tooltip has the same problems there.
+- **Companion banner:** the tooltip draws behind the companion's card (`CompanionBanner`, its own canvas at the HUD
+  canvas's order - 1).
+- Tried so far (`FavoritesBar.EnsureTip`): the tooltip copy got its own canvas, order `short.MaxValue`, then the HUD
+  canvas's sorting layer too (it logs the HUD canvas's render mode / layer / order once: "Favourites: tooltip over the
+  HUD"); the wheel's slot copies' canvases set to `overrideSorting = false`; the side boxes now hide / clear every copy
+  of themselves, not only the first. The last of these is untested. Next: read that log line; if sorting still loses,
+  place the tooltip beside the wheel / bar instead of over it.
+
+### Next: BetterCompanions (design in progress, 2026-10-23)
 - A bot-driven adventurer puppet (built like `RemoteAvatar` / Rory, AI like the pets): follows you, fights, middle
   mouse sends it (melee: go there and fight; ranged: close enough to your target).
 - `/companion 2` / `/companion 3` copies that game save slot (`player_slotN.evp`, read only) into the mod's own
@@ -59,6 +71,26 @@ is only what we learned in Duckov: the techniques, the notes in this file, and t
 - `Skill Progression_UI_New_V5-Recovered2.png`: an unused **Masteries** screen mockup (per weapon type mastery
   cards with levels, XP bar, primary and secondary skill slots, unlock milestones 4/7/14/23/36/40). A template for
   when we build our own class or weapon masteries.
+
+### Later: the secret chicken level (idea, 2026-10-24)
+- Like Diablo's secret cow level: a hidden level packed with thousands of chickens.
+- They get stronger as you go.
+- A chicken boss at the end that shoots eggs (or something like that).
+- Not started; just parked here for later.
+
+### Later: export and import characters and worlds (idea, 2026-10-25)
+- The game has no way to take a character or a world out of the game: not to another of your own computers, and not
+  to share "my version of the world" for someone else to download and play.
+- Export: pick a character or a world (Insert menu, or the title screen) and save it as one file (a zip of the
+  `player_slotN.evp` / `world_slotN.evw` + `.eve` files and their friendly JSON, plus our mods' own files for it:
+  Better Chests' looks, Core's saved data, companion saves, build-mode pieces) with a small manifest (name, level or
+  world day, game version, which mods it was saved with).
+- Import: pick a file; it goes into the first free slot (never over an existing one), after the usual backup.
+  Refuse, with the reason, a file from a newer game version or one needing mods you don't have.
+- Sharing worlds: an imported world could start as a fresh copy for the player (their own character in it), the way
+  joining a host's world works.
+- Saves stay safe: export reads only; import never overwrites, and backs up first (never lose player saves).
+- Not started; parked here for later.
 
 ### What we carry over from Duckov
 - **Code to copy (game-independent):** `Transport.cs` + `SteamTransport.cs` + `SteamLobby.cs` (LiteNetLib or

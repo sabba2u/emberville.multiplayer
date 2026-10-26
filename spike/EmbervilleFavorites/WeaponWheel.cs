@@ -178,6 +178,8 @@ internal static class WeaponWheel
         title.raycastTarget = false;
 
         wheel.SetActive(false);
+        // (the belt slots it's copied from sort on canvases of their own: here they sort as the wheel, under the tooltip)
+        foreach (var c in wheel.GetComponentsInChildren<Canvas>(true)) c.overrideSorting = false;
         return true;
     }
 

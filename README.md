@@ -147,7 +147,7 @@ Lilshrooms, Lil Ticks, Lil Bombers, Spiderling, Bug Fuzz): `/pet list`, `/pet gl
 ![clucky](clucky_sm.gif)
 
 ## Companion
-An adventurer who travels and fights beside you, made from one of your other characters (Better Companion).
+An adventurer who travels and fights beside you, made from one of your other characters (Better Companions).
 - `/companion 2` copies save slot 2 into your companion: its looks, gear, bag and level. Your real slot is only read;
   the companion keeps its own save. An empty slot gives a brand-new adventurer. Also `/companion new`, `dismiss`,
   `call`, and `/companion` for its status.

@@ -100,7 +100,7 @@
     <ProjectReference Include="..\BetterCombat\BetterCombat.csproj"><Private>false</Private></ProjectReference>
     <ProjectReference Include="..\BetterLooting\BetterLooting.csproj"><Private>false</Private></ProjectReference>
     <ProjectReference Include="..\BetterPetsAndSummons\BetterPetsAndSummons.csproj"><Private>false</Private></ProjectReference>
-    <ProjectReference Include="..\BetterCompanion\BetterCompanion.csproj"><Private>false</Private></ProjectReference>
+    <ProjectReference Include="..\BetterCompanions\BetterCompanions.csproj"><Private>false</Private></ProjectReference>
     <ProjectReference Include="..\BetterNPCsAndQuests\BetterNPCsAndQuests.csproj"><Private>false</Private></ProjectReference>
     <ProjectReference Include="..\BetterWeather\BetterWeather.csproj"><Private>false</Private></ProjectReference>
   </ItemGroup>

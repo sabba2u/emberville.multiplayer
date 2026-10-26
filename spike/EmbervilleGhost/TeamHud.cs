@@ -45,6 +45,7 @@ internal static class TeamHud
         public IntPtr Id;
         public bool Seen;   // has a picture (else draw a plain box)
         public Transform Target;   // whose character it films this frame
+        public GameObject Light;   // its light: on only while it films (see Light)
     }
 
     static readonly Dictionary<int, Portrait> portraits = new Dictionary<int, Portrait>();
@@ -66,6 +67,15 @@ internal static class TeamHud
     {
         var mouse = UnityEngine.InputSystem.Mouse.current;
         hovered = -1;
+        // your companion's card: right-click for its menu (heal, trade)
+        bool overMate = false;
+        if (mateFrame < Time.frameCount - 1) CompanionBanner.Hide();   // (not drawn last frame: the HUD's hidden, or no companion)
+        if (mouse != null && Application.isFocused && CompanionBanner.Shown)
+        {
+            overMate = CompanionBanner.Contains(mouse.position.ReadValue());
+            if (overMate && mouse.rightButton.wasPressedThisFrame) { MateMenu(CompanionBanner.TopCentre()); openedAt = Time.frameCount; }   // (just above the card, centred)
+        }
+        if (Time.frameCount != openedAt) MateMenuTick(mouse);   // (not the right-click that opened it)
         if (mouse != null && Application.isFocused && Plugin != null && Plugin.Connected)
         {
             var p = mouse.position.ReadValue();
@@ -84,7 +94,7 @@ internal static class TeamHud
             if (menuFor >= 0 && kbd != null && kbd.escapeKey.wasPressedThisFrame) menuFor = -1;
         }
         if (menuFor >= 0 && (Plugin == null || !Plugin.Connected)) menuFor = -1;
-        if (hovered >= 0 || menuFor >= 0) GameInput.Block("strip"); else GameInput.Unblock("strip");
+        if (hovered >= 0 || menuFor >= 0 || overMate || mateMenu) GameInput.Block("strip"); else GameInput.Unblock("strip");
     }
 
     static void Menu()
@@ -163,6 +173,7 @@ internal static class TeamHud
     /// <summary>From Hud.Draw (only when the game isn't covering the screen).</summary>
     public static void Draw()
     {
+        Companion();
         if (Plugin == null || !show.Value || !Plugin.Connected || Plugin.MyId < 0) { Sleep(); return; }
         var me = LocalPlayer.Get();
         if (!me) { Sleep(); return; }
@@ -194,7 +205,7 @@ internal static class TeamHud
         }
         // Players who left: their portrait camera goes.
         var gone = new List<int>();
-        foreach (int id in portraits.Keys) if (!alive.Contains(id)) gone.Add(id);
+        foreach (int id in portraits.Keys) if (!alive.Contains(id) && id != CompanionId) gone.Add(id);
         foreach (int id in gone) Drop(id);
         Menu();
     }
@@ -283,8 +294,8 @@ internal static class TeamHud
         const float ps = 48f;
         var p0 = new Vector2(x + 5, y + 5);
         var p1 = new Vector2(p0.x + ps, p0.y + ps);
-        dl.AddRectFilled(p0, p1, ImGui.ColorConvertFloat4ToU32(new Vector4(0.17f, 0.13f, 0.2f, 1f)), 4f);
-        if (portraitsOn.Value)
+        dl.AddRectFilled(p0, p1, ImGui.ColorConvertFloat4ToU32(id == CompanionId ? new Vector4(MateBack.r, MateBack.g, MateBack.b, 1f) : new Vector4(0.17f, 0.13f, 0.2f, 1f)), 4f);
+        if (portraitsOn.Value || id == CompanionId)   // (your companion's: always its picture)
         {
             var portrait = Picture(id, target);
             if (portrait != null && portrait.Seen)
@@ -301,7 +312,7 @@ internal static class TeamHud
             float dim = info.Dead ? 0.45f : 1f;
             if (icon) ItemIcons.Draw(dl, icon, new Vector2(p0.x + 5, p0.y + 5), new Vector2(p1.x - 5, p1.y - 5), ImGui.ColorConvertFloat4ToU32(new Vector4(dim, dim, dim, 1f)));
         }
-        uint role = ImGui.ColorConvertFloat4ToU32(id == 0 ? new Vector4(1f, 0.8f, 0.3f, 1f) : new Vector4(0.45f, 0.8f, 1f, 1f));
+        uint role = ImGui.ColorConvertFloat4ToU32(id == CompanionId ? MateTeal : id == 0 ? new Vector4(1f, 0.8f, 0.3f, 1f) : new Vector4(0.45f, 0.8f, 1f, 1f));
         dl.AddRect(p0, p1, role, 4f, ImDrawFlags.None, 2f);
 
         // Name (+ diamond when they run our area)
@@ -377,13 +388,12 @@ internal static class TeamHud
         var cam = go.AddComponent<Camera>();
         cam.orthographic = true;
         cam.clearFlags = CameraClearFlags.SolidColor;
-        cam.backgroundColor = new Color(0.17f, 0.13f, 0.2f, 1f);   // the inventory preview's dark purple
+        cam.backgroundColor = Color.clear;   // (see-through: the card's own box shows behind the character, purple, or teal for your companion)
         cam.targetTexture = tex;
         cam.depth = -100;
         cam.nearClipPlane = 0.01f;
         cam.farClipPlane = 100f;
-        Light(cam);
-        return new Portrait { Cam = cam, Tex = tex, Id = ImGuiUnity.TextureId(tex) };
+        return new Portrait { Cam = cam, Tex = tex, Id = ImGuiUnity.TextureId(tex), Light = Light(cam) };
     }
 
     /// <summary>The layers the character's sprites are on (not the minimap marker): the portrait sees only those.</summary>
@@ -394,6 +404,26 @@ internal static class TeamHud
     // pipeline on its own (disabled); we draw each one ourselves: its character's renderers move onto a spare layer
     // nothing else uses, the camera (filming only that layer) renders into its texture right then
     // (RenderPipeline.SubmitRenderRequest), and they move straight back. The main view never sees the change.
+
+    static bool cornerLogged;
+
+    /// <summary>Once: what the companion's portrait has in its corner (is the background see-through, as asked?).</summary>
+    static void LogCorner(RenderTexture tex)
+    {
+        cornerLogged = true;
+        var was = RenderTexture.active;
+        try
+        {
+            RenderTexture.active = tex;
+            var read = new Texture2D(1, 1, TextureFormat.RGBA32, false);
+            read.ReadPixels(new Rect(1, 1, 1, 1), 0, 0);
+            read.Apply();
+            NetLog.Info($"Portrait: the companion's corner is #{ColorUtility.ToHtmlStringRGBA(read.GetPixel(0, 0))} (clear asked: #00000000)", toast: false);
+            UnityEngine.Object.Destroy(read);
+        }
+        catch (Exception e) { NetLog.Info($"Portrait: couldn't read the corner: {e.Message}", toast: false); }
+        finally { RenderTexture.active = was; }
+    }
 
     static int portraitLayer = -1;
     static readonly List<(GameObject go, int layer)> moved = new List<(GameObject, int)>();
@@ -414,6 +444,9 @@ internal static class TeamHud
     /// <summary>Every other frame (Update): draw each visible player's portrait, isolated on our layer.</summary>
     public static void RenderPortraits()
     {
+        // its lights: on in a world, off at the main menu (see Light)
+        bool menu = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name == "MainMenu";
+        foreach (var p in portraits.Values) if (p.Light && p.Light.activeSelf == menu) p.Light.SetActive(!menu);
         if (portraits.Count == 0 || (++frame & 1) != 0) return;
         foreach (var p in portraits.Values)
         {
@@ -428,16 +461,19 @@ internal static class TeamHud
             }
             catch (Exception e) { NetLog.Warn($"Portrait: {e.Message}"); }
             finally { Restore(); }
+            if (!cornerLogged && p.Cam && p.Cam.gameObject.name.EndsWith("P1001")) LogCorner(p.Tex);
         }
     }
 
     /// <summary>
     /// The portrait's own light. URP's 2D renderer only uses lights on a layer the camera sees (global ones too), and
     /// ours sees only PortraitLayer: without a light there every lit sprite draws black. A wide point light on that
-    /// layer, always on (the main camera never sees the layer, so it never lights the world). Not a global one: a
-    /// second global light trips URP's one-per-sorting-layer check.
+    /// layer, on in a world and off at the main menu: there, the character select's previews film a layer the game
+    /// leaves unnamed (it can be our "spare" one), and with our light the only one on it they drew black. (Switched on
+    /// just for each picture instead, it lit nothing: URP's 2D lights skip one turned on that same frame.) Not a global
+    /// one: a second global light trips URP's one-per-sorting-layer check.
     /// </summary>
-    static void Light(Camera cam)
+    static GameObject Light(Camera cam)
     {
         try
         {
@@ -454,9 +490,10 @@ internal static class TeamHud
             l.pointLightOuterRadius = 25f;
             l.color = Color.white;
             l.intensity = 1f;
-            go.SetActive(true);
+            go.SetActive(true);   // (RenderPortraits turns it off at the main menu)
+            return go;
         }
-        catch (Exception e) { NetLog.Warn($"Portrait light: {e.Message}"); }
+        catch (Exception e) { NetLog.Warn($"Portrait light: {e.Message}"); return null; }
     }
 
     static void Isolate(Transform target)
@@ -494,6 +531,89 @@ internal static class TeamHud
         menuFor = -1;
         foreach (var p in portraits.Values) if (p.Cam) p.Cam.enabled = false;
         if (Plugin != null && !Plugin.Connected && portraits.Count > 0)
-            foreach (int id in new List<int>(portraits.Keys)) Drop(id);
+            foreach (int id in new List<int>(portraits.Keys)) if (id != CompanionId) Drop(id);
+    }
+
+    // ---- your companion's card: bottom middle, just above the F5-F8 bar (Favourites mod), playing alone too ----
+
+    const int CompanionId = 1000;   // (its portrait's key: no player has it)
+    static readonly Vector4 MateTeal = new Vector4(0.31f, 0.84f, 0.9f, 1f);   // (its ring's colour)
+    static readonly Color MateBack = new Color(0.07f, 0.2f, 0.22f, 1f);      // (the same, much darker: behind its portrait)
+
+    /// <summary>A loading screen up (or the game not playing): no card over it.</summary>
+    static bool Loading()
+    {
+        if (Singleton<GameManager>.HasMain && Singleton<GameManager>.main.gameState != GameState.Playing) return true;
+        if (!Singleton<SceneLoader>.HasMain) return false;
+        return Singleton<SceneLoader>.main.isLoading;
+    }
+
+    // ---- its card's menu (the game's buttons) ----
+
+    static int mateFrame = -10;
+    static RectTransform mateMenu;
+    static int openedAt = -1;
+
+    static void MateMenu(UnityEngine.Vector2 at)
+    {
+        CloseMateMenu();
+        var heal = Integrations.CompanionHealOption();
+        mateMenu = GameUi.Popup(at, 6f, "Companion",   // (just above the card, never over it)
+            (heal.label, () => { string said = Integrations.CompanionHeal(); if (said.Length > 0) Chat.System(said); CloseMateMenu(); }, heal.can),
+            ("Trade (open your bags)", () => { CloseMateMenu(); Integrations.CompanionTrade(); }, true),
+            Integrations.CompanionCard(out var body, out _, out _, out _, out bool down, out _, out bool holding) && holding
+                ? ("Follow me", () => { CloseMateMenu(); Integrations.CompanionFollow(); }, true)
+                : ("Guard here", () => { CloseMateMenu(); if (body) Integrations.CompanionTo(body.transform.position, true); }, body && !down),
+            ("Cancel", CloseMateMenu, true));
+    }
+
+    static void CloseMateMenu()
+    {
+        if (mateMenu) UnityEngine.Object.Destroy(mateMenu.gameObject);
+        mateMenu = null;
+    }
+
+    /// <summary>The menu closes with Esc, or a click anywhere off it.</summary>
+    static void MateMenuTick(UnityEngine.InputSystem.Mouse mouse)
+    {
+        if (!mateMenu) return;
+        var kbd = UnityEngine.InputSystem.Keyboard.current;
+        bool clicked = mouse != null && (mouse.leftButton.wasPressedThisFrame || mouse.rightButton.wasPressedThisFrame);
+        if (kbd != null && kbd.escapeKey.wasPressedThisFrame || clicked && !GameUi.MouseOver()) CloseMateMenu();
+    }
+
+    static RectTransform favBar;
+    static float favLookedAt = -10f;
+
+    /// <summary>The top of the Favourites mod's F5-F8 bar on screen (ImGui's top-down y); without it, a little above the bottom.</summary>
+    static float FavouritesTop()
+    {
+        if (!favBar && Time.unscaledTime - favLookedAt > 2f)
+        {
+            favLookedAt = Time.unscaledTime;
+            var go = GameObject.Find("EmbervilleFavorites_Bar");
+            favBar = go ? go.transform as RectTransform : null;
+        }
+        float fallback = Screen.height - 90f;
+        if (!favBar || !favBar.gameObject.activeInHierarchy) return fallback;
+        favBar.GetWorldCorners(corners);
+        var canvas = favBar.GetComponentInParent<Canvas>();
+        var cam = canvas && canvas.renderMode != RenderMode.ScreenSpaceOverlay ? canvas.worldCamera : null;
+        float top = float.MinValue;
+        foreach (var c in corners) top = Mathf.Max(top, RectTransformUtility.WorldToScreenPoint(cam, c).y);
+        return top > 0f && top < Screen.height ? Screen.height - top : fallback;
+    }
+
+    static void Companion()
+    {
+        bool any = Integrations.CompanionCard(out var body, out var name, out int level, out float health01, out bool down, out float revive01, out bool holding);
+        if (!any || Plugin == null || !show.Value || !LocalPlayer.Get() || Loading()) { if (portraits.TryGetValue(CompanionId, out var p) && p.Cam) p.Cam.enabled = false; CompanionBanner.Hide(); return; }
+        string line = "Companion" + (level > 0 ? $" - Lv {level}" : "") +
+                      (down ? (revive01 > 0f ? $" - reviving {revive01 * 100f:0}%" : " - down: hold F") : holding ? " - guarding" : "");
+        bool hasKymia = Integrations.CompanionKymia(out float kymia01);
+        var picture = Picture(CompanionId, body ? body.transform : null);
+        CompanionBanner.Show(string.IsNullOrEmpty(name) ? "Companion" : name, line, health01, kymia01, hasKymia, down,
+            picture != null && picture.Seen ? picture.Tex : null, Screen.height - FavouritesTop());
+        mateFrame = Time.frameCount;
     }
 }

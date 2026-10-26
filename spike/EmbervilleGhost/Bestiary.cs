@@ -27,7 +27,6 @@ internal static class Bestiary
 {
     static ConfigEntry<Key> keyEntry;
     public static bool Visible { get; private set; }
-    static List<(InputActionMap map, bool on)> savedMaps;
 
     public static void Bind(ConfigFile config)
     {
@@ -58,6 +57,39 @@ internal static class Bestiary
         return name;
     }
 
+    // The names players know them by (embervillecodex.com/bestiary), where the game's own (EnemyTypeExt.GetName) differ or are missing
+    static readonly Dictionary<string, string> codexNames = new(System.StringComparer.OrdinalIgnoreCase)
+    {
+        ["Shroom"] = "Lilshroom", ["Lil Shroom"] = "Lilshroom",
+        ["Lil Bomber"] = "LilBomber", ["Lil Tick"] = "LilTick",
+        ["Acolyte Sorcerer Elite"] = "Elite Acolyte Sorcerer",
+    };
+    static readonly Dictionary<string, string> names = new();
+
+    /// <summary>"Mob_Glowbat" -> "Glowbat", "Aco_Sorcerer" -> "Acolyte Sorcerer", "SpiderMatriarch" -> "Spider Matriarch". Kills stay saved by key.</summary>
+    internal static string NameOf(string key, Enemy prefab = null)
+    {
+        if (string.IsNullOrEmpty(key)) return "";
+        if (names.TryGetValue(key, out var have)) return have;
+        string n = "";
+        try { if (prefab && prefab.enemyType != EnemyType.None) n = prefab.enemyType.GetName(); } catch { }
+        if (string.IsNullOrEmpty(n))
+        {
+            var words = new List<string>();
+            foreach (var part in key.Split('_'))
+            {
+                if (part.Length == 0 || part == "Mob" || part == "Boss" || part == "Enemy") continue;
+                if (part == "Aco") { words.Add("Acolyte"); continue; }
+                if (part == "Sc") { words.Add("Scavenger"); continue; }
+                words.Add(System.Text.RegularExpressions.Regex.Replace(part, "(?<=[a-z])(?=[A-Z])", " "));   // SpiderMatriarch -> Spider Matriarch
+            }
+            n = string.Join(" ", words);
+            if (n.Length == 0) n = key;
+        }
+        if (codexNames.TryGetValue(n, out var codex)) n = codex;
+        return names[key] = n;
+    }
+
     static List<Entry> Roster()
     {
         if (roster != null && roster.All(e => e.Prefab)) return roster;
@@ -72,7 +104,7 @@ internal static class Bestiary
             if (byKey.TryGetValue(key, out var have) && have.Prefab.gameObject.name.Length <= n.Length) continue;   // the plainest name stands for the kind
             byKey[key] = new Entry { Key = key, Prefab = e };
         }
-        roster = byKey.Values.OrderBy(x => x.Prefab.enemyType == EnemyType.None ? 1 : 0).ThenBy(x => x.Key).ToList();
+        roster = byKey.Values.OrderBy(x => x.Prefab.enemyType == EnemyType.None ? 1 : 0).ThenBy(x => NameOf(x.Key, x.Prefab)).ToList();
         return roster;
     }
 
@@ -127,7 +159,7 @@ internal static class Bestiary
         kills.TryGetValue(key, out int n);
         kills[key] = n + 1;
         Save();
-        if (n == 0) NetLog.Success($"New in the Bestiary: {key} ({keyEntry.Value})", toast: true);
+        if (n == 0) NetLog.Success($"New in the Bestiary: {NameOf(key, __instance)} ({keyEntry.Value})", toast: true);
     }
 
     // ---- open / close ----
@@ -149,15 +181,11 @@ internal static class Bestiary
         if (on)
         {
             Load();
-            savedMaps = new List<(InputActionMap, bool)>();
-            foreach (var map in MainInput.Actions.asset.actionMaps) { savedMaps.Add((map, map.enabled)); map.Disable(); }
-            Cursor.visible = true;
-            Cursor.lockState = CursorLockMode.None;
+            GameInput.Block("bestiary", alsoUi: true);
         }
         else
         {
-            if (savedMaps != null) foreach (var (map, was) in savedMaps) if (was) map.Enable();
-            savedMaps = null;
+            GameInput.Unblock("bestiary");
             if (Integrations.HasPets) ClearStage();
         }
     }
@@ -202,7 +230,7 @@ internal static class Bestiary
             e.Parts ??= PartsOf(e.Prefab);
             if (e.Parts.Count > 0) DrawParts(dl, e.Parts, new Vector2(at.x + 6, at.y + 4), new Vector2(at.x + cell - 6, at.y + cell - 20), known);
             else dl.AddText(new Vector2(at.x + cell / 2 - 6, at.y + cell / 2 - 16), ImGui.ColorConvertFloat4ToU32(new Vector4(0.5f, 0.5f, 0.5f, 1f)), "?");
-            string label = known ? e.Key : "???";
+            string label = known ? NameOf(e.Key, e.Prefab) : "???";
             var size = ImGui.CalcTextSize(label);
             if (size.x > cell - 4) { label = label.Substring(0, Math.Max(3, (int)(label.Length * (cell - 10) / size.x))) + ".."; size = ImGui.CalcTextSize(label); }
             dl.AddText(new Vector2(at.x + (cell - size.x) / 2, at.y + cell - 18), ImGui.ColorConvertFloat4ToU32(known ? new Vector4(1f, 0.88f, 0.7f, 1f) : new Vector4(0.55f, 0.55f, 0.55f, 1f)), label);
@@ -225,7 +253,7 @@ internal static class Bestiary
     {
         int n = KillsOf(e.Key);
         bool known = n > 0;
-        string title = known ? e.Key : "???";
+        string title = known ? NameOf(e.Key, e.Prefab) : "???";
         ImGui.SetWindowFontScale(1.4f);
         float tw = ImGui.CalcTextSize(title).x;
         ImGui.SetCursorPosX(Math.Max(0, (ImGui.GetContentRegionAvail().x - tw) / 2));

@@ -28,7 +28,9 @@ internal static class Pings
 
     const float Lifetime = 3f;
     const float OrderLifetime = 1f, OrderFade = 0.4f;   // an order to the risen / the flock: a quick mark
-    const float PathLifetime = 10f, PathFade = 2f;
+    const float PathLifetime = 4f, PathFade = 1f;
+    const float WalkedLifetime = 30f, BehindFade = 0.5f, Reached = 0.6f;   // a path your companion walks: kept while it does, fading behind it
+    const float Stuck = 6f;   // ... unless it gets no further along it for this long (a fight, a wall): then the rest fades
     const float PointSpacing = 0.3f;   // world units between recorded points
     const float DragStart = 0.5f;      // move this far while holding = drawing, not a ping
     const int MaxPoints = 256;
@@ -41,6 +43,11 @@ internal static class Pings
         public readonly List<V3> Points = new List<V3>();
         public float Born;
         public int PlayerId;
+        /// <summary>Your companion is walking it: how far it's got (points before this are behind it), and when it passed each.</summary>
+        public bool Walked;
+        public int Next;
+        public float[] PassedAt;
+        public float LastStep;
     }
 
     static readonly List<Ping> active = new List<Ping>();
@@ -80,6 +87,8 @@ internal static class Pings
         return true;
     }
 
+    static bool Shift => Keyboard.current != null && Keyboard.current.shiftKey.isPressed;
+
     /// <summary>Middle mouse: click = ping, hold + drag = draw (every frame).</summary>
     public static void Tick()
     {
@@ -100,6 +109,7 @@ internal static class Pings
             if (drawing == null)
             {
                 if ((point - pressPoint).magnitude < DragStart) return;   // still might be a click
+                foreach (var old in paths) if (old.PlayerId == MyId) End(old, Time.unscaledTime);   // (a new line: your old ones fade away)
                 drawing = new DrawnPath { PlayerId = MyId, Born = float.MaxValue };   // doesn't age while drawing
                 drawing.Points.Add(pressPoint);
                 paths.Add(drawing);
@@ -114,9 +124,26 @@ internal static class Pings
         {
             drawing.Born = Time.unscaledTime;
             SendPath(drawing);
+            if (Integrations.CompanionOut)   // (your companion walks it: the line stays while it does, and goes behind it)
+            {
+                Integrations.RallyPath(drawing.Points, Shift);   // (Shift: it holds the end of the line)
+                Add(drawing.Points[drawing.Points.Count - 1], MyId, "", order: true);
+                drawing.Walked = true;
+                drawing.PassedAt = new float[drawing.Points.Count];
+                drawing.LastStep = Time.unscaledTime;
+            }
             drawing = null;
         }
         else if (Integrations.HoldingStaff) { Add(pressPoint, MyId, "", order: true); Integrations.Rally(pressPoint); }   // an order to the risen / the flock: a red mark, just for us
+        else if (Integrations.CompanionOut && Integrations.CompanionAt(out var mate) && new V3(mate.x - pressPoint.x, mate.y - pressPoint.y, 0f).magnitude <= 0.8f)
+            Integrations.CompanionFollow();   // a click on your companion: follow me (when it's holding a spot)
+        else if (Integrations.CompanionOut)   // an order to your companion: the red mark for you; your teammates still see your ping
+        {
+            Add(pressPoint, MyId, "", order: true);
+            SendPing(pressPoint, showOurs: false);
+            if (Integrations.HasPets) Integrations.Rally(pressPoint, companion: false);
+            Integrations.CompanionTo(pressPoint, Shift);
+        }
         else { SendPing(pressPoint); Integrations.Rally(pressPoint); }   // (and the Staff of Clucking's flock runs there)
     }
 
@@ -127,9 +154,9 @@ internal static class Pings
         if (me) SendPing(me.transform.position);
     }
 
-    static void SendPing(V3 point)
+    static void SendPing(V3 point, bool showOurs = true)
     {
-        Add(point, MyId, "You");
+        if (showOurs) Add(point, MyId, "You");
         if (Plugin == null || !Plugin.Connected || Plugin.MyId < 0) return;
         var w = new NetDataWriter();
         w.Put((byte)MsgType.Ping);
@@ -175,7 +202,8 @@ internal static class Pings
         if (active.Count == 0 && paths.Count == 0) return;
         float now = Time.unscaledTime;
         active.RemoveAll(p => now - p.Born > (p.Order ? OrderLifetime : Lifetime));
-        paths.RemoveAll(p => p != drawing && now - p.Born > PathLifetime);
+        foreach (var p in paths) if (p.Walked && p != drawing) Follow(p, now);
+        paths.RemoveAll(p => p != drawing && now - p.Born > (p.Walked ? WalkedLifetime : PathLifetime));
         var cam = Camera.main;
         if (!cam) return;
         var dl = ImGui.GetBackgroundDrawList();
@@ -214,10 +242,27 @@ internal static class Pings
         }
     }
 
+    /// <summary>A path your companion walks: the points it has reached are marked passed; at the end (or with no companion) the rest fades.</summary>
+    static void Follow(DrawnPath path, float now)
+    {
+        if (!Integrations.CompanionAt(out var at)) { End(path, now); return; }
+        // the furthest point within reach a little way ahead (it cuts corners, so not only the next one)
+        for (int i = path.Next; i < path.Points.Count && i < path.Next + 8; i++)
+            if (new V3(at.x - path.Points[i].x, at.y - path.Points[i].y, 0f).magnitude <= Reached)
+                for (; path.Next <= i; path.Next++) { path.PassedAt[path.Next] = now; path.LastStep = now; }
+        if (path.Next >= path.Points.Count || now - path.LastStep > Stuck) End(path, now);
+    }
+
+    static void End(DrawnPath path, float now)
+    {
+        path.Walked = false;
+        path.Born = Mathf.Min(path.Born, now - (PathLifetime - PathFade));   // (straight into its fade)
+    }
+
     static void DrawPath(ImDrawListPtr dl, Camera cam, DrawnPath path, float now)
     {
         float age = path == drawing ? 0f : now - path.Born;
-        float fade = 1f - Mathf.Clamp01((age - (PathLifetime - PathFade)) / PathFade);
+        float fade = path.Walked ? 1f : 1f - Mathf.Clamp01((age - (PathLifetime - PathFade)) / PathFade);
         var colour = ColourOf(path.PlayerId); colour.w = fade;
         uint line = ImGui.ColorConvertFloat4ToU32(colour);
         uint outline = ImGui.ColorConvertFloat4ToU32(new Vector4(0f, 0f, 0f, 0.5f * fade));
@@ -228,8 +273,15 @@ internal static class Pings
             var pt = Project(cam, path.Points[i]);
             if (i > 0)
             {
-                dl.AddLine(prev, pt, outline, 7f);   // dark edge so it reads on any ground
-                dl.AddLine(prev, pt, line, 4f);
+                uint edge = outline, middle = line;
+                if (path.PassedAt != null && path.PassedAt[i] > 0f)   // behind your companion: fading out
+                {
+                    float left = fade * (1f - Mathf.Clamp01((now - path.PassedAt[i]) / BehindFade));
+                    edge = ImGui.ColorConvertFloat4ToU32(new Vector4(0f, 0f, 0f, 0.5f * left));
+                    middle = ImGui.ColorConvertFloat4ToU32(new Vector4(colour.x, colour.y, colour.z, left));
+                }
+                dl.AddLine(prev, pt, edge, 7f);   // dark edge so it reads on any ground
+                dl.AddLine(prev, pt, middle, 4f);
                 beforeLast = prev;
             }
             prev = pt;

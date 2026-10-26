@@ -319,6 +319,7 @@ internal static class Hud
         NoDeath.Draw();
         Delve.DrawTesting();   // /exitpath, /exitarrow: shown even while the game calls us busy
         DebugWalls.Draw();
+        UiInspector.Draw();   // Menu > UI Inspector: outlines and what's under the mouse
         Dungeon.Loading.Draw();   // building a dungeon floor: what it's doing
         Arena.Draw();        // the boss arena's panel
         HostWindow.Draw();

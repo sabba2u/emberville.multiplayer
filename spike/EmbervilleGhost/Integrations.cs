@@ -20,7 +20,7 @@ internal static class Integrations
     public const string PetsGuid = "spike.emberville.betterpetsandsummons";
     public const string NpcsGuid = "spike.emberville.betternpcsandquests";
     public const string WeatherGuid = "spike.emberville.betterweather";
-    public const string CompanionGuid = "spike.emberville.bettercompanion";
+    public const string CompanionGuid = "spike.emberville.bettercompanions";
 
     public static bool HasCombat { get; private set; }
     public static bool HasLooting { get; private set; }
@@ -42,9 +42,10 @@ internal static class Integrations
         if (HasWeather) WeatherSync.Hook();
         HasCompanion = Chainloader.PluginInfos.ContainsKey(CompanionGuid);
         if (HasCompanion) CompanionHooks();
+        if (translations != null) TranslationsHooks();
         NetLog.Info("Split-out mods: " + string.Join(", ", new List<string> {
             HasCombat ? "Better Combat" : null, HasLooting ? "Better Looting" : null, HasPets ? "Better Pets and Summons" : null,
-            HasNpcs ? "Better NPCs and Quests" : null, HasWeather ? "Better Weather" : null, HasCompanion ? "Better Companion" : null }.FindAll(x => x != null)) +
+            HasNpcs ? "Better NPCs and Quests" : null, HasWeather ? "Better Weather" : null, HasCompanion ? "Better Companions" : null }.FindAll(x => x != null)) +
             (HasCombat || HasLooting || HasPets || HasNpcs || HasWeather || HasCompanion ? "" : "none"), toast: false);
     }
 
@@ -105,6 +106,7 @@ internal static class Integrations
         if (HasWeather && WeatherCommand(cmd)) return true;
         if (HasCompanion && CompanionCommand(cmd)) return true;
         if (chestsCommand != null && chestsCommand.Invoke(null, new object[] { cmd }) is bool ok && ok) return true;   // /stash (Better Chests)
+        if (translationsCommand != null && translationsCommand.Invoke(null, new object[] { cmd }) is bool lang && lang) return true;   // /lang (Better Translations)
         return false;
     }
 
@@ -120,23 +122,34 @@ internal static class Integrations
     [MethodImpl(MethodImplOptions.NoInlining)] static bool CombatAim(out Vector3 at) => BetterCombat.LockOn.AimPoint(out at);
     static readonly System.Reflection.MethodInfo chestsCommand =
         HarmonyLib.AccessTools.TypeByName("BetterChests.Plugin") is System.Type ct ? HarmonyLib.AccessTools.Method(ct, "Command", new[] { typeof(string) }) : null;
+    // Better Translations: by name (no build dependency): its commands, its /help line, its replies in our chat
+    static readonly System.Type translations = HarmonyLib.AccessTools.TypeByName("BetterTranslations.Plugin");
+    static readonly System.Reflection.MethodInfo translationsCommand =
+        translations != null ? HarmonyLib.AccessTools.Method(translations, "Command", new[] { typeof(string) }) : null;
+    public static readonly string TranslationsHelp = translations != null ? HarmonyLib.AccessTools.Field(translations, "Help")?.GetValue(null) as string : null;
+    static void TranslationsHooks()
+    {
+        var say = HarmonyLib.AccessTools.Field(HarmonyLib.AccessTools.TypeByName("BetterTranslations.Hooks"), "Say");
+        say?.SetValue(null, (System.Action<string>)Chat.System);
+    }
     [MethodImpl(MethodImplOptions.NoInlining)] static bool PetsCommand(string c) => BetterPetsAndSummons.Plugin.Command(c);
     [MethodImpl(MethodImplOptions.NoInlining)] static bool WeatherCommand(string c) => BetterWeather.Plugin.Command(c);
-    [MethodImpl(MethodImplOptions.NoInlining)] static bool CompanionCommand(string c) => BetterCompanion.Plugin.Command(c);
+    [MethodImpl(MethodImplOptions.NoInlining)] static bool CompanionCommand(string c) => BetterCompanions.Plugin.Command(c);
 
-    /// <summary>Better Companion: our chat, busy and typing checks, and which creatures are story NPCs.</summary>
+    /// <summary>Better Companions: our chat, busy and typing checks, and which creatures are story NPCs.</summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
     static void CompanionHooks()
     {
-        BetterCompanion.Hooks.Say = Chat.System;
-        BetterCompanion.Hooks.Typing = () => ImGuiUnity.Typing || Chat.IsOpen;
-        BetterCompanion.Hooks.Busy = () => PlayerStatusUtil.LocalBusy;
-        BetterCompanion.Hooks.Ignore = EnemySync.LocalOnly;
-        BetterCompanion.Hooks.RemoteRun = e => !EnemySync.Runs(e);   // (a creature someone else's game runs: theirs to point)
-        BetterCompanion.Hooks.HasRally = true;   // (Pings hands every middle click to Rally)
-        BetterCompanion.Hooks.DrawsHud = true;
-        BetterCompanion.Hooks.DownedNear = CompanionSync.DownedNear;   // (F at a teammate's downed companion: revive, not loot)   // (its name tag: DrawHud → CompanionDraw)
-        if (HasCombat) BetterCompanion.Hooks.LockTarget = CombatLocked;
+        BetterCompanions.Hooks.Say = Chat.System;
+        BetterCompanions.Hooks.Typing = () => ImGuiUnity.Typing || Chat.IsOpen;
+        BetterCompanions.Hooks.Busy = () => PlayerStatusUtil.LocalBusy;
+        BetterCompanions.Hooks.Ignore = EnemySync.LocalOnly;
+        BetterCompanions.Hooks.RemoteRun = e => !EnemySync.Runs(e);   // (a creature someone else's game runs: theirs to point)
+        BetterCompanions.Hooks.HasRally = true;   // (Pings hands every middle click to Rally)
+        BetterCompanions.Hooks.DrawsHud = true;
+        BetterCompanions.Hooks.Popup = (at, title, items) => GameUi.Popup(at, 6f, title, items);   // (its Class button's picker)
+        BetterCompanions.Hooks.DownedNear = CompanionSync.DownedNear;   // (F at a teammate's downed companion: revive, not loot)   // (its name tag: DrawHud → CompanionDraw)
+        if (HasCombat) BetterCompanions.Hooks.LockTarget = CombatLocked;
     }
 
     /// <summary>Better Weather's Insert tab.</summary>
@@ -187,7 +200,7 @@ internal static class Integrations
         SummonSync.Draw();
     }
 
-    [MethodImpl(MethodImplOptions.NoInlining)] static void CompanionDraw() => BetterCompanion.Plugin.DrawHud();
+    [MethodImpl(MethodImplOptions.NoInlining)] static void CompanionDraw() => BetterCompanions.Plugin.DrawHud();
     [MethodImpl(MethodImplOptions.NoInlining)] static void PetsHud() => BetterPetsAndSummons.Plugin.DrawHud();
 
     // ---- every frame: teammates' pets and summons ----
@@ -226,8 +239,82 @@ internal static class Integrations
     public static bool HoldingStaff => HasPets && Holding();
     [MethodImpl(MethodImplOptions.NoInlining)] static bool Holding() => BetterPetsAndSummons.Plugin.HoldingStaff;
 
-    public static void Rally(Vector3 point) { if (HasPets) RallyTo(point); if (HasCompanion) CompanionSend(point); }
-    [MethodImpl(MethodImplOptions.NoInlining)] static void CompanionSend(Vector3 p) => BetterCompanion.Plugin.Send(p);
+    public static void Rally(Vector3 point, bool companion = true) { if (HasPets) RallyTo(point); if (companion && HasCompanion) CompanionSend(point); }
+
+    /// <summary>A companion is out: our middle clicks are orders to it (the red mark), our lines its path.</summary>
+    public static bool CompanionOut => HasCompanion && IsCompanionOut();
+    [MethodImpl(MethodImplOptions.NoInlining)] static bool IsCompanionOut() => BetterCompanions.Plugin.CompanionOut;
+
+    public static void RallyPath(List<Vector3> points, bool stay = false) { if (HasCompanion) CompanionPath(points, stay); }
+    /// <summary>An order to your companion alone (Shift: it holds the spot).</summary>
+    public static void CompanionTo(Vector3 point, bool stay) { if (HasCompanion) CompanionSendStay(point, stay); }
+    /// <summary>Your companion, holding a spot: back to following you.</summary>
+    public static void CompanionFollow() { if (HasCompanion) CompanionBack(); }
+    [MethodImpl(MethodImplOptions.NoInlining)] static void CompanionSendStay(Vector3 p, bool stay) => BetterCompanions.Plugin.Send(p, stay);
+    [MethodImpl(MethodImplOptions.NoInlining)] static void CompanionBack() => BetterCompanions.Plugin.Follow();
+
+    /// <summary>Your companion, for its card (TeamHud): its body, name, level, health 0..1, downed (and the revive so far), holding a spot.</summary>
+    public static bool CompanionCard(out GameObject body, out string name, out int level, out float health01, out bool down, out float revive01, out bool holding)
+    {
+        body = null; name = ""; level = 0; health01 = 0f; down = false; revive01 = 0f; holding = false;
+        return HasCompanion && CompanionCardOf(out body, out name, out level, out health01, out down, out revive01, out holding);
+    }
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    static bool CompanionCardOf(out GameObject body, out string name, out int level, out float health01, out bool down, out float revive01, out bool holding)
+    {
+        body = BetterCompanions.Plugin.CompanionRoot;
+        name = BetterCompanions.Plugin.CompanionName;
+        level = BetterCompanions.Plugin.CompanionLevel;
+        health01 = BetterCompanions.Plugin.CompanionHealth;
+        down = BetterCompanions.Plugin.CompanionDown;
+        revive01 = BetterCompanions.Plugin.CompanionRevive;
+        holding = BetterCompanions.Plugin.Post != null;
+        return body;
+    }
+
+    /// <summary>Your companion's card menu: the Heal button (words, pressable), healing it with one of your potions, trading.</summary>
+    public static (string label, bool can) CompanionHealOption() => HasCompanion ? HealOptionOf() : ("Heal", false);
+    public static string CompanionHeal() => HasCompanion ? HealIt() : "";
+    public static void CompanionTrade() { if (HasCompanion) TradeIt(); }
+    [MethodImpl(MethodImplOptions.NoInlining)] static (string, bool) HealOptionOf() => BetterCompanions.Plugin.HealOption();
+    [MethodImpl(MethodImplOptions.NoInlining)] static string HealIt() => BetterCompanions.Plugin.Heal();
+    [MethodImpl(MethodImplOptions.NoInlining)] static void TradeIt() => BetterCompanions.Plugin.Trade();
+
+    /// <summary>Your companion's Kymia, 0..1 (false: it has none, or none out).</summary>
+    /// <summary>Your companion's power slot i (0-3): its skill's icon (none: empty), cooldown left / total, running, when cast.</summary>
+    public static bool CompanionPower(int i, out Sprite icon, out float left, out float total, out bool running, out float castAt)
+    {
+        icon = null; left = 0f; total = 1f; running = false; castAt = -100f;
+        return HasCompanion && PowerOf(i, out icon, out left, out total, out running, out castAt);
+    }
+    /// <summary>Its card's power slot clicked: that power now. Empty: done; else why not.</summary>
+    public static string CompanionUsePower(int i) => HasCompanion ? UsePower(i) : "No companion.";
+    [MethodImpl(MethodImplOptions.NoInlining)] static string UsePower(int i) => BetterCompanions.Plugin.UseCompanionPower(i);
+
+    /// <summary>The powers your companion could slot: icon, name, rank, ID.</summary>
+    public static List<(Sprite icon, string name, int rank, string id)> CompanionPowerChoices() =>
+        HasCompanion ? PowerChoices() : new List<(Sprite, string, int, string)>();
+    [MethodImpl(MethodImplOptions.NoInlining)] static List<(Sprite icon, string name, int rank, string id)> PowerChoices() => BetterCompanions.Plugin.CompanionPowerChoices();
+
+    public static void CompanionSetPower(int i, string id) { if (HasCompanion) SetPower(i, id); }
+    [MethodImpl(MethodImplOptions.NoInlining)] static void SetPower(int i, string id) => BetterCompanions.Plugin.SetCompanionPower(i, id);
+
+    [MethodImpl(MethodImplOptions.NoInlining)] static bool PowerOf(int i, out Sprite icon, out float left, out float total, out bool running, out float castAt) =>
+        BetterCompanions.Plugin.CompanionPower(i, out icon, out left, out total, out running, out castAt);
+
+    public static bool CompanionKymia(out float kymia01) { kymia01 = 0f; return HasCompanion && KymiaOf(out kymia01); }
+    [MethodImpl(MethodImplOptions.NoInlining)] static bool KymiaOf(out float k) { k = BetterCompanions.Plugin.CompanionKymia; return k >= 0f; }
+
+    /// <summary>Where your companion stands, when one is out.</summary>
+    public static bool CompanionAt(out Vector3 at) { at = default; return HasCompanion && CompanionPosition(out at); }
+    [MethodImpl(MethodImplOptions.NoInlining)] static bool CompanionPosition(out Vector3 at)
+    {
+        var root = BetterCompanions.Plugin.CompanionRoot;
+        at = root ? root.transform.position : default;
+        return root;
+    }
+    [MethodImpl(MethodImplOptions.NoInlining)] static void CompanionPath(List<Vector3> p, bool stay) => BetterCompanions.Plugin.SendPath(p, stay);
+    [MethodImpl(MethodImplOptions.NoInlining)] static void CompanionSend(Vector3 p) => BetterCompanions.Plugin.Send(p);
     [MethodImpl(MethodImplOptions.NoInlining)] static void RallyTo(Vector3 p) => BetterPetsAndSummons.Plugin.Rally(p);
 
     /// <summary>A descent guardian's death: now and then, a staff among its loot.</summary>

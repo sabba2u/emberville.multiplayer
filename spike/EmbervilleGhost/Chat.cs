@@ -27,7 +27,6 @@ internal static class Chat
     static string typing = "";
     static bool hooked;
     static float openedAt;
-    static List<(UnityEngine.InputSystem.InputActionMap map, bool on)> savedMaps;
 
     public static bool IsOpen { get; private set; }
 
@@ -45,7 +44,7 @@ internal static class Chat
         if (kb == null) return;
         if (!IsOpen)
         {
-            if (!UnityEngine.Application.isFocused || ImGuiUnity.IsOpen || !CanOpen()) return;
+            if (!UnityEngine.Application.isFocused || ImGuiUnity.IsOpen || GameConsole.IsOpen || !CanOpen()) return;
             if (kb.enterKey.wasPressedThisFrame || kb.numpadEnterKey.wasPressedThisFrame) Open();
             return;
         }
@@ -94,22 +93,14 @@ internal static class Chat
         openedAt = Time.unscaledTime;
         typing = "";
         if (!hooked && Keyboard.current != null) { Keyboard.current.onTextInput += OnTextInput; hooked = true; }
-        // Game input off while typing (WASD would walk, Esc would pause...). Remember which maps were on.
-        savedMaps = new List<(UnityEngine.InputSystem.InputActionMap, bool)>();
-        foreach (var map in MainInput.Actions.asset.actionMaps)
-        {
-            savedMaps.Add((map, map.enabled));
-            map.Disable();
-        }
+        GameInput.Block("chat", alsoUi: true);   // game input off while typing (WASD would walk, Esc would pause...)
     }
 
     static void Close()
     {
         IsOpen = false;
         typing = "";
-        if (savedMaps != null)
-            foreach (var (map, on) in savedMaps) if (on) map.Enable();
-        savedMaps = null;
+        GameInput.Unblock("chat");
     }
 
     /// <summary>Chat commands. True = it was one (not sent as chat).</summary>
@@ -123,6 +114,15 @@ internal static class Chat
         if (cmd == "summon all") { Travel.SummonAll(); return true; }
         if (cmd == "room" || cmd.StartsWith("room ")) { CustomRoom.Command(cmd.Length > 4 ? cmd.Substring(5) : ""); return true; }
         if (cmd == "summon" || cmd.StartsWith("summon ")) { Travel.Summon(Travel.Find(cmd.Length > 6 ? cmd.Substring(7) : "")); return true; }
+        if (cmd == "charscreen" || cmd.StartsWith("charscreen ")) { UnlockClasses.CharacterScreen(cmd.Length > 10 ? cmd.Substring(11) : ""); return true; }   // the character screen unlocked and opened (off: locked)
+        if (cmd == "unlockscreens" || cmd.StartsWith("unlockscreens ")) { UnlockClasses.AllScreens(cmd.Length > 13 ? cmd.Substring(14) : ""); return true; }   // every screen the story unlocks (off: locked)
+        if (cmd == "classscreen" || cmd.StartsWith("classscreen ")) { UnlockClasses.Screen(cmd.Length > 11 ? cmd.Substring(12) : ""); return true; }   // the class screen unlocked and opened (off: locked)
+        if (cmd == "unlockclasses" || cmd.StartsWith("unlockclasses ")) { UnlockClasses.Run(cmd.Length > 13 ? cmd.Substring(14) : ""); return true; }   // testing: every class (or one) learned
+        if (cmd == "lockclasses" || cmd.StartsWith("lockclasses ")) { UnlockClasses.Lock(cmd.Length > 11 ? cmd.Substring(12) : ""); return true; }   // testing: classes forgotten
+        if (cmd == "classes") { UnlockClasses.List(); return true; }   // every class: learned, equipped
+        if (cmd.StartsWith("classes ")) { UnlockClasses.Detail(cmd.Substring(8)); return true; }   // one class: what it is
+        if (cmd == "lockmasteries" || cmd.StartsWith("lockmasteries ")) { Arsenal.LockMasteries(cmd.Length > 13 ? cmd.Substring(14) : ""); return true; }   // testing: masteries back off
+        if (cmd == "give" || cmd.StartsWith("give ")) { Arsenal.Give(cmd.Length > 4 ? cmd.Substring(5) : ""); return true; }   // testing: any item into your bag
         if (Integrations.Command(cmd)) return true;   // /bowlock, /moveattack, /pet, /clucking, /risen (the split-out mods)
         if (cmd == "resources" || cmd.StartsWith("resources ") || cmd == "mats" || cmd.StartsWith("mats "))
         {
@@ -157,6 +157,8 @@ internal static class Chat
             case "noclip": NoClip.Toggle(); return true;   // testing: walk through walls
             case "hook": HunterHook.Give(); return true;   // a Hunter's Hook
             case "respec": Respec.Run(); return true;   // every stat point back to spend again
+            case "unlockmasteries": Arsenal.UnlockMasteries(); return true;   // testing: every weapon type's mastery
+            case "weapons": Arsenal.Weapons(); return true;   // every weapon in the game, by type
             case "hookshout": HookSounds.Shout(); return true;   // try the hook's shout sound
             case "exitarrow": Delve.ToggleExitArrow(); return true;   // testing: an arrow to the stairs down
             case "exitpath": Delve.ToggleExitPath(); return true;   // testing: a line along the floor to the stairs
@@ -164,10 +166,11 @@ internal static class Chat
             case "help":
             case "?":
                 System("/sleep: ready to skip to morning (everyone must)   /estate: unlock building on your estate (host)");
-                System("/devmode: the game's developer tools on/off   /devpanel: open the developer panel   /arena: to this scene's test arena   /dungeon: into a generated dungeon (or out)   /walls: show what blocks you (debug)   /noclip: walk through walls   /clucking: a Staff of Clucking   /risen: a Staff of the Risen   /hook: a Hunter's Hook   /respec: your stat points back to spend again   /stash: your shared stash (U)   /tp name: go to a player   /summon name (or all): bring them to you   /rain: a rain storm on/off   /snow: snow on/off (Better Weather)   /exitarrow: arrow to the stairs down   /exitpath: a line to them   /nodeath: take no damage   /onehitkill: 500 damage a hit (testing)   /bowlock: arrows home in (off to start; /bowlock 15 = 15° cone)   /moveattack: move while attacking (off to start)");
+                System("/devmode: the game's developer tools on/off   /devpanel: open the developer panel   /arena: to this scene's test arena   /dungeon: into a generated dungeon (or out)   /walls: show what blocks you (debug)   /noclip: walk through walls   /clucking: a Staff of Clucking   /risen: a Staff of the Risen   /hook: a Hunter's Hook   /respec: your stat points back to spend again   /classes: every class, learned or not (/classes mage: what it does)   /charscreen: unlock the character screen and open it (off: lock it)   /unlockscreens: every screen (inventory, quests, masteries, classes, character, minimap; off: lock them)   /classscreen: unlock the class screen and open it (off: lock it)   /unlockclasses (mage): learn every class (or one)   /lockclasses (mage): forget them (not the one you have on)   /unlockmasteries: every weapon mastery   /lockmasteries (all): the unused ones (or all) back off   /weapons: every weapon in the game   /give name [count]: any item into your bag   /stash: your shared stash (U)   /tp name: go to a player   /summon name (or all): bring them to you   /rain: a rain storm on/off   /snow: snow on/off (Better Weather)   /exitarrow: arrow to the stairs down   /exitpath: a line to them   /nodeath: take no damage   /onehitkill: 500 damage a hit (testing)   /bowlock: arrows home in (off to start; /bowlock 15 = 15° cone)   /moveattack: move while attacking (off to start)");
                 System("/resources (or /resources 250): 100 of every material, and enough for the town's repairs   /repair: fix the nearest broken building");
                 System("/trade P2 (or a name): trade items with someone   /pet on (pets start off), /pet: befriend / call / send home, /pet list, /pet glowbat, /pet name ..., /pet color red");
                 System($"/online (or {OnlinePlayers.KeyName}): who's connected, mute; the host also kicks and bans   X at a chest (Better Chests mod): put in what it already has");
+                if (Integrations.TranslationsHelp != null) System(Integrations.TranslationsHelp);   // (Better Translations)
                 return true;
         }
         return false;
@@ -214,8 +217,9 @@ internal static class Chat
 
     /// <summary>Remember what hit our player last, for "Cohh was killed by a Spiderling".</summary>
     [HarmonyLib.HarmonyPatch(typeof(PlayerMaster), nameof(PlayerMaster.ApplyDamage)), HarmonyLib.HarmonyPrefix]
-    static void RememberHitter(DamageData damageData)
+    static void RememberHitter(PlayerMaster __instance, DamageData damageData)
     {
+        if (!ReferenceEquals(__instance, LocalPlayer.Get())) return;   // (a companion that's a real player too)
         if (pvpHitBy != null) { lastHitBy = pvpHitBy; pvpHitBy = null; }
         else if (damageData.Aggressor is UnityEngine.MonoBehaviour mb && mb) lastHitBy = CleanName(mb.name);
         else if (damageData.Aggressor != null) lastHitBy = "";
@@ -225,7 +229,7 @@ internal static class Chat
     [HarmonyLib.HarmonyPatch(typeof(PlayerMaster), nameof(PlayerMaster.Die)), HarmonyLib.HarmonyPostfix]
     static void AfterDie(PlayerMaster __instance)
     {
-        if (Plugin == null) return;
+        if (Plugin == null || !ReferenceEquals(__instance, LocalPlayer.Get())) return;
         Died(Plugin.MyId, lastHitBy);
         if (!Plugin.Connected || Plugin.MyId < 0) return;
         var w = new NetDataWriter();
@@ -257,6 +261,7 @@ internal static class Chat
 
     internal static void System(string text, Vector4 color)
     {
+        if (GameConsole.Reply(text, color)) return;   // (the console finding command names: not shown)
         lines.Add(new Line { Time = Time.unscaledTime, Who = "", Text = text, Color = color });
         if (lines.Count > 50) lines.RemoveAt(0);
     }

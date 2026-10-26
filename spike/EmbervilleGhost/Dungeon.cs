@@ -359,6 +359,23 @@ internal static class Dungeon
 
     struct Built { public Teleporter entry; public Vector3 fallback; public int rooms; }
 
+    /// <summary>
+    /// Some of the game's room pieces have a gathering spot without its trigger (GatheringObject.triggerForward): it throws
+    /// as it wakes and can't be gathered anyway. Given the one among its own pieces if it has one; else left off (logged).
+    /// </summary>
+    static void MendGathering(GameObject root)
+    {
+        int mended = 0, off = 0;
+        foreach (var g in root.GetComponentsInChildren<GatheringObject>(true))
+        {
+            if (!g || g.triggerForward) continue;
+            var trigger = g.GetComponentInChildren<TriggerForward>(true);
+            if (trigger) { g.triggerForward = trigger; mended++; }
+            else { g.gameObject.SetActive(false); off++; }
+        }
+        if (mended + off > 0) NetLog.Info($"Dungeon: {mended + off} gathering spot(s) without a trigger in the game's rooms: {mended} given theirs, {off} left off", toast: false);
+    }
+
     static async UniTask<Built> Build(DungeonRender render, Where where, BiomeSettings biome)
     {
         var region = render.Regions[where.Region];
@@ -487,6 +504,7 @@ internal static class Dungeon
         confiner.points = new[] { new Vector2(min.x, min.y), new Vector2(max.x, min.y), new Vector2(max.x, max.y), new Vector2(min.x, max.y) };
         area.cameraConfiner = confiner;
 
+        MendGathering(root);
         root.SetActive(true);
         area.Setup();
         area.gameObject.SetActive(false);   // GameManager turns it on when we arrive (CurrentArea)

@@ -347,6 +347,12 @@ internal static class FavoritesBar
         tip.autoFindCanvasRect = true;
         tip.canvasRect = (RectTransform)canvas.transform;
         foreach (var g in tip.GetComponentsInChildren<Graphic>(true)) g.raycastTarget = false;   // never in the way of the mouse
+        // over everything on the HUD, the wheel's slots too (copies of the belt's, which sort on their own)
+        var own = tip.GetComponent<Canvas>() ?? tip.gameObject.AddComponent<Canvas>();
+        own.overrideSorting = true;
+        own.sortingLayerID = canvas.sortingLayerID;   // (its own canvas would otherwise be on the Default layer: under the HUD's)
+        own.sortingOrder = short.MaxValue;   // (the top: the slots it's shown by can't sit over it)
+        Plugin.Log.LogInfo($"Favourites: tooltip over the HUD (canvas {canvas.name}, {canvas.renderMode}, layer {SortingLayer.IDToName(canvas.sortingLayerID)}, order {canvas.sortingOrder})");
         return true;
     }
 

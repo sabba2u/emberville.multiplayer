@@ -86,14 +86,14 @@ internal static partial class GameUi
         return sounds;
     }
 
-    static RectTransform Rect(string name, Transform parent)
+    internal static RectTransform Rect(string name, Transform parent)
     {
         var go = new GameObject(name, typeof(RectTransform));
         go.transform.SetParent(parent, false);
         return (RectTransform)go.transform;
     }
 
-    static Image Img(GameObject go, string sprite, Color fallback, float ppuMul = 1f)
+    internal static Image Img(GameObject go, string sprite, Color fallback, float ppuMul = 1f)
     {
         var img = go.AddComponent<Image>();
         var s = Sprite(sprite);
@@ -293,6 +293,40 @@ internal static partial class GameUi
         scroll.content = w.Content;
         w.Root.gameObject.SetActive(false);
         return w;
+    }
+
+    /// <summary>A small framed menu of the game's buttons, growing up from a point on the screen (Unity's bottom-left
+    /// coordinates; <paramref name="lift"/> canvas units higher), with a title; a button whose enabled is false is greyed out.</summary>
+    public static RectTransform Popup(Vector2 screenPoint, float lift, string title, params (string label, Action onClick, bool enabled)[] items)
+    {
+        var r = Rect("EG_Popup", Root.transform);
+        r.anchorMin = r.anchorMax = new Vector2(0.5f, 0.5f);
+        r.pivot = new Vector2(0.5f, 0f);
+        RectTransformUtility.ScreenPointToLocalPointInRectangle((RectTransform)Root.transform, screenPoint,
+            Root.renderMode == RenderMode.ScreenSpaceOverlay ? null : Root.worldCamera, out var local);
+        r.anchoredPosition = local + new Vector2(0f, lift);
+        Img(r.gameObject, "UI_Hud_CommonElements_10", new Color(0.13f, 0.11f, 0.1f, 0.96f), 0.5f);
+        var v = r.gameObject.AddComponent<VerticalLayoutGroup>();
+        v.padding = new RectOffset(18, 18, 52, 22); v.spacing = 6;   // (the frame's top edge is deep: the title starts below it)
+        v.childControlWidth = true; v.childControlHeight = true;
+        v.childForceExpandWidth = true; v.childForceExpandHeight = false;
+        var fit = r.gameObject.AddComponent<ContentSizeFitter>();
+        fit.horizontalFit = fit.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+        if (!string.IsNullOrEmpty(title)) Fixed(Label(r, title, 22, Gold, TextAlignmentOptions.Center), 280, 30);
+        foreach (var (label, onClick, enabled) in items)
+        {
+            var b = Button(r, label, onClick, 280, 36, square: true);   // (the game's square-cornered button)
+            b.interactable = enabled;
+            if (!enabled) foreach (var t in b.GetComponentsInChildren<TextMeshProUGUI>(true)) t.color = Dim;
+        }
+        // kept on screen: it grows up from the point, so near the top it comes down below it
+        LayoutRebuilder.ForceRebuildLayoutImmediate(r);
+        var space = ((RectTransform)Root.transform).rect;
+        float top = r.anchoredPosition.y + r.rect.height, over = top - space.yMax + 8f;
+        if (over > 0f) r.anchoredPosition -= new Vector2(0f, over);
+        float half = r.rect.width / 2f;
+        r.anchoredPosition = new Vector2(Mathf.Clamp(r.anchoredPosition.x, space.xMin + half + 8f, space.xMax - half - 8f), r.anchoredPosition.y);
+        return r;
     }
 
     public static void Clear(Transform t)

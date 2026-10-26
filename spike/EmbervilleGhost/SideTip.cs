@@ -20,11 +20,16 @@ internal sealed class SideTip : MonoBehaviour
     public static void Show(ItemInfoWindow window, string body)
     {
         if (!window || !window.infoBoxRect) return;
-        var tip = window.infoBoxRect.GetComponentInChildren<SideTip>(true);
-        if (string.IsNullOrEmpty(body)) { if (tip) tip.gameObject.SetActive(false); return; }
-        // (a copy of the tooltip made while ours was in it, the Favourites bar's: its panel came along without its
-        // links, so it's made again)
-        if (tip && (!tip.text || tip.box != window.infoBoxRect)) { tip.gameObject.SetActive(false); Destroy(tip.gameObject); tip = null; }
+        // every one in it: a copy of the tooltip (the Favourites bar's, the weapon wheel's) can carry an old one along,
+        // without its links; those go, and only one of ours stays
+        SideTip tip = null;
+        foreach (var t in window.infoBoxRect.GetComponentsInChildren<SideTip>(true))
+        {
+            if (string.IsNullOrEmpty(body)) { t.gameObject.SetActive(false); continue; }
+            if (tip || !t.text || t.box != window.infoBoxRect) { t.gameObject.SetActive(false); Destroy(t.gameObject); continue; }
+            tip = t;
+        }
+        if (string.IsNullOrEmpty(body)) return;
         if (!tip) tip = Make(window);
         tip.gameObject.SetActive(true);
         tip.text.text = body;

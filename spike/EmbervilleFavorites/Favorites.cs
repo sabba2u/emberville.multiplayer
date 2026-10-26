@@ -65,6 +65,7 @@ public static class Favorites
 
     public static void Tick()
     {
+        Wheel();
         var kb = Keyboard.current;
         if (kb == null || !Application.isFocused) return;
         int pressed = kb.f5Key.wasPressedThisFrame ? 0 : kb.f6Key.wasPressedThisFrame ? 1 : kb.f7Key.wasPressedThisFrame ? 2 : kb.f8Key.wasPressedThisFrame ? 3 : -1;
@@ -79,6 +80,32 @@ public static class Favorites
             return;
         }
         if (FreeToPlay) Wield(pressed);
+    }
+
+    static float wheelAt;
+
+    /// <summary>
+    /// Shift + the mouse wheel while playing: down = the next favourite (F5, F6, F7, F8, round again), up = the one before;
+    /// keys with no weapon (or one no longer in your bag) are skipped. Not while farming (the game's wheel picks seeds there).
+    /// </summary>
+    static void Wheel()
+    {
+        var mouse = Mouse.current;
+        var kb = Keyboard.current;
+        if (mouse == null || kb == null || !kb.shiftKey.isPressed || !Application.isFocused || !Player || !Singleton<Inventory>.HasMain || !FreeToPlay) return;
+        if (Singleton<FarmingManager>.HasMain && Singleton<FarmingManager>.main.isFarmMode) return;
+        float y = mouse.scroll.ReadValue().y;
+        if (Mathf.Abs(y) < 0.01f || Time.unscaledTime < wheelAt) return;
+        wheelAt = Time.unscaledTime + 0.12f;   // (one notch, one weapon: a fast spin doesn't skip past)
+        Load();
+        var have = new List<int>();
+        for (int i = 0; i < Slots; i++) if (keys[i] != null && Find(i) != null) have.Add(i);
+        if (have.Count == 0) return;
+        int now = have.FindIndex(i => Find(i)?.section == InventorySection.Gear);
+        if (now >= 0 && have.Count == 1) return;   // (the only one, already in hand)
+        int step = y < 0f ? 1 : -1;
+        int next = now < 0 ? (step > 0 ? 0 : have.Count - 1) : ((now + step) % have.Count + have.Count) % have.Count;
+        Wield(have[next]);
     }
 
     static void Assign(int slot, ItemObject item)

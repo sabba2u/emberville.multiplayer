@@ -112,3 +112,18 @@ internal static class DevMode
         GoTo(arenas[0]);
     }
 }
+
+/// <summary>
+/// The developer panel's Creative Area button: the demo doesn't ship that scene, and loading it crashed the game's
+/// scene loader (after it had already marked story steps done in your save). Said instead, and nothing changed.
+/// </summary>
+[HarmonyLib.HarmonyPatch(typeof(DevOptionsManager), nameof(DevOptionsManager.GoToCreativeArea))]
+internal static class NoCreativeArea
+{
+    static bool Prefix()
+    {
+        if (UnityEngine.Application.CanStreamedLevelBeLoaded("CreativeArea")) return true;
+        NetLog.Warn("The Creative Area isn't in this version of the game. /arena goes to this scene's test arena instead.");
+        return false;
+    }
+}

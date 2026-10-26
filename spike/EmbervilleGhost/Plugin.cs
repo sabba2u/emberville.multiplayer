@@ -31,6 +31,7 @@ namespace EmbervilleGhost;
 [BepInDependency(Integrations.NpcsGuid, BepInDependency.DependencyFlags.SoftDependency)]
 [BepInDependency(Integrations.WeatherGuid, BepInDependency.DependencyFlags.SoftDependency)]
 [BepInDependency(Integrations.CompanionGuid, BepInDependency.DependencyFlags.SoftDependency)]
+[BepInDependency("spike.emberville.bettertranslations", BepInDependency.DependencyFlags.SoftDependency)]   // (Better Translations: /lang)
 public class Plugin : BaseUnityPlugin, ITransportListener
 {
     internal const string Version = "0.3.2";
@@ -165,6 +166,7 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         Trade.Plugin = this;
         OnlinePlayers.Plugin = this;
         ImGuiUnity.OnRender += Hud.Draw;
+        try { GameConsole.Init(Config); ImGuiUnity.OnRender += GameConsole.Draw; } catch (System.Exception e) { Log.LogWarning($"Console: {e}"); }
         try { ImGuiUnity.Init(Config, System.IO.Path.GetDirectoryName(Info.Location)); }
         catch (Exception e) { Log.LogError($"ImGui init failed, no menu/HUD: {e}"); }
         NetLog.Info($"{Title} loaded. F9 host, F10 join / disconnect, Insert = menu, Delete = status line.", toast: true);
@@ -209,6 +211,8 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         CharacterSafety.Tick();
         DemoEnd.Tick();
         Stockpile.Tick();
+        Arsenal.Tick();
+        MenuLightWatch.Tick();
         GroundSync.Tick();
         MouseWalk.Tick();
         Diag.Tick();
@@ -254,6 +258,7 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         TimeSync.Tick();
         if (transport != null && transport.IsRunning) NetTick();
         Chat.Tick();
+        GameConsole.Tick();
 
         Perf.Begin("4 imgui");
         try { ImGuiUnity.Update(); }
@@ -1374,7 +1379,7 @@ internal enum MsgType : byte
     NpcLook = 153,
     HookBlood = 154,
     WeatherStorm = 155, // whoever changed it -> everyone (host -> each player who joins), reliable: kind (0 clear, 1 rain, 2 snow: Better Weather), its own settings (amount, darkness, settle, lightning every, wind: NaN = the sliders')
-    CompanionState = 160, // owner -> their place, ~10 Hz unreliable (gone: reliable): out?, then x, y, flip, health 0-255, downed, animators (Better Companion)
+    CompanionState = 160, // owner -> their place, ~10 Hz unreliable (gone: reliable): out?, then x, y, flip, health 0-255, downed, animators (Better Companions)
     CompanionLook = 161,  // owner -> their place, reliable, when it changes: LookSync bytes (name, parts, colours) of their companion
     CompanionRevive = 162, // reviver -> the companion's owner, reliable: (nothing) they held F at it for 2 s
     TpAsk = 158,        // player -> the player they want to go to, reliable: (nothing; they answer with SummonTo)

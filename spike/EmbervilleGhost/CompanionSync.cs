@@ -7,7 +7,7 @@ using UnityEngine;
 namespace EmbervilleGhost;
 
 /// <summary>
-/// Everyone's Better Companion for everyone in the area. The companion's brain and body run on its owner's copy
+/// Everyone's Better Companions for everyone in the area. The companion's brain and body run on its owner's copy
 /// only; ~10x a second that copy sends CompanionState (position, facing, health, downed, animators) and, when it
 /// changes, CompanionLook (LookSync: hair, gear, colours, name). Every other copy keeps a stand-in for it (a stripped
 /// copy of our character, as for teammates: RemoteAvatar), gliding to where the real one is, with its name and health
@@ -33,7 +33,7 @@ internal static class CompanionSync
     {
         if (!Online || Time.unscaledTime < nextSend) return;
         nextSend = Time.unscaledTime + SendEvery;
-        var root = BetterCompanion.Plugin.CompanionRoot;
+        var root = BetterCompanions.Plugin.CompanionRoot;
         if (!root)
         {
             if (sentOut) { var gone = new NetDataWriter(); gone.Put((byte)MsgType.CompanionState); gone.Put(false); Plugin.SendToPlace(gone, DeliveryMethod.ReliableOrdered); }
@@ -45,7 +45,7 @@ internal static class CompanionSync
         if (Time.unscaledTime >= nextLook || !sentOut)
         {
             nextLook = Time.unscaledTime + LookEvery;
-            var look = LookSync.Capture(root, BetterCompanion.Plugin.CompanionName);
+            var look = LookSync.Capture(root, BetterCompanions.Plugin.CompanionName);
             if (lastLook == null || !look.SequenceEqual(lastLook))
             {
                 lastLook = look;
@@ -61,10 +61,10 @@ internal static class CompanionSync
         w.Put(true);
         var p = root.transform.position;
         w.Put(p.x); w.Put(p.y);
-        w.Put(BetterCompanion.Plugin.CompanionFlipped);
-        w.Put((byte)Mathf.RoundToInt(Mathf.Clamp01(BetterCompanion.Plugin.CompanionHealth) * 255f));
-        w.Put(BetterCompanion.Plugin.CompanionDown);
-        AnimSync.Write(w, BetterCompanion.Plugin.CompanionAnimators ?? new Animator[0]);
+        w.Put(BetterCompanions.Plugin.CompanionFlipped);
+        w.Put((byte)Mathf.RoundToInt(Mathf.Clamp01(BetterCompanions.Plugin.CompanionHealth) * 255f));
+        w.Put(BetterCompanions.Plugin.CompanionDown);
+        AnimSync.Write(w, BetterCompanions.Plugin.CompanionAnimators ?? new Animator[0]);
         Plugin.SendToPlace(w, DeliveryMethod.Unreliable);
     }
 
@@ -106,7 +106,7 @@ internal static class CompanionSync
     /// <summary>Owner: a teammate got our companion up.</summary>
     public static void OnRevive(int from)
     {
-        BetterCompanion.Plugin.Revived();
+        BetterCompanions.Plugin.Revived();
         NetLog.Info($"Companion: revived by {Plugin.NameOf(from)}");
     }
 
@@ -134,7 +134,7 @@ internal static class CompanionSync
                 s.Avatar.Root.name = $"EmbervilleGhost_Companion_P{id + 1}";
                 foreach (var t in s.Avatar.Root.GetComponentsInChildren<StandInTarget>(true)) Object.Destroy(t);   // (hits on it aren't its owner's)
                 foreach (var c in s.Avatar.Root.GetComponentsInChildren<Collider2D>(true)) Object.Destroy(c);
-                BetterCompanion.CompanionMarks.Ring(s.Avatar.Root.transform);   // (told apart from the creatures, as ours)
+                BetterCompanions.CompanionMarks.Ring(s.Avatar.Root.transform);   // (told apart from the creatures, as ours)
                 if (s.Look != null) s.Avatar.ApplyLook(s.Look);
                 s.Avatar.Apply(s.To, s.Flip, s.Anim);
             }
@@ -170,8 +170,8 @@ internal static class CompanionSync
     /// <summary>Where each player's companion is (ours too), for the enemy handover.</summary>
     public static IEnumerable<(int id, Vector3 pos)> Positions()
     {
-        var root = BetterCompanion.Plugin.CompanionRoot;
-        if (root && Plugin != null && !BetterCompanion.Plugin.CompanionDown) yield return (Plugin.MyId, root.transform.position);
+        var root = BetterCompanions.Plugin.CompanionRoot;
+        if (root && Plugin != null && !BetterCompanions.Plugin.CompanionDown) yield return (Plugin.MyId, root.transform.position);
         foreach (var kv in theirs)
             if (!kv.Value.Down && Time.unscaledTime - kv.Value.HeardAt <= StaleAfter) yield return (kv.Key, kv.Value.To);
     }
@@ -184,7 +184,7 @@ internal static class CompanionSync
         if (!cam) return;
         foreach (var s in theirs.Values)
             if (s.Avatar != null && !s.Avatar.Lost)
-                BetterCompanion.CompanionMarks.Tag(cam, s.Avatar.Root.transform.position, s.Name, s.Health, s.Down, s.Held / ReviveHold);
+                BetterCompanions.CompanionMarks.Tag(cam, s.Avatar.Root.transform.position, s.Name, s.Health, s.Down, s.Held / ReviveHold);
     }
 
     public static void Clear()
