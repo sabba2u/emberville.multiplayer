@@ -46,7 +46,7 @@ public static class CenterCam
         float s = lag.Value * 100f;
         ImGui.SetNextItemWidth(280);
         if (ImGui.SliderFloat("Camera lag##centercam", ref s, 0f, 100f, "%.0f%%")) lag.Value = s / 100f;
-        ImGui.SameLine(); ImGui.TextDisabled("0% locked on you, 100% the game's smooth trailing");
+        ImGui.SameLine(); ImGui.TextDisabled("0%% locked on you, 100%% the game's smooth trailing");
         if (!on.Value) ImGui.EndDisabled();
     }
 
