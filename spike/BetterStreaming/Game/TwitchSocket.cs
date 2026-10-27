@@ -107,8 +107,8 @@ internal static class TwitchSocket
             {
                 case TwitchKind.Welcome:
                     keepalive = e.KeepaliveSeconds > 0 ? e.KeepaliveSeconds : 10;
-                    welcomed();
                     if (!carried) await SubscribeAll(e.SessionId);
+                    welcomed();   // (the backoff starts over only once it's really working)
                     Connected = true;
                     Status = "Connected: listening for cheers";
                     break;

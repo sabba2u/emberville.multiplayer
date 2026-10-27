@@ -108,16 +108,19 @@ internal static class TwitchAuth
             Task.Run(() => Form(Id + "/revoke", new Dictionary<string, string> { ["client_id"] = TwitchConfig.ClientId.Value, ["token"] = token }));
     }
 
+    /// <summary>Good for 2 more minutes (ExpiresAt can be DateTime.MinValue: "refresh now", so no maths on it).</summary>
+    static bool Fresh => saved.ExpiresAt > DateTime.UtcNow.AddMinutes(2);
+
     /// <summary>A token that works now (refreshed if it's about to run out). Testing against a local mock: a dummy.</summary>
     public static async Task<string> Token()
     {
         if (!SignedIn) return TwitchConfig.Mock ? "mock" : "";
         if (DateTime.UtcNow > nextValidate) _ = Task.Run(Validate);
-        if (DateTime.UtcNow < saved.ExpiresAt.AddMinutes(-2)) return saved.Access;
+        if (Fresh) return saved.Access;
         await refreshing.WaitAsync();
         try
         {
-            if (DateTime.UtcNow < saved.ExpiresAt.AddMinutes(-2)) return saved.Access;
+            if (Fresh) return saved.Access;
             var (status, body) = await Form(Id + "/token", new Dictionary<string, string>
             {
                 ["client_id"] = TwitchConfig.ClientId.Value,
