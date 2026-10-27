@@ -1,6 +1,8 @@
 # emberville.multiplayer
 
-
+> ### ⌨️ Press **Insert** on your keyboard to open the mods menu
+> Every mod's switches and sliders live there (or click **MODS** on the title screen / Esc menu, just above Options).
+> Close it with Insert again.
 
 Unofficial online co-op and a set of gameplay mods for **Emberville** (the demo; Unity 6, Mono), as BepInEx 5 plugins.
 Not made or supported by Cygnus Cross.
@@ -13,15 +15,76 @@ Not made or supported by Cygnus Cross.
 - **Commands and API:** [API.md](API.md) (every chat command, NPC dialogue lines, and C# for other mods).
 - Notes and the roadmap: [`todo.md`](todo.md).
 
+### 🎥 New: Twitch integration ([Better Streaming](#better-streaming-twitch-plays-along))
+Hook the game up to your Twitch chat: bits, cheers and votes set off heals, loot, monster raids, lightning storms or a
+random weapon swap every few seconds, right in your game. Chat can spin a wheel, roll dice, pull slots, drop a Plinko
+ball, cheer on a monster race, form a raid party where every raider shows up as a monster wearing their name... and
+bet on whether you'll survive. MODS (Insert) > **Streaming** > **Connect Twitch**.
+
+### What's new in 0.6
+- **Twitch integration** (above): the wheel, dice, the casino, the monster race, raid parties, chatters as enemies,
+  votes, polls, predictions and a leaderboard.
+- **Combat that answers you** (Better Combat): spell keys that never eat a press, a spell that cuts a swing's
+  follow-through, dodge and attack presses remembered, **no stun lock**, a slowdown slider for moving while you
+  attack, and a **Before / after** button. [Details](#your-character).
+- **No level caps:** your character levels past the demo's 15, and `/unlockclasses` opens the class tree to level 40.
+  **Shift + `+`** on the character screen gives you a level. [Details](#levels-no-cap-and-test-keys).
+
 ## Contents
-[Playing together](#playing-together) · [Travel: homes, portals, /tp](#travel-homes-portals-tp) ·
+[Better Streaming: Twitch](#better-streaming-twitch-plays-along) · [Playing together](#playing-together) · [Travel: homes, portals, /tp](#travel-homes-portals-tp) ·
 [The descent and the boss arena](#the-descent-and-the-boss-arena) · [Weapons and summons](#weapons-and-summons) ·
-[Your character](#your-character) · [Chests and loot](#chests-and-loot) · [Weather](#weather) ·
+[Your character](#your-character) · [Levels: no cap](#levels-no-cap-and-test-keys) · [Chests and loot](#chests-and-loot) · [Weather](#weather) ·
 [NPCs and quests](#npcs-and-quests) · [Fishing](#fishing) · [Pets](#pets) · [Companion: an AI adventurer](#companion-an-ai-adventurer) ·
 [The Ninja (early alpha)](#the-ninja-a-new-class-early-alpha) ·
-[Better Streaming](#better-streaming-twitch-plays-along) · [The mod menu](#the-mod-menu) · [Quality of life](#quality-of-life) ·
+[The mod menu](#the-mod-menu) · [Quality of life](#quality-of-life) ·
 [Keys](#keys) · [Commands](#commands) · [API](#api) · [Secrets](#secrets-the-dev-panel-test-arenas-and-the-estate) ·
 [Build](#build)
+
+## Better Streaming: Twitch plays along
+For streamers: your Twitch chat sets off effects in your game, with the viewer's name on screen ("Twitch raid incoming
+by xxJoexx", their message under it).
+- **Connect:** MODS > **Streaming** > **Connect Twitch**. The game shows a short code; enter it on twitch.tv (the link
+  is right there). No password is ever typed in the game; **Sign out** ends it.
+- **Cheers:** a word in the cheer picks the effect (`cheer500 raid`), else the exact amount; bigger cheers make raids
+  bigger. Effects so far: **Raid** (creatures that fit the area, around you), **Chicken raid** (waves of hostile
+  chickens), **Heal**, **Poison** (down to 1 health, never further), **Instant death**, **Chain lightning** (every enemy on screen zapped for 30 s), **Freeze** (frozen solid
+  for 5 s) and the **Mystery chest** (a chest beside you: full of loot, or a trap that springs a raid when opened).
+  `!effects` in chat lists them with prices. Bits need a Twitch Affiliate or Partner channel.
+- **Fair play:** the **chaos dial** (Chill to Mayhem) sets how often a mean effect may land; the rest wait in a queue
+  shown on screen ("3 curses incoming..."). Nice ones skip the queue, and nothing lands in a cutscene, a menu or while
+  dead. **Chat can kill you for real** (then a breather from mean effects); switch on **Twitch deaths are free** in
+  the tab and you get up where you fell instead, bag intact.
+- **Try it first:** every effect has a free **Test** button, and **Simulate a cheer** runs a pretend cheer through the
+  same rules. Prices, caps, times and which effects are on are all in the tab.
+- **Messing with you** (30 s each, longer when bought again): backwards walking, can't stop walking, swapped buttons
+  (attack and dodge), random dodges, invisible; upside down, mirror world, sideways, dizzy, seasick, earthquake, zoomed
+  way in or out; drunk, colour blind, tunnel vision, lights out, retro; fists only (your own weapon comes back after); weapon
+  roulette (every 5 s a weapon of a different type from your bag, never the same type twice in a row); random x2 / x3 (that many naughty effects at once); and a **lightning storm** (Better Weather's rain, strikes all around you;
+  your weather comes back after). They work the same on a controller.
+- **Spin the Wheel** (`cheer525 wheel`): a game-show wheel pops up and spins. A peg sits on every line between
+  slices and a rubber flapper clicks over each one, slowing it more and more; a wheel too slow to clear a peg gets
+  thrown back into the slice it was leaving. Green slices are nice, red naughty, gold spins again, and instant death
+  is a thin black sliver. Where it stops happens. The streamer sets the slices and their widths.
+- **Roll the Dice** (`cheer475 dice`): three dice tumble across the screen; the total picks the outcome (low bad,
+  high good). Three 1s: instant death. Three 6s: the jackpot (a heal, chain lightning and a loot drop at once).
+- **The casino:** **Pull the Slots** (`cheer495 slots`: three reels; three of a kind is that effect doubled, three
+  7s the jackpot, three skulls instant death, two of a kind that effect), **Plinko** (`cheer510 plinko`: a ball
+  bounces down the pegs into a bin; the middle is mild, the edges are the jackpot and death), **Coin flip**
+  (`cheer125 coin`: heads nice, tails naughty, `heads`/`tails` in the cheer calls it and doubles it; once in a
+  while it lands on its edge) and **Roulette** (`cheer540 roulette red`: red naughty, black nice, the green 0 the
+  jackpot; bet a colour in the cheer and win it doubled). One gamble on screen at a time; the rest wait their turn.
+- **Chat plays together:** a **monster race** (`cheer575 race`, a button, or every few minutes): four of the game's
+  creatures race across the top of the screen, each carrying an effect, and chat cheers them on with `!1` to `!4`;
+  the winner's effect happens. A **raid party**: `!party` opens one, chatters `!join` for 45 seconds, and a raid comes
+  with a monster for every raider, each wearing their name. **Chatters as enemies**: the monsters wear the names of
+  people chatting, "RIP name" when they fall, and the one nearest when you go down gets the kill on the leaderboard.
+- **Free for chat:** **votes** (`!raid` from 10 different chatters within a minute sets it off; the counts show on
+  stream), **polls** ("What happens next?", from a button or every few minutes; the winner happens), and a
+  **"Will they survive?" prediction** that starts by itself when a big raid lands and settles itself when you fall or
+  win. A **leaderboard** of top raiders, top healers and most deaths caused shows on stream (`!top` in chat).
+  Polls and predictions need an Affiliate or Partner channel; if you connected Twitch before this version, sign out
+  and connect again to allow predictions.
+- Coming next: channel-point rewards.
 
 ## Playing together
 - **Steam (easiest):** host with **F9 > Host via Steam**; friends join from their Steam friends list (right-click >
@@ -128,6 +191,25 @@ Type the command in chat to get one, or MODS > Better Combat > **New Weapons**.
   ![moveandattack](moveandattack_sm.gif)
 
 
+## Levels: no cap, and test keys
+- **Your level has no cap** (Better Companions): the demo stops at 15; you keep levelling, each level past the game's
+  table costing what its last one did. Your companion too.
+- **Classes past 15:** `/unlockclasses` learns every class and opens the class tree to **level 40** (the game's own XP
+  table goes that far), its "coming soon" skills too (they may be unfinished in the demo). XP your class earned while
+  capped was kept, so those levels come back at once. You get 2 skill points every 5 class levels. `/lockclasses`
+  puts the cap back.
+- **Test keys on the character screen** (open it, hold **Shift**):
+
+  | Keys | What it does |
+  |---|---|
+  | **Shift + `+`** (or `=`, numpad +) | a level up: the XP for it, given like a kill (your class and weapon mastery get it too) |
+  | **Shift + `/`** | a level down (attribute points back if you'd spent more than the lower level gives) |
+  | **Shift + `-`** | your attribute points back to spend again |
+  | **Shift + `*`** (Shift+8) | back to level 1 (no XP, points back) |
+
+  The same keys **without Shift** do it to your companion while its attributes are showing.
+- More in **MODS > Respec**: − / + / Reset for your level, each class, each weapon and armour mastery and every job.
+
 ## Chests and loot
 - **F** on an item marks it a favourite (a heart on its slot): favourites never get swept into chests.
 - At a chest: **X** puts in everything the chest already holds; **V** customizes it (name, colour, and what it takes:
@@ -226,52 +308,6 @@ it's rough. The art is borrowed for now (arrows until there are throwing stars),
 - Without the mod, a Ninja save just has no class on; nothing else in your save changes.
 - Coming: Shadow Step (unseen for a while, to sneak past), throwing stars, more skills.
 
-## Better Streaming: Twitch plays along
-For streamers: your Twitch chat sets off effects in your game, with the viewer's name on screen ("Twitch raid incoming
-by xxJoexx", their message under it).
-- **Connect:** MODS > **Streaming** > **Connect Twitch**. The game shows a short code; enter it on twitch.tv (the link
-  is right there). No password is ever typed in the game; **Sign out** ends it.
-- **Cheers:** a word in the cheer picks the effect (`cheer500 raid`), else the exact amount; bigger cheers make raids
-  bigger. Effects so far: **Raid** (creatures that fit the area, around you), **Chicken raid** (waves of hostile
-  chickens), **Heal**, **Poison** (down to 1 health, never further), **Instant death**, **Chain lightning** (every enemy on screen zapped for 30 s), **Freeze** (frozen solid
-  for 5 s) and the **Mystery chest** (a chest beside you: full of loot, or a trap that springs a raid when opened).
-  `!effects` in chat lists them with prices. Bits need a Twitch Affiliate or Partner channel.
-- **Fair play:** the **chaos dial** (Chill to Mayhem) sets how often a mean effect may land; the rest wait in a queue
-  shown on screen ("3 curses incoming..."). Nice ones skip the queue, and nothing lands in a cutscene, a menu or while
-  dead. **Chat can kill you for real** (then a breather from mean effects); switch on **Twitch deaths are free** in
-  the tab and you get up where you fell instead, bag intact.
-- **Try it first:** every effect has a free **Test** button, and **Simulate a cheer** runs a pretend cheer through the
-  same rules. Prices, caps, times and which effects are on are all in the tab.
-- **Messing with you** (30 s each, longer when bought again): backwards walking, can't stop walking, swapped buttons
-  (attack and dodge), random dodges, invisible; upside down, mirror world, sideways, dizzy, seasick, earthquake, zoomed
-  way in or out; drunk, colour blind, tunnel vision, lights out, retro; fists only (your own weapon comes back after); weapon
-  roulette (every 5 s a weapon of a different type from your bag, never the same type twice in a row); random x2 / x3 (that many naughty effects at once); and a **lightning storm** (Better Weather's rain, strikes all around you;
-  your weather comes back after). They work the same on a controller.
-- **Spin the Wheel** (`cheer525 wheel`): a game-show wheel pops up and spins. A peg sits on every line between
-  slices and a rubber flapper clicks over each one, slowing it more and more; a wheel too slow to clear a peg gets
-  thrown back into the slice it was leaving. Green slices are nice, red naughty, gold spins again, and instant death
-  is a thin black sliver. Where it stops happens. The streamer sets the slices and their widths.
-- **Roll the Dice** (`cheer475 dice`): three dice tumble across the screen; the total picks the outcome (low bad,
-  high good). Three 1s: instant death. Three 6s: the jackpot (a heal, chain lightning and a loot drop at once).
-- **The casino:** **Pull the Slots** (`cheer495 slots`: three reels; three of a kind is that effect doubled, three
-  7s the jackpot, three skulls instant death, two of a kind that effect), **Plinko** (`cheer510 plinko`: a ball
-  bounces down the pegs into a bin; the middle is mild, the edges are the jackpot and death), **Coin flip**
-  (`cheer125 coin`: heads nice, tails naughty, `heads`/`tails` in the cheer calls it and doubles it; once in a
-  while it lands on its edge) and **Roulette** (`cheer540 roulette red`: red naughty, black nice, the green 0 the
-  jackpot; bet a colour in the cheer and win it doubled). One gamble on screen at a time; the rest wait their turn.
-- **Chat plays together:** a **monster race** (`cheer575 race`, a button, or every few minutes): four of the game's
-  creatures race across the top of the screen, each carrying an effect, and chat cheers them on with `!1` to `!4`;
-  the winner's effect happens. A **raid party**: `!party` opens one, chatters `!join` for 45 seconds, and a raid comes
-  with a monster for every raider, each wearing their name. **Chatters as enemies**: the monsters wear the names of
-  people chatting, "RIP name" when they fall, and the one nearest when you go down gets the kill on the leaderboard.
-- **Free for chat:** **votes** (`!raid` from 10 different chatters within a minute sets it off; the counts show on
-  stream), **polls** ("What happens next?", from a button or every few minutes; the winner happens), and a
-  **"Will they survive?" prediction** that starts by itself when a big raid lands and settles itself when you fall or
-  win. A **leaderboard** of top raiders, top healers and most deaths caused shows on stream (`!top` in chat).
-  Polls and predictions need an Affiliate or Partner channel; if you connected Twitch before this version, sign out
-  and connect again to allow predictions.
-- Coming next: channel-point rewards.
-
 ## The mod menu
 **Insert**, or the **MODS** button on the title screen and the Esc menu (just above Options). Its tabs:
 **Multiplayer** (hosting, the party strip and who's connected), **Font Options**, **Mouse Options**, **Better Combat**,
@@ -311,6 +347,7 @@ by xxJoexx", their message under it).
 |---|---|
 | F9 / F10 | host (IP or Steam) / join (again: disconnect) |
 | Insert (or the MODS button) | the mods' menu (every switch and slider) |
+| Shift + `+` / `/` / `-` / `*` (character screen) | a level up / a level down / attribute points back / back to level 1 ([more](#levels-no-cap-and-test-keys)) |
 | Enter | chat (and `/commands`) |
 | O | Online Players |
 | N | Bestiary |
