@@ -50,6 +50,7 @@ Press **Enter**, type the command with a `/` in front, press Enter. `/help` list
 |---|---|
 | `/bowlock`, `/bowlock 15` | Arrows curve onto a creature near your aim; the cone in degrees. |
 | `/moveattack`, `/moveattack 70` | Move while attacking; bow aiming speed in %. |
+| `/centercam`, `/centercam 30` | Camera centred on you, dashes too (off to start); its lag in % of the game's (0 = locked). |
 
 ### Weather (Better Weather)
 | Command | What it does |

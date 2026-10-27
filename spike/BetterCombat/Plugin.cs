@@ -13,7 +13,7 @@ namespace BetterCombat;
 public class Plugin : BaseUnityPlugin
 {
     public const string Guid = "spike.emberville.bettercombat";
-    public const string Version = "0.2.2";
+    public const string Version = "0.3.0";
     internal static ManualLogSource Logger_;
 
     void Awake()
@@ -23,6 +23,7 @@ public class Plugin : BaseUnityPlugin
         BowAssist.Bind(Config);
         MoveAttack.Bind(Config);
         LockOn.Bind(Config);
+        CenterCam.Bind(Config);
         Migrate.FromGhost(Config, firstRun, "Combat");
         new HarmonyLib.Harmony(Guid).PatchAll(typeof(Plugin).Assembly);
         Logger.LogInfo($"Better Combat v{Version}: lock-on (G), bow lock-on (/bowlock), move while attacking (/moveattack)");
@@ -30,7 +31,7 @@ public class Plugin : BaseUnityPlugin
 
     void Update()
     {
-        try { LockOn.Tick(); }
+        try { LockOn.Tick(); CenterCam.Tick(); }
         catch (System.Exception e) { Logger.LogWarning(e); }
     }
 
@@ -41,6 +42,7 @@ public class Plugin : BaseUnityPlugin
         if (cmd == "moveattack" || cmd.StartsWith("moveattack ")) { MoveAttack.Command(cmd.Length > 10 ? cmd.Substring(11) : ""); return true; }
         if (cmd.StartsWith("bowlock ") && float.TryParse(cmd.Substring(8).Trim().TrimEnd('°'), out float deg)) { BowAssist.SetAngle(deg); return true; }
         if (cmd == "bowlock") { BowAssist.Toggle(); return true; }
+        if (cmd == "centercam" || cmd.StartsWith("centercam ")) { CenterCam.Command(cmd.Length > 9 ? cmd.Substring(10) : ""); return true; }
         return false;
     }
 
@@ -48,6 +50,7 @@ public class Plugin : BaseUnityPlugin
     public static void DrawMenu()
     {
         LockOn.DrawMenu();   // (first: the main one)
+        CenterCam.DrawMenu();
         MoveAttack.DrawMenu();
         BowAssist.DrawMenu();
     }

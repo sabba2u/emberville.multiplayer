@@ -35,7 +35,7 @@ namespace EmbervilleGhost;
 [BepInDependency("spike.emberville.bettertranslations", BepInDependency.DependencyFlags.SoftDependency)]   // (Better Translations: /lang)
 public class Plugin : BaseUnityPlugin, ITransportListener
 {
-    internal const string Version = "0.5.0";
+    internal const string Version = "0.5.1";
     internal const string ModName = "Sabba's Emberville Multiplayer Mod";
     internal static string Title => $"{ModName} v{Version}";
 
@@ -167,6 +167,7 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         Diag.Bind(Config);
         DesyncCheck.Bind(Config);
         Delve.Bind(Config);
+        FastLoad.Bind(Config);
         Integrations.Init();   // Better Combat / Looting / Pets and Summons, if installed
         TeamHud.Plugin = this;
         MapMates.Plugin = this;
@@ -233,6 +234,7 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         NpcLooks.Tick();   // the host's NPCs (and Rory) look the same on every game
         GearDye.Tick();
         SkillStackFix.Tick();
+        FastLoad.Tick();   // the loading screen over: the game's loading priority back
         TownPortal.Tick();
         AdeosGate.Tick();   // the Adeos room: a teammate at the shut gate is let in
         Homes.Tick();   // your /sethome places' portals

@@ -113,6 +113,8 @@ Type the command in chat to get one, or MODS > Better Combat > **New Weapons**.
   **Controller (partial support):** hold the **right trigger** to lock on to the nearest enemy (hold again: let go), tap
   it for the next one; locked, you face it whatever the right stick does, so arrows and spells go at it.
 - **Better Combat:** move while attacking (`/moveattack`), bows that aim in any direction and lock on (`/bowlock`).
+- **Centred camera** (Better Combat, off to start): `/centercam` keeps the camera on you, so a dash doesn't leave you at
+  the edge of the screen; `/centercam 30` lets it trail a little (30% of the game's lag). Also in MODS > Better Combat.
   
   ![moveandattack](moveandattack_sm.gif)
 
@@ -244,6 +246,8 @@ by xxJoexx", their message under it).
 **Better Looting**, **Companions**, **Respec**, **Pets**, **Streaming** and **Log**. Close it with Insert again or the [x].
 
 ## Quality of life
+- **Faster loading:** worlds load much faster (in one test, about 100 s down to under 20 s): the game's loading runs at
+  high priority while the loading screen is up. (`FastLoad` in the multiplayer mod's config turns it off.)
 - **Mouse walking:** hold the mouse side button to walk toward the mouse; a click walks there.
 - **Sleep vote:** everyone types `/sleep` and the clock skips to the morning.
 - **Team buffs:** a buff you cast on yourself also lands on teammates near you (host option).

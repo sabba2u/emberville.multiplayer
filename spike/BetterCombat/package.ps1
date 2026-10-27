@@ -50,7 +50,9 @@ USE
   you aim.
 - Move while attacking (off to start): melee and magic at full speed, bows slower while aiming. Chat /moveattack,
   /moveattack 70 (bow speed 70%).
-Without the multiplayer mod: switch them in BepInEx\config\spike.emberville.bettercombat.cfg ([Combat]).
+- Centred camera (off to start): the camera stays on you, dashes too. Chat /centercam, /centercam 30 (it trails at
+  30% of the game's lag; 0 = locked on you).
+Without the multiplayer mod: switch them in BepInEx\config\spike.emberville.bettercombat.cfg ([Combat], [Camera]).
 
 UNINSTALL
 Delete BepInEx\plugins\BetterCombat.
