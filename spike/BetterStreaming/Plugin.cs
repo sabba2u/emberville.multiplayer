@@ -32,15 +32,23 @@ public class Plugin : BaseUnityPlugin
         Logger.LogInfo($"Better Streaming v{Version}");
     }
 
+    static bool coinAsked;
+
+    void OnGUI() { try { FakeCursors.Draw(); } catch (System.Exception e) { Log.Warn($"Streaming: fake cursors: {e.Message}"); } }
+
     void OnDestroy() => TwitchSocket.Stop();
 
     void Update()
     {
-        try { Log.Flush(); Streamer.Tick(); ChainLightning.Tick(); TwitchDeath.Tick(); }
+        if (!coinAsked && Singleton<GameManager>.HasMain) { coinAsked = true; NiceEffects.Preload(); }
+        try { Log.Flush(); Streamer.Tick(); ChainLightning.Tick(); TwitchDeath.Tick(); Controls.Tick(); CameraFx.Tick(); Filters.Tick(); Storm.Tick(); Storm.TickHits(); WeaponLock.Tick(); WeaponRoulette.Tick(); PixelPerfect.Tick(); NiceEffects.Tick(); FireSound.Tick(); Bubble.Tick(); }
         catch (System.Exception e) { Logger.LogWarning(e); }
     }
 
     // ---- for the multiplayer mod ----
+
+    /// <summary>The player is down but getting up again (a free Twitch death, second wind): not a real death.</summary>
+    public static bool GettingUp => TwitchDeath.Falling;
 
     /// <summary>The "Streaming" tab of the mods' menu (ImGui, drawn by the multiplayer mod).</summary>
     public static void DrawMenu() => Panel.Draw();

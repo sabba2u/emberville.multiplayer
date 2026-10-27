@@ -40,6 +40,7 @@ internal static class CompanionSave
     public static bool Load()
     {
         int slot = Rules.SlotFromPrefix(GameData.playerFilePrefix) ?? 0;
+        if (slot != PlayingSlot) Hireling.PutBack();   // (another character: a hireling out goes, yours back first, nothing of it kept)
         if (slot != 0 && slot == PlayingSlot && Data != null)
         {
             // a change of scene: the same character, so keep what's in memory (XP, swaps) and make sure it's on disk
@@ -68,7 +69,7 @@ internal static class CompanionSave
     /// <summary>Save the companion (its PlayerData and its notes), keeping the previous file as .bak.</summary>
     public static void Write()
     {
-        if (Data == null || PlayingSlot == 0) return;
+        if (Data == null || PlayingSlot == 0 || Hireling.Active) return;   // (a Twitch hireling is never saved: yours is)
         try
         {
             Backup(File(PlayingSlot));
@@ -187,8 +188,10 @@ internal static class CompanionSave
         return all.Where(d => d && !string.IsNullOrEmpty(d.addressKey)).GroupBy(d => d.addressKey).Select(g => g.First()).OrderBy(d => d.name).ToList();
     }
 
-    static void Wear(ItemData d) =>
-        Data.playerInventory.Add(new SavedItem { Key = d.addressKey, Amount = 1, Section = InventorySection.Gear, SlotIndex = -1, Values = new ItemRandomValues(d, 0) });
+    static void Wear(ItemData d) => Wear(Data, d);
+
+    static void Wear(PlayerData into, ItemData d) =>
+        into.playerInventory.Add(new SavedItem { Key = d.addressKey, Amount = 1, Section = InventorySection.Gear, SlotIndex = -1, Values = new ItemRandomValues(d, 0) });
 
     /// <summary>A ready-made companion (level 1, as a new one, with its class, its looks, clothes and a weapon). The one
     /// out goes to the roster.</summary>
@@ -197,29 +200,38 @@ internal static class CompanionSave
         if (PlayingSlot == 0) return "Companion: load a character first.";
         var (name, cls, cat, what) = Presets[i];
         KeepReplaced();
-        Data = new PlayerData { playerName = name, equippedClass = cls, playerSetup = PresetLooks(i) };
-        string id = cls.GetEmbervilleID();
-        Data.KnownClasses.Add(id);
-        Data.LearnedClasses.Add(id);
-        var items = ItemsToHand();
-        // a weapon of its kind, worn: the plainest there is (none to hand: bare-handed for now)
-        var weapon = items.OfType<CollectableWeapon>().Where(w => w.weapon && w.weapon.weaponCategory == cat)
-            .OrderBy(w => w.maxDamageRange.y).ThenBy(w => w.name).FirstOrDefault();
-        if (weapon) Wear(weapon);
-        // clothes: the first of its weight for each slot (as the NPCs pick theirs), else any for that slot
-        var armour = items.OfType<CollectableArmor>().Where(a => a.gear != null && a.gear.layerIndex >= 0).ToList();
-        int dressed = 0;
-        foreach (var slot in PresetSlots[i])
-        {
-            var piece = armour.FirstOrDefault(a => a.Weight == PresetWeight[i] && (a.gear.gearSlot & slot) != 0) ?? armour.FirstOrDefault(a => (a.gear.gearSlot & slot) != 0);
-            if (piece) { Wear(piece); dressed++; }
-        }
+        Data = MakePreset(i, out var weapon, out int dressed);
         Meta = new CompanionMeta { real = true };
         Write();
         Changed?.Invoke();
         Log.Info($"Companion: {name}, {what} ({cls}, {(weapon ? weapon.name : "no weapon to hand")}, {dressed} pieces of clothing)");
         return $"Companion: {name}, {what}, joins you" + (weapon ? "." : $" (bare-handed: no {cat} to hand yet; give one through Trade).")
             + (dressed == 0 ? " (No clothes to hand yet: the item list is still loading. Try again in a moment.)" : "");
+    }
+
+    /// <summary>A ready-made one's save (its class learned and on, its looks, a weapon of its kind and its clothes),
+    /// made but not kept anywhere: StartPreset keeps it; the Twitch hireling borrows it.</summary>
+    internal static PlayerData MakePreset(int i, out ItemData weapon, out int dressed)
+    {
+        var (name, cls, cat, _) = Presets[i];
+        var data = new PlayerData { playerName = name, equippedClass = cls, playerSetup = PresetLooks(i) };
+        string id = cls.GetEmbervilleID();
+        data.KnownClasses.Add(id);
+        data.LearnedClasses.Add(id);
+        var items = ItemsToHand();
+        // a weapon of its kind, worn: the plainest there is (none to hand: bare-handed for now)
+        weapon = items.OfType<CollectableWeapon>().Where(w => w.weapon && w.weapon.weaponCategory == cat)
+            .OrderBy(w => w.maxDamageRange.y).ThenBy(w => w.name).FirstOrDefault();
+        if (weapon) Wear(data, weapon);
+        // clothes: the first of its weight for each slot (as the NPCs pick theirs), else any for that slot
+        var armour = items.OfType<CollectableArmor>().Where(a => a.gear != null && a.gear.layerIndex >= 0).ToList();
+        dressed = 0;
+        foreach (var slot in PresetSlots[i])
+        {
+            var piece = armour.FirstOrDefault(a => a.Weight == PresetWeight[i] && (a.gear.gearSlot & slot) != 0) ?? armour.FirstOrDefault(a => (a.gear.gearSlot & slot) != 0);
+            if (piece) { Wear(data, piece); dressed++; }
+        }
+        return data;
     }
 
     /// <summary>Its character level: its base class's XP (as the character screen shows it), not its combat class's.</summary>

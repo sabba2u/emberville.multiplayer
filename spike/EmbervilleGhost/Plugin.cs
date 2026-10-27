@@ -31,10 +31,11 @@ namespace EmbervilleGhost;
 [BepInDependency(Integrations.NpcsGuid, BepInDependency.DependencyFlags.SoftDependency)]
 [BepInDependency(Integrations.WeatherGuid, BepInDependency.DependencyFlags.SoftDependency)]
 [BepInDependency(Integrations.CompanionGuid, BepInDependency.DependencyFlags.SoftDependency)]
+[BepInDependency(Integrations.ClassesGuid, BepInDependency.DependencyFlags.SoftDependency)]
 [BepInDependency("spike.emberville.bettertranslations", BepInDependency.DependencyFlags.SoftDependency)]   // (Better Translations: /lang)
 public class Plugin : BaseUnityPlugin, ITransportListener
 {
-    internal const string Version = "0.4.0";
+    internal const string Version = "0.5.0";
     internal const string ModName = "Sabba's Emberville Multiplayer Mod";
     internal static string Title => $"{ModName} v{Version}";
 
@@ -231,6 +232,7 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         Rory.Tick();
         NpcLooks.Tick();   // the host's NPCs (and Rory) look the same on every game
         GearDye.Tick();
+        SkillStackFix.Tick();
         TownPortal.Tick();
         AdeosGate.Tick();   // the Adeos room: a teammate at the shut gate is let in
         Homes.Tick();   // your /sethome places' portals

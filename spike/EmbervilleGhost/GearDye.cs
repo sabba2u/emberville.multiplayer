@@ -57,10 +57,26 @@ internal static class GearDye
 
     // ---- tinting ----
 
+    // (the tint goes on two ways: the sprite's own colour, and, for sprites drawn with a material that colours by its
+    // _Color (the game's clothes colour material ignores the sprite's colour), that colour for this sprite alone)
+    static readonly int ColorId = Shader.PropertyToID("_Color");
+    static MaterialPropertyBlock block;
+    static readonly HashSet<string> shadersSaid = new();
+
     public static void Tint(SpriteRenderer sr, Color c)
     {
         if (!sr) return;
         sr.color = new Color(c.r, c.g, c.b, sr.color.a);
+        var mat = sr.sharedMaterial;
+        if (mat && mat.HasProperty(ColorId))
+        {
+            block ??= new MaterialPropertyBlock();
+            sr.GetPropertyBlock(block);
+            block.SetColor(ColorId, mat.GetColor(ColorId) * new Color(c.r, c.g, c.b, 1f));
+            sr.SetPropertyBlock(block);
+        }
+        if (mat && shadersSaid.Add(mat.shader ? mat.shader.name : "?"))
+            NetLog.Info($"Dye: gear drawn with {mat.name} ({(mat.shader ? mat.shader.name : "?")}, _Color: {mat.HasProperty(ColorId)})", toast: false);
         if (!sr.GetComponent<Mark>()) sr.gameObject.AddComponent<Mark>();
     }
 
@@ -68,11 +84,19 @@ internal static class GearDye
     {
         if (!sr) return;
         sr.color = new Color(1f, 1f, 1f, sr.color.a);
+        if (sr.HasPropertyBlock())
+        {
+            block ??= new MaterialPropertyBlock();
+            sr.GetPropertyBlock(block);
+            block.Clear();
+            sr.SetPropertyBlock(block);
+        }
         var m = sr.GetComponent<Mark>();
         if (m) UnityEngine.Object.Destroy(m);
     }
 
     static readonly HashSet<SpriteRenderer> tinted = new();
+    static int lastCount = -1;
     static float next;
 
     /// <summary>Every frame (Plugin): our worn pieces in their dyes (a few times a second: gear changes swap sprites).</summary>
@@ -103,6 +127,7 @@ internal static class GearDye
             }
         }
         foreach (var sr in tinted) if (sr && !want.ContainsKey(sr)) Untint(sr);
+        if (want.Count != lastCount) { lastCount = want.Count; NetLog.Info($"Dye: {want.Count} sprites of worn gear dyed", toast: false); }
         tinted.Clear();
         foreach (var kv in want) { Tint(kv.Key, kv.Value); tinted.Add(kv.Key); }
     }
@@ -114,12 +139,15 @@ internal static class GearDye
     {
         try
         {
+            int n = 0;
             foreach (var cgs in __instance.gearSlots)
             {
                 if (cgs?.slot == null) continue;
                 var slot = cgs.gearSlot;
-                cgs.slot.SetRightClickCallback(() => Open(slot));
+                cgs.slot.SetRightClickCallback(() => { NetLog.Info($"Dye: right-click on the {slot} slot", toast: false); Open(slot); });
+                n++;
             }
+            if (!saidSlots) { saidSlots = true; NetLog.Info($"Dye: right-click ready on {n} gear slots", toast: false); }
         }
         catch (Exception e) { NetLog.Warn($"Dye: gear slots: {e.Message}", toast: false); }
     }
@@ -131,12 +159,15 @@ internal static class GearDye
     static int picked;
     static readonly List<Image> edges = new();
 
+    static bool saidSlots;
+
     static void Open(GearSlot slot)
     {
         var me = LocalPlayer.Get();
-        if (!me || me.characterStats == null) return;
+        if (!me || me.characterStats == null) { NetLog.Info("Dye: no player", toast: false); return; }
         var item = me.characterStats.EquippedItems.FirstOrDefault(x => SlotOf(x) is GearSlot s && (s & slot) != 0);
-        if (item == null) return;
+        if (item == null) { NetLog.Info($"Dye: nothing worn in the {slot} slot", toast: false); return; }
+        NetLog.Info($"Dye: opening for {item}", toast: false);
         dyeing = item;
         var now = DyeOf(item);
         picked = 0;
@@ -190,7 +221,7 @@ internal static class GearDye
 
     static void Dye()
     {
-        if (dyeing != null) SetDye(dyeing, picked == 0 ? null : Palette[picked].colour);
+        if (dyeing != null) { SetDye(dyeing, picked == 0 ? null : Palette[picked].colour); NetLog.Info($"Dye: {dyeing} dyed {(picked == 0 ? "back to none" : Palette[picked].name)}", toast: false); }
         Cancel();
     }
 

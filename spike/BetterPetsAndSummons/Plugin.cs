@@ -17,7 +17,7 @@ namespace BetterPetsAndSummons;
 public class Plugin : BaseUnityPlugin
 {
     public const string Guid = "spike.emberville.betterpetsandsummons";
-    public const string Version = "0.1.2";
+    public const string Version = "0.1.3";
     internal static ManualLogSource Logger_;
 
     void Awake()
@@ -55,6 +55,18 @@ public class Plugin : BaseUnityPlugin
 
     /// <summary>The two staffs, into your bag (the multiplayer mod's Better Combat tab: New Weapons).</summary>
     public static void GiveCluckStaff() => CluckStaff.Give();
+
+    /// <summary>Battle chickens with no staff (Better Streaming): how many came.</summary>
+    public static int SummonChickens(Vector3 at, int count, int level, float life, Color? tint = null, float size = 0f, string tag = null) => CluckStaff.Flock(at, count, level, life, tint, size, tag);
+
+    /// <summary>Summons for Better Streaming still about: "chickens", "golden" (its golden chickens), "guardians".</summary>
+    public static int SummonsAlive(string tag) => tag == "guardians" ? RisenStaff.GuardiansAlive() : CluckStaff.Alive(tag);
+
+    /// <summary>Those creatures rise beside there and fight for you (Better Streaming's guardians): how many came.</summary>
+    public static int RaiseGuardians(Vector3 at, System.Collections.Generic.IEnumerable<string> prefabs, float hp, float damage, float life) => RisenStaff.Guardians(at, prefabs, hp, damage, life);
+
+    /// <summary>Your pet golden for a while (Better Streaming): false: no pet out.</summary>
+    public static bool GoldenPet(float seconds) => Pet.Golden(seconds);
     public static void GiveRisenStaff() => RisenStaff.Give();
 
     /// <summary>Name tags and health bars over our pet and summons (ImGui, drawn by the multiplayer mod's HUD).</summary>

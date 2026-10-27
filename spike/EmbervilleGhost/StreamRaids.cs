@@ -60,12 +60,7 @@ internal static class StreamRaids
     /// <summary>Hooks.SpawnRaid: (around, how many, toughness, viewer) → any came?</summary>
     public static bool Raid(Vector3 around, int count, float tough, string viewer)
     {
-        var kinds = EnemiesManager.AllEnemies
-            .Where(e => e && !e.IsDead && e.gameObject.activeInHierarchy && !twitch.Contains(e) && !MiniBoss.IsBoss(e) && e.CanTakeDamage &&
-                        e.enemyType != EnemyType.None && !e.name.StartsWith("NPC_") &&
-                        ((Vector2)(e.transform.position - around)).magnitude < 40f)
-            .Select(e => MiniBoss.BaseName(e.name)).Distinct().ToList();
-        if (kinds.Count == 0) kinds = MiniBoss.Prefabs().Take(6).Select(e => MiniBoss.BaseName(e.name)).ToList();
+        var kinds = AreaKinds(around);
         int made = 0;
         for (int i = 0; i < count; i++)
         {
@@ -80,6 +75,19 @@ internal static class StreamRaids
         }
         NetLog.Info($"Twitch raid from {viewer}: {made} creatures ({string.Join(", ", kinds)})", toast: false);
         return made > 0;
+    }
+
+    /// <summary>The creature kinds that fit the area (alive within 40 units, not shielded, not bosses, not fauna or NPCs);
+    /// none: the arena's roster.</summary>
+    public static List<string> AreaKinds(Vector3 around)
+    {
+        var kinds = EnemiesManager.AllEnemies
+            .Where(e => e && !e.IsDead && e.gameObject.activeInHierarchy && !twitch.Contains(e) && !MiniBoss.IsBoss(e) && e.CanTakeDamage &&
+                        e.enemyType != EnemyType.None && !e.name.StartsWith("NPC_") &&
+                        ((Vector2)(e.transform.position - around)).magnitude < 40f)
+            .Select(e => MiniBoss.BaseName(e.name)).Distinct().ToList();
+        if (kinds.Count == 0) kinds = MiniBoss.Prefabs().Take(6).Select(e => MiniBoss.BaseName(e.name)).ToList();
+        return kinds;
     }
 
     /// <summary>Hooks.ChickenRaid: (around, waves, toughness, viewer) → started?</summary>

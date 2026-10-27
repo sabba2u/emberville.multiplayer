@@ -149,6 +149,7 @@ public static class CluckStaff
         public Enemy Target;
         public Vector3? RallyTo;
         public float RallyUntil;
+        public string Tag;       // (someone else's: Better Streaming's "chickens" / "golden")
     }
 
     static readonly List<Chicken> flock = new List<Chicken>();
@@ -186,6 +187,29 @@ public static class CluckStaff
         AddClucks(staffItem, 1);
         Bus<UIDamageEvent>.Invoke(new UIDamageEvent(0f, "Cluck!", at, DamageResult.Critical));
     }
+
+    /// <summary>Chickens for someone else (Better Streaming's battle chickens): no staff, no Kymia; as a staff of that
+    /// level makes them, for that long, around there (a tint: golden ones). How many came.</summary>
+    internal static int Flock(Vector3 at, int count, int level, float life, Color? tint = null, float size = 0f, string tag = null)
+    {
+        var kind = Pet.Kinds[0];
+        if (!PetBody.Available(kind) && !PetBody.Learn(kind)) return 0;
+        int made = 0;
+        for (int i = 0; i < count; i++)
+        {
+            var body = PetBody.Create(kind, at + (Vector3)(Random.insideUnitCircle * 1.5f));
+            if (body == null) continue;
+            float s = size > 0f ? size : SizeAt(level);
+            body.Scale(s);
+            if (tint.HasValue) body.SetTint(tint.Value);
+            flock.Add(new Chicken { Body = body, Born = Time.time, NextPeck = Time.time + 0.4f, Hp = HpAt(level), MaxHp = HpAt(level), Life = life, DamageMul = DamageMulAt(level), Size = s, Id = Summoned.NextId(), Tag = tag });
+            made++;
+        }
+        return made;
+    }
+
+    /// <summary>How many chickens with that tag are still about.</summary>
+    internal static int Alive(string tag) => flock.Count(c => c.Tag == tag && c.Body != null && c.Body.Alive && c.Hp > 0f);
 
     /// <summary>Our chickens, for the summons sync.</summary>
     public static IEnumerable<Summoned.Summon> Summons()

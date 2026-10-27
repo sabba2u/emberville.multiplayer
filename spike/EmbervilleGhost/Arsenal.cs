@@ -32,7 +32,13 @@ internal static class Arsenal
             if (these.Count == 0) Chat.System($"{cat}: (none in the game)", new ImGuiNET.Vector4(1f, 0.4f, 0.35f, 1f));   // (red: a line is one colour)
             else Chat.System($"{cat}: " + string.Join(", ", these));
         }
-        Chat.System($"{weapons.Count} weapons. /give name: one into your bag.");
+        Chat.System($"{weapons.Count} weapons. /give name: one into your bag. (Every one is in the log too: BepInEx/LogOutput.log.)");
+        // the log: every weapon, one a line (type, name, ID, tier, damage), for searching and copying
+        NetLog.Info($"---- /weapons: {weapons.Count} weapons in the game's catalogue ----", toast: false);
+        foreach (var w in weapons.OrderBy(w => w.weapon.weaponCategory.ToString()).ThenBy(NameOf))
+            NetLog.Info($"weapon | {w.weapon.weaponCategory} | {NameOf(w)} | {w.addressKey ?? w.name} | tier {(int)w.itemTier} | damage {w.minDamageRange.x}-{w.maxDamageRange.y} | asset {w.name}", toast: false);
+        foreach (WeaponCategory cat in Enum.GetValues(typeof(WeaponCategory)))
+            if (cat != WeaponCategory.None && !weapons.Any(w => w.weapon.weaponCategory == cat)) NetLog.Info($"weapon | {cat} | (none in the game)", toast: false);
     });
 
     public static void Give(string args) => WithItems(() =>
@@ -69,6 +75,18 @@ internal static class Arsenal
 
     /// <summary>Only the weapon types the game has finished: a weapon in the catalogue with its attacks. (The mastery screen
     /// breaks on one without: Throwing Weapons in the demo.) A broken one discovered earlier is taken back off.</summary>
+    /// <summary>/unlockmasteries all: every weapon type's card, the unfinished ones too (no finished weapon in the game:
+    /// their card may break the Masteries screen when opened; /lockmasteries takes them off again).</summary>
+    public static void UnlockAllMasteries()
+    {
+        if (!GameData.HasPlayerData) { Chat.System("Load into a world first."); return; }
+        var found = GameData.playerData.DiscoveredWeapons;
+        var added = new List<string>();
+        foreach (WeaponCategory cat in Enum.GetValues(typeof(WeaponCategory)))
+            if (cat != WeaponCategory.None && !found.Contains(cat)) { found.Add(cat); added.Add(cat.ToString()); }
+        Chat.System(added.Count > 0 ? $"Every mastery card unlocked, the unfinished ones too: {string.Join(", ", added)}. If one breaks the Masteries screen: /lockmasteries." : "Every mastery card is already unlocked.");
+    }
+
     public static void UnlockMasteries() => WithItems(() =>
     {
         if (!GameData.HasPlayerData) { Chat.System("Load into a world first."); return; }

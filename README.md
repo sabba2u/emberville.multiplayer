@@ -18,6 +18,7 @@ Not made or supported by Cygnus Cross.
 [The descent and the boss arena](#the-descent-and-the-boss-arena) · [Weapons and summons](#weapons-and-summons) ·
 [Your character](#your-character) · [Chests and loot](#chests-and-loot) · [Weather](#weather) ·
 [NPCs and quests](#npcs-and-quests) · [Fishing](#fishing) · [Pets](#pets) · [Companion: an AI adventurer](#companion-an-ai-adventurer) ·
+[The Ninja (early alpha)](#the-ninja-a-new-class-early-alpha) ·
 [Better Streaming](#better-streaming-twitch-plays-along) · [The mod menu](#the-mod-menu) · [Quality of life](#quality-of-life) ·
 [Keys](#keys) · [Commands](#commands) · [API](#api) · [Secrets](#secrets-the-dev-panel-test-arenas-and-the-estate) ·
 [Build](#build)
@@ -192,6 +193,28 @@ game itself moves it, swings its weapon, fires its arrows and spells, spends its
   back to that character.
 - Everyone sees everyone's companion in co-op.
 
+## The Ninja: a new class (early alpha)
+A new class (Better Classes), all about speed, things thrown and the Hunter's Hook. **Early alpha:** it works, but
+it's rough. The art is borrowed for now (arrows until there are throwing stars), and the numbers will change.
+- **Get it:** on the class screen, like any class (it takes the game's empty Archer slot), or `/ninja` in chat. For
+  testing, `/ninja` learns every Ninja skill at once, and as a Ninja you get **20 extra skill points** to place.
+- **Fast:** +15% move speed.
+- **Poison throws:** your bare hands throw instead of punching (the game's punch moves, the white swipe hidden): each
+  throw is a green poisoned arrow, **half the creature's health over 5 seconds** (a boss: a tenth). Kicks stay kicks.
+  Any weapon you hold works as usual.
+- **Smoke step:** your dodge vanishes in a puff of smoke and you reappear **1.5 times as far**, straight **through
+  walls, doors and fences** as long as there's floor on the other side.
+- **Skills** (put them on your skill bar from the class screen):
+  - **Hunter's Hook:** a foe it catches is dragged to you and stunned.
+  - **Fire Palm:** hold it for a cone of fire from your hands, burning until you let go or run out of Kymia. Burning
+    creatures panic and run, and the fire spreads from one to the next.
+  - **Chain Lightning:** jumps to the nearest creature, then on from each to the next, until everything on screen is
+    hit; each one is stunned for 5 seconds.
+  - **Spike Trap:** set at your feet (up to three at once, armed for 30 s): the first creature to step on one is hit
+    by sparkly steel spikes and held fast.
+- Without the mod, a Ninja save just has no class on; nothing else in your save changes.
+- Coming: Shadow Step (unseen for a while, to sneak past), throwing stars, more skills.
+
 ## Better Streaming: Twitch plays along
 For streamers: your Twitch chat sets off effects in your game, with the viewer's name on screen ("Twitch raid incoming
 by xxJoexx", their message under it).
@@ -208,8 +231,12 @@ by xxJoexx", their message under it).
   the tab and you get up where you fell instead, bag intact.
 - **Try it first:** every effect has a free **Test** button, and **Simulate a cheer** runs a pretend cheer through the
   same rules. Prices, caps, times and which effects are on are all in the tab.
-- Coming next: drunk, mirror world, upside down and other screen and control effects; Spin the Wheel and Roll the Dice;
-  channel-point rewards and chat votes.
+- **Messing with you** (30 s each, longer when bought again): backwards walking, can't stop walking, swapped buttons
+  (attack and dodge), random dodges, invisible; upside down, mirror world, sideways, dizzy, seasick, earthquake, zoomed
+  way in or out; drunk, colour blind, tunnel vision, lights out, retro; fists only (your own weapon comes back after); weapon
+  roulette (a random weapon from your bag every 30 s); random x2 / x3 (that many naughty effects at once); and a **lightning storm** (Better Weather's rain, strikes all around you;
+  your weather comes back after). They work the same on a controller.
+- Coming next: Spin the Wheel and Roll the Dice; channel-point rewards and chat votes.
 
 ## The mod menu
 **Insert**, or the **MODS** button on the title screen and the Esc menu (just above Options). Its tabs:

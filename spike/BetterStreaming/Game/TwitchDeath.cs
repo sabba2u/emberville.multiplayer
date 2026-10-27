@@ -29,8 +29,11 @@ internal static class TwitchDeath
     /// <summary>Twitch deaths cost nothing (else they're real).</summary>
     public static bool Free { get => free.Value; set => free.Value = value; }   // (up again during a cutscene or a menu: the controls come back once it's over)
 
-    /// <summary>Until then, poison ticks stop at 1 health (Twitch's poison, plus a moment's margin).</summary>
+    /// <summary>Until then, poison and burn ticks stop at 1 health (Twitch's, plus a moment's margin).</summary>
     public static float PoisonUntil = -100f;
+
+    /// <summary>Down, but getting up (a free Twitch death, second wind): not a death to count (the arena's runs).</summary>
+    public static bool Falling => falling;
 
     /// <summary>Hits in the next seconds count as Twitch's.</summary>
     public static void Mark(float seconds) => markedUntil = Mathf.Max(markedUntil, Time.time + seconds);
@@ -44,7 +47,7 @@ internal static class TwitchDeath
     static void RememberHit(PlayerMaster __instance, ref DamageData damageData)
     {
         if (!Local(__instance)) return;
-        // Twitch's poison takes you down to 1 health, never further (its ticks are effect hits)
+        // Twitch's poison and fire take you down to 1 health, never further (their ticks are effect hits)
         if (damageData.Result == DamageResult.Effect && Time.time < PoisonUntil && damageData.Amount >= __instance.currentHealth)
             damageData.Amount = System.Math.Max(0, __instance.currentHealth - 1);
         bool twitch = Time.time < markedUntil || (damageData.Aggressor is Object o && o && Hooks.IsTwitchCreature(o));
@@ -54,7 +57,9 @@ internal static class TwitchDeath
     [HarmonyPatch(typeof(PlayerMaster), nameof(PlayerMaster.Die)), HarmonyPrefix]
     static bool InsteadOfDying(PlayerMaster __instance)
     {
-        if (!Local(__instance) || !Recent) return true;
+        if (!Local(__instance)) return true;
+        if (NiceEffects.CatchDeath(__instance)) { FakeDeath(__instance, "Second wind!", "chat had your back: up you get, full health", health: 1f); return false; }   // (second wind: up again, whatever it was)
+        if (!Recent) return true;
         if (!Free)
         {
             // (for real: the game's death runs; mean effects take a breather while you're back on your feet)
@@ -88,8 +93,12 @@ internal static class TwitchDeath
     }
 
     /// <summary>Fall, and get up again where you fell (Tick). False: already down.</summary>
-    public static bool FakeDeath(PlayerMaster p)
+    static string upBanner, upSub;
+    static float upHealth = 0.5f;
+
+    public static bool FakeDeath(PlayerMaster p, string banner = "Twitch can't kill you for real", string sub = null, float health = 0.5f)
     {
+        upBanner = banner; upSub = sub; upHealth = health;
         if (!p || falling || p.IsDead) return false;
         Log.Info("Streaming: a Twitch death (free): down, then up again here");
         p.effectsHandler?.StopAllEffects();   // (as the game's death does: no poison left to kill you again)
@@ -117,7 +126,7 @@ internal static class TwitchDeath
         p.ChangeState(p.stateIdle);   // (after the dying state's own end; its death event was held back: no respawn)
         inputOwed = true;   // (the dying state switched the controls off; on again at once if nothing else holds them)
         p.currentHealth = 0;
-        p.RestoreHealthPercentage(0.5f);
-        Overlay.Banner("Twitch can't kill you for real", $"back up: a {Breather:0} s breather from mean effects");
+        p.RestoreHealthPercentage(upHealth);
+        Overlay.Banner(upBanner, upSub ?? $"back up: a {Breather:0} s breather from mean effects");
     }
 }

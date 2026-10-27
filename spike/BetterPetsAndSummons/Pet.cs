@@ -65,6 +65,25 @@ public static class Pet
     const float AggroRange = 3.5f, PeckRange = 0.8f, PeckCooldown = 1.1f;
 
     static PetBody mine;
+
+    /// <summary>Your pet, golden for a while (Better Streaming): false: no pet out.</summary>
+    internal static bool Golden(float seconds)
+    {
+        if (mine == null || !mine.Alive) return false;
+        goldUntil = Time.time + seconds;
+        mine.SetTint(new Color(1f, 0.82f, 0.3f));
+        return true;
+    }
+
+    static float goldUntil = -1f;
+
+    /// <summary>Every frame (Tick): the gold wears off (its own colour back).</summary>
+    static void GoldTick()
+    {
+        if (goldUntil < 0f || Time.time < goldUntil) return;
+        goldUntil = -1f;
+        if (mine != null && mine.Alive) mine.SetTint(Tint);
+    }
     static Enemy target;
     static float nextPeck, nextLook, lastHitAt;
     static Enemy lastHit;
@@ -283,6 +302,7 @@ public static class Pet
 
     public static void Tick()
     {
+        GoldTick();
         if (enabled.Value) Learn();
         var me = LocalPlayer.Get();
         if (!Out || !me || me.IsDead && mine == null) { Despawn(); return; }

@@ -300,7 +300,7 @@ internal static partial class Arena
         if (rushWave == 0) return;
         if (!Active) { EndRush("left"); return; }
         var me = LocalPlayer.Get();
-        if (me && me.IsDead) { EndRush("over: you fell"); return; }
+        if (me && me.IsDead) { if (Integrations.ReallyDead(me)) EndRush("over: you fell"); return; }   // (second wind: the rush goes on)
         if (rushPending)
         {
             if (Time.unscaledTime < rushNextAt) return;

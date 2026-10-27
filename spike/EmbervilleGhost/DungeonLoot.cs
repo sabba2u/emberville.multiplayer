@@ -211,6 +211,57 @@ internal static class DungeonLoot
 
     static bool Has(ItemData d, ItemCategory c) => (d.itemCategory & c) != 0;
 
+    /// <summary>An item's level requirement, as its card shows it (0: none).</summary>
+    internal static int LevelOf(ItemObject item)
+    {
+        var attrs = item?.randomValues?.intAttributes;
+        if (attrs == null) return 0;
+        foreach (var a in attrs) if (a != null && a.Key == ItemRandomValues.Attr.LevelRequirement) return a.Value;
+        return 0;
+    }
+
+    /// <summary>
+    /// A gift of gear (Better Streaming's loot drop): 3-5 pieces of equipment (weapons, armour, gear), each better than
+    /// what you have: its level requirement 1-3 above yours (70%), 3-6 above (20%) or 7-15 above (10%). Yours: the
+    /// average requirement of what you wear and hold (none: your level). For each piece, up to 40 candidates (any
+    /// equipment, any quality) are made and the one whose real requirement is nearest the target (at or over it first)
+    /// is kept. And 1-2 stacks of health or Kymia potions. No food, no materials. Null: the catalogue isn't loaded.
+    /// </summary>
+    internal static List<ItemObject> GearAndPotions(System.Random rng, int yourLevel)
+    {
+        if (pool == null || pool.Count == 0) return null;
+        var equipment = pool.Where(d => Has(d, ItemCategory.Weapon) || Has(d, ItemCategory.Armor) || Has(d, ItemCategory.Gear)).ToList();
+        var potions = pool.Where(d => d.name.StartsWith("Item_Potion")).ToList();   // (health and Kymia, small and big)
+        var list = new List<ItemObject>();
+        int gear = equipment.Count > 0 ? rng.Next(3, 6) : 0;
+        for (int i = 0; i < gear; i++)
+        {
+            double roll = rng.NextDouble();
+            int target = yourLevel + (roll < 0.7 ? rng.Next(1, 4) : roll < 0.9 ? rng.Next(3, 7) : rng.Next(7, 16));
+            ItemObject best = null;
+            int bestScore = int.MaxValue;
+            for (int tries = 0; tries < 40 && bestScore > 0; tries++)
+            {
+                var data = equipment[rng.Next(equipment.Count)];
+                ItemObject candidate;
+                try { candidate = new ItemObject(data, 1, rng.Next(0, 7)); }
+                catch (System.Exception) { continue; }
+                int level = LevelOf(candidate);
+                int score = level >= target ? level - target : (target - level) * 3;   // (a bit over beats a bit under)
+                if (score < bestScore) { bestScore = score; best = candidate; }
+            }
+            if (best != null) list.Add(best);
+        }
+        int stacks = potions.Count > 0 ? rng.Next(1, 3) : 0;
+        for (int i = 0; i < stacks; i++)
+        {
+            var data = potions[rng.Next(potions.Count)];
+            try { list.Add(new ItemObject(data, rng.Next(1, 4), -1)); }
+            catch (System.Exception e) { NetLog.Warn($"Loot drop {data.addressKey}: {e.Message}", toast: false); }
+        }
+        return list;
+    }
+
     /// <summary>Our chests: our contents instead of the prefab's loot table.</summary>
     [HarmonyPatch(typeof(Chest), nameof(Chest.CreateChestItems))]
     static class FillPatch

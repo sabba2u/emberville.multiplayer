@@ -182,7 +182,7 @@ internal static class HunterHook
         me.rb.MovePosition(me.transform.position + to / d * Mathf.Min(PullSpeed * Time.fixedDeltaTime, d - StopShort));
     }
 
-    static bool Throw(PlayerMaster me)
+    internal static bool Throw(PlayerMaster me)
     {
         var cam = Camera.main;
         if (!cam) return false;

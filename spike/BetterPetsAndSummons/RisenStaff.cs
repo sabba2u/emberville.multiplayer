@@ -260,6 +260,7 @@ public static class RisenStaff
         public Enemy Target;
         public Vector3? RallyTo;
         public float RallyUntil;
+        public bool Guardian;    // (Better Streaming's)
     }
 
     static readonly List<Risen> risen = new List<Risen>();
@@ -308,6 +309,29 @@ public static class RisenStaff
         corpses.Remove(best);
         Bus<UIDamageEvent>.Invoke(new UIDamageEvent(0f, "Rise!", best.At, DamageResult.Critical));
     }
+
+    /// <summary>Risen for someone else (Better Streaming's guardians): no corpse, no staff, no Kymia; each of those
+    /// creatures rises beside there (ghostly green) and fights for you for that long. How many came.</summary>
+    internal static int Guardians(Vector3 at, IEnumerable<string> prefabs, float hp, float damage, float life)
+    {
+        int made = 0;
+        foreach (var prefab in prefabs)
+        {
+            var kind = new PetKind("risen_" + prefab, prefab, prefab, prefab);
+            if (!PetBody.Available(kind) && !PetBody.Learn(kind)) continue;
+            var spot = at + (Vector3)(Random.insideUnitCircle.normalized * Random.Range(1.2f, 2.2f));
+            var body = PetBody.Create(kind, spot);
+            if (body == null) continue;
+            body.SetTint(Ghost);
+            risen.Add(new Risen { Body = body, Label = Pretty(prefab) + " (guardian)", Born = Time.time, Hp = hp, MaxHp = hp, Damage = damage, NextHit = Time.time + 0.6f, Life = life, Id = Summoned.NextId(), Guardian = true });
+            Bus<UIDamageEvent>.Invoke(new UIDamageEvent(0f, "Rise!", spot, DamageResult.Critical));
+            made++;
+        }
+        return made;
+    }
+
+    /// <summary>How many of Better Streaming's guardians are still about.</summary>
+    internal static int GuardiansAlive() => risen.Count(r => r.Guardian && r.Body != null && r.Body.Alive && r.Hp > 0f);
 
     static string Pretty(string prefab) => BaseName(prefab).Replace("Mob_", "").Replace("Acolyte_", "").Replace('_', ' ');
 

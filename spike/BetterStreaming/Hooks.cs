@@ -23,6 +23,27 @@ public static class Hooks
     public static Func<Enemy, bool> IsBoss = _ => false;
     /// <summary>A mystery chest near there: (around, a trap?, viewer) → placed? A trap springs a raid when opened.</summary>
     public static Func<Vector3, bool, string, bool> SpawnChest;
+    /// <summary>The game's whole item catalogue once loaded (the multiplayer mod loads it), else null.</summary>
+    public static Func<System.Collections.Generic.IReadOnlyList<ItemData>> Catalogue = () => null;
+    /// <summary>The storm's weather: rain on (true: done; false: no weather mod), and the weather before it put back.</summary>
+    public static Func<bool> StormOn;
+    public static Action StormOff;
+    /// <summary>A lightning strike there (to look at: the damage is ours).</summary>
+    public static Action<Vector3> Strike;
+    /// <summary>Battle chickens fighting for you: (around, how many, seconds) → how many came.</summary>
+    public static Func<Vector3, int, float, int> BattleChickens;
+    /// <summary>Creatures of the area rising to fight for you: (around, how many, seconds, viewer) → how many came.</summary>
+    public static Func<Vector3, int, float, string, int> Guardians;
+    /// <summary>Your pet golden for a while: (seconds) → done? (false: no pet out)</summary>
+    public static Func<float, bool> GoldenPet;
+    /// <summary>A big golden chicken by you (no pet out): (where, seconds) → how many came.</summary>
+    public static Func<Vector3, float, int> GoldenChicken;
+    /// <summary>Our summons still about: "chickens", "golden", "guardians".</summary>
+    public static Func<string, int> SummonsAlive;
+    /// <summary>A chest's worth of loot, as a descent floor of that depth rolls it.</summary>
+    public static Func<int, System.Collections.Generic.IEnumerable<ItemObject>> RollLoot;
+    /// <summary>A hireling companion for a while (Better Companions): (viewer, seconds) → empty: done; else why not.</summary>
+    public static Func<string, float, string> Hire;
     /// <summary>A message for the player: the chat window there; the game's notification list here.</summary>
     public static Action<string> Say = text => Log.Note(text);
 }

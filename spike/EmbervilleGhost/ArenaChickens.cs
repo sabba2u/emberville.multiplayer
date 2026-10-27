@@ -100,7 +100,7 @@ internal static partial class Arena
         if (!Active) { EndChickens("over (you left)"); return; }
         var me = LocalPlayer.Get();
         if (!me) return;
-        if (me.IsDead) { EndChickens("over"); return; }
+        if (me.IsDead) { if (Integrations.ReallyDead(me)) EndChickens("over"); return; }   // (a fall you get up from: the run goes on)
         hens.RemoveAll(h => !h.E || h.E.IsDead);
         // the traps: spikes after a minute, the arrows after three
         float t = Time.time - chickenStart;

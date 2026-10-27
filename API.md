@@ -41,6 +41,7 @@ Press **Enter**, type the command with a `/` in front, press Enter. `/help` list
 | `/hook` | A Hunter's Hook. (`/hookshout` plays its shout.) |
 | `/clucking` | A Staff of Clucking. |
 | `/risen` | A Staff of the Risen. |
+| `/ninja` | Become a Ninja (Better Classes, early alpha): the class on and every Ninja skill learnt. |
 | `/pet on`, `/pet off`, `/pet` | Pets on / off; befriend, call or send home your pet. |
 | `/pet list`, `/pet <kind>`, `/pet name <name>`, `/pet color <colour>`, `/pet scan` | Kinds, switch, rename, recolour, what's loaded. |
 

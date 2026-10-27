@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using BepInEx.Bootstrap;
 using UnityEngine;
@@ -22,6 +23,7 @@ internal static class Integrations
     public const string WeatherGuid = "spike.emberville.betterweather";
     public const string CompanionGuid = "spike.emberville.bettercompanions";
     public const string StreamingGuid = "spike.emberville.betterstreaming";
+    public const string ClassesGuid = "spike.emberville.betterclasses";
 
     public static bool HasCombat { get; private set; }
     public static bool HasLooting { get; private set; }
@@ -30,6 +32,7 @@ internal static class Integrations
     public static bool HasWeather { get; private set; }
     public static bool HasCompanion { get; private set; }
     public static bool HasStreaming { get; private set; }
+    public static bool HasClasses { get; private set; }
 
     /// <summary>From Plugin.Awake (they load first: soft dependencies).</summary>
     public static void Init()
@@ -46,11 +49,13 @@ internal static class Integrations
         if (HasCompanion) CompanionHooks();
         HasStreaming = Chainloader.PluginInfos.ContainsKey(StreamingGuid);
         if (HasStreaming) StreamingHooks();
+        HasClasses = Chainloader.PluginInfos.ContainsKey(ClassesGuid);
+        if (HasClasses) ClassesHooks();
         if (translations != null) TranslationsHooks();
         NetLog.Info("Split-out mods: " + string.Join(", ", new List<string> {
             HasCombat ? "Better Combat" : null, HasLooting ? "Better Looting" : null, HasPets ? "Better Pets and Summons" : null,
-            HasNpcs ? "Better NPCs and Quests" : null, HasWeather ? "Better Weather" : null, HasCompanion ? "Better Companions" : null, HasStreaming ? "Better Streaming" : null }.FindAll(x => x != null)) +
-            (HasCombat || HasLooting || HasPets || HasNpcs || HasWeather || HasCompanion || HasStreaming ? "" : "none"), toast: false);
+            HasNpcs ? "Better NPCs and Quests" : null, HasWeather ? "Better Weather" : null, HasCompanion ? "Better Companions" : null, HasStreaming ? "Better Streaming" : null, HasClasses ? "Better Classes" : null }.FindAll(x => x != null)) +
+            (HasCombat || HasLooting || HasPets || HasNpcs || HasWeather || HasCompanion || HasStreaming || HasClasses ? "" : "none"), toast: false);
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
@@ -109,6 +114,7 @@ internal static class Integrations
         if (HasPets && PetsCommand(cmd)) return true;
         if (HasWeather && WeatherCommand(cmd)) return true;
         if (HasCompanion && CompanionCommand(cmd)) return true;
+        if (HasClasses && ClassesCommand(cmd)) return true;
         if (chestsCommand != null && chestsCommand.Invoke(null, new object[] { cmd }) is bool ok && ok) return true;   // /stash (Better Chests)
         if (translationsCommand != null && translationsCommand.Invoke(null, new object[] { cmd }) is bool lang && lang) return true;   // /lang (Better Translations)
         return false;
@@ -139,6 +145,16 @@ internal static class Integrations
     [MethodImpl(MethodImplOptions.NoInlining)] static bool PetsCommand(string c) => BetterPetsAndSummons.Plugin.Command(c);
     [MethodImpl(MethodImplOptions.NoInlining)] static bool WeatherCommand(string c) => BetterWeather.Plugin.Command(c);
     [MethodImpl(MethodImplOptions.NoInlining)] static bool CompanionCommand(string c) => BetterCompanions.Plugin.Command(c);
+    [MethodImpl(MethodImplOptions.NoInlining)] static bool ClassesCommand(string c) => BetterClasses.Plugin.Command(c);
+
+    /// <summary>Better Classes: our chat, and the Ninja's hook skill throws our Hunter's Hook (walls, guardians, online).</summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    static void ClassesHooks()
+    {
+        BetterClasses.Hooks.Say = Chat.System;
+        BetterClasses.Hooks.ThrowHook = HunterHook.Throw;
+        BetterClasses.Hooks.IsFriendly = EnemySync.LocalOnly;   // (pets, summons, companions' own)
+    }
 
     /// <summary>Better Companions: our chat, busy and typing checks, and which creatures are story NPCs.</summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
@@ -167,9 +183,75 @@ internal static class Integrations
         BetterStreaming.Hooks.ChickenRaid = StreamRaids.Chickens;
         BetterStreaming.Hooks.SpawnChest = StreamRaids.Chest;
         BetterStreaming.Hooks.IsBoss = MiniBoss.IsBoss;
+        BetterStreaming.Hooks.Catalogue = () => { DungeonLoot.Preload(); return DungeonLoot.Pool; };   // (a weapon to lend)
+        if (HasWeather) StormHooks();
+        if (HasPets) StreamPetHooks();
+        if (HasCompanion) HireHook();
+        BetterStreaming.Hooks.RollLoot = _ =>
+        {
+            DungeonLoot.Preload();
+            return DungeonLoot.GearAndPotions(new System.Random(UnityEngine.Random.Range(1, int.MaxValue)), YourGearLevel());   // (better than yours: no food)
+        };
         BetterStreaming.Hooks.IsTwitchCreature = StreamRaids.IsTwitch;
         BetterStreaming.Hooks.IsFriendly = EnemySync.LocalOnly;   // (pets, summons, companions' own: chain lightning leaves them)
         BetterStreaming.Hooks.Say = Chat.System;
+    }
+
+    /// <summary>Better Streaming's lightning storm: Better Weather's rain (everyone's), its strikes, the weather put back.</summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    static void StormHooks()
+    {
+        BetterWeather.Kind before = BetterWeather.Kind.Clear;
+        BetterWeather.WeatherOptions beforeOptions = null;
+        BetterStreaming.Hooks.StormOn = () =>
+        {
+            before = BetterWeather.Plugin.Current;
+            beforeOptions = BetterWeather.Plugin.CurrentOptions;
+            BetterWeather.Plugin.SetWeather(BetterWeather.Kind.Rain);
+            return true;
+        };
+        BetterStreaming.Hooks.StormOff = () =>
+        {
+            if (beforeOptions != null) BetterWeather.Plugin.SetWeather(before, beforeOptions);
+            else BetterWeather.Plugin.SetWeather(before);
+        };
+        BetterStreaming.Hooks.Strike = BetterWeather.Plugin.StrikeAt;
+    }
+
+    /// <summary>Better Streaming's helpers from Better Pets and Summons: battle chickens, guardians, the golden pet.</summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    static void StreamPetHooks()
+    {
+        BetterStreaming.Hooks.BattleChickens = (at, count, life) => BetterPetsAndSummons.Plugin.SummonChickens(at, count, 10, life, tag: "chickens");
+        BetterStreaming.Hooks.SummonsAlive = BetterPetsAndSummons.Plugin.SummonsAlive;
+        BetterStreaming.Hooks.Guardians = (at, count, life, viewer) =>
+        {
+            var kinds = StreamRaids.AreaKinds(at);
+            var picks = Enumerable.Range(0, count).Select(_ => kinds[UnityEngine.Random.Range(0, kinds.Count)]).ToList();
+            return BetterPetsAndSummons.Plugin.RaiseGuardians(at, picks, 60f, 8f, life);
+        };
+        BetterStreaming.Hooks.GoldenPet = BetterPetsAndSummons.Plugin.GoldenPet;
+        BetterStreaming.Hooks.GoldenChicken = (at, life) =>
+            BetterPetsAndSummons.Plugin.SummonChickens(at, 1, 15, life, new UnityEngine.Color(1f, 0.82f, 0.3f), 1.6f, "golden");   // (no pet out: a golden chicken)   // (no pet out: a golden chicken)
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    static void HireHook() => BetterStreaming.Hooks.Hire = BetterCompanions.Plugin.Hire;   // (Better Streaming's hireling)
+
+    /// <summary>Down for real? (Not a fall Better Streaming gets you up from: second wind, a free Twitch death.)</summary>
+    public static bool ReallyDead(PlayerMaster me) => me && me.IsDead && !(HasStreaming && StreamingGettingUp());
+
+    [MethodImpl(MethodImplOptions.NoInlining)] static bool StreamingGettingUp() => BetterStreaming.Plugin.GettingUp;
+
+    /// <summary>The level of what you have: the average level requirement of your worn and held gear (none: your level).</summary>
+    static int YourGearLevel()
+    {
+        var me = LocalPlayer.Get();
+        if (!me || me.characterStats == null) return 1;
+        var levels = me.characterStats.EquippedItems.Select(DungeonLoot.LevelOf).Where(l => l > 0).ToList();
+        if (levels.Count > 0) return Mathf.RoundToInt((float)levels.Average());
+        var baseClass = me.characterStats.baseClass;
+        return baseClass && GameData.HasPlayerData ? Mathf.Max(1, GameData.playerData.GetCurrentLevel(baseClass.playerClassType)) : 1;
     }
 
     /// <summary>Better Streaming's tab.</summary>
@@ -286,8 +368,12 @@ internal static class Integrations
 
     // ---- every frame: teammates' pets and summons ----
 
+    static bool catalogueAsked;
+
     public static void Tick()
     {
+        // the game's item list, loading in the background once you're in a world (companions' and Twitch's gear need it)
+        if (!catalogueAsked && LocalPlayer.Get()) { catalogueAsked = true; DungeonLoot.Preload(); }
         if (HasCompanion) CompanionSync.Tick();
         StreamRaids.Tick();   // (Better Streaming's raids: the chickens walked at you)
         if (!HasPets) return;

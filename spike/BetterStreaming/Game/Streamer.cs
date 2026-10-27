@@ -52,6 +52,8 @@ internal static class Streamer
             var bits = config.Bind(s, "Bits", d.Bits, $"{d.Name}: its price in Bits");
             var cap = config.Bind(s, "CapBits", d.CapBits, $"{d.Name}: the most Bits it grows with (scaling effects)");
             var secs = config.Bind(s, "Seconds", d.Seconds, $"{d.Name}: how long it lasts (timed effects)");
+            if (d.Id == "roulette" && Mathf.Approximately(secs.Value, 120f)) secs.Value = 90f;   // (its old length, never changed: the new one)
+            if ((d.Id == "kymia" || d.Id == "gold" || d.Id == "shield") && secs.Value <= 0f) secs.Value = 30f;   // (it was once instant: now it lasts, and must end)
             settings[d.Id] = (on, bits, cap, secs);
             Defs.Add(d);
         }
@@ -83,6 +85,10 @@ internal static class Streamer
     /// <summary>The effects chat can buy: switched on, and able to happen at all (a raid needs the pack). Whether it can
     /// happen right now (a player there, not loading) is the queue's business: a cheer bought now waits.</summary>
     public static List<EffectDef> Buyable() => Defs.Where(d => d.Enabled && Effects.TryGetValue(d.Id, out var fx) && fx.Available(out _)).ToList();
+
+    /// <summary>An effect over before its time (second wind used, a weapon lock ended by a scene change): its timer and
+    /// its buff icon gone.</summary>
+    public static void EndEarly(string id) { Timers.Stop(id); BuffIcons.Hide(id); }
 
     /// <summary>Into the queue (a paid one, a test, a simulated cheer).</summary>
     public static void Submit(Pending p)
@@ -116,14 +122,18 @@ internal static class Streamer
     {
         while (TwitchSocket.Events.TryDequeue(out var e)) OnTwitch(e);
         foreach (var id in Timers.Expired())
+        {
+            BuffIcons.Hide(id);
             if (Effects.TryGetValue(id, out var fx)) { try { fx.Stop(); } catch (Exception ex) { Log.Warn($"Streaming: ending {id}: {ex.Message}"); } }
+        }
         if (Now() < holdUntil) return;
         var next = Queue.Next(CanFight());
         if (next == null) return;
         Fire(next);
     }
 
-    static void Fire(Pending p)
+    /// <summary>One off now (its banner, ring, word and timer), past the queue (the random packs' picks).</summary>
+    internal static void Fire(Pending p)
     {
         var d = Def(p.EffectId);
         if (d == null || !Effects.TryGetValue(p.EffectId, out var fx)) { Log.Warn($"Streaming: {p.EffectId} isn't there"); return; }
@@ -133,7 +143,7 @@ internal static class Streamer
         if (fx.Ready(out why))
         {
             // (timed: started first, so a second one extends it and the effect reads its whole time)
-            if (d.Seconds > 0f) Timers.Start(d.Id, d.Seconds * (d.Scales ? size : 1f));
+            if (d.Seconds > 0f) Timers.Start(d.Id, d.Seconds * (d.Scales && d.LongerWithBits ? size : 1f));
             try { ok = fx.Fire(p, size); if (!ok) why = "nothing could come here"; }
             catch (Exception e) { why = e.Message; Log.Warn($"Streaming: {d.Name} went wrong: {e}"); }
             if (!ok && !wasOn) Timers.Stop(d.Id);
@@ -146,6 +156,7 @@ internal static class Streamer
             return;
         }
         Save();
+        if (d.Seconds > 0f) BuffIcons.Show(d.Id, d.Name, Timers.Left(d.Id));   // (the game's buff list on the left: name, icon, time)
         if (BetterStreaming.Effects.Player)
         {
             BetterStreaming.Effects.Glow(BetterStreaming.Effects.Player, BetterStreaming.Effects.ColourOf(d.Id));   // (the ring under you, in the effect's colour)

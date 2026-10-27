@@ -67,8 +67,8 @@ public class CheerRouterTests
     [Fact]
     public void AffordableButNoScalingBuysDearestFixed()
     {
-        // 250 Bits: no keyword, no exact price, no scaling effect affordable (chickens 300): the dearest it can buy (poison 200)
-        var p = CheerRouter.Route(All(), 250, "");
+        // 205 Bits: no keyword, no exact price, no scaling effect affordable (chickens 300): the dearest it can buy (poison 200)
+        var p = CheerRouter.Route(All(), 205, "");
         Assert.Equal("poison", p.Effect.Id);
         Assert.Equal(1f, p.Size);
     }

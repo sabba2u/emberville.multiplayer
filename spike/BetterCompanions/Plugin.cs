@@ -14,7 +14,7 @@ namespace BetterCompanions;
 public class Plugin : BaseUnityPlugin
 {
     public const string Guid = "spike.emberville.bettercompanions";
-    public const string Version = "0.2.0";
+    public const string Version = "0.2.1";
     internal static ManualLogSource Logger_;
     static BepInEx.Configuration.ConfigEntry<int> copyFrom;
 
@@ -46,6 +46,8 @@ public class Plugin : BaseUnityPlugin
     {
         try { GearScreen.Tick(Singleton<GameManager>.HasMain ? Singleton<GameManager>.main.player : null); }   // (first, and on its own: the mode must always be able to end)
         catch (System.Exception e) { Logger.LogWarning(e); }
+        try { Hireling.Tick(); }
+        catch (System.Exception e) { Logger.LogWarning(e); }
         try { Companion.Tick(); }
         catch (System.Exception e) { Logger.LogWarning(e); }
         try { CompanionPanel.Tick(Singleton<GameManager>.HasMain ? Singleton<GameManager>.main.player : null); CompanionPanel.Attributes.Tick(); CompanionPanel.Classes.Tick(); CompanionPanel.Powers.Tick(); }
@@ -57,6 +59,10 @@ public class Plugin : BaseUnityPlugin
     /// <summary>Its power slot i (0-3), for its card: the skill's icon (none: empty), cooldown left / total in seconds,
     /// running now, and Time.time when it last cast it.</summary>
     /// <summary>Its card's slot i clicked: that power now. Empty: done; else why not.</summary>
+    /// <summary>A hireling for that long (Better Streaming): yours steps out, a ready-made adventurer named after the
+    /// viewer, at your level + 5, its tree learned and powers on, teleports in; then out, and yours back. Empty: done.</summary>
+    public static string Hire(string viewer, float seconds) => Hireling.Hire(viewer, seconds);
+
     public static string UseCompanionPower(int i) => RealSkills.UseNow(RealPlayer.Current, i);
 
     /// <summary>The powers it could put in a slot (active ones with points on its own tree): icon, name, rank, ID.</summary>

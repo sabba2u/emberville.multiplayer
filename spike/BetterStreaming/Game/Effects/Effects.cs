@@ -9,8 +9,18 @@ internal static class Effects
 {
     public static void Register()
     {
-        foreach (IEffect fx in new IEffect[] { new Heal(), new Poison(), new InstantDeath(), new ChainLightning(), new Raid(), new ChickenRaid(), new Freeze(), new MysteryChest() })
+        foreach (IEffect fx in new IEffect[] { new Heal(), new Status("poison", EffectType.Poison), new Status("fire", EffectType.Burn, me => FireSound.Start(me), me => FireSound.Stop(me)), new InstantDeath(), new ChainLightning(), new Raid(), new ChickenRaid(), new Freeze(), new MysteryChest() })
             Streamer.Effects[fx.Id] = fx;
+        Controls.Register();
+        CameraFx.Register();
+        Filters.Register();
+        FakeCursors.Register();
+        WeaponLock.Register();
+        Streamer.Effects["roulette"] = new WeaponRoulette();
+        NiceEffects.Register();
+        Streamer.Effects["random2"] = new RandomPack("random2", 2);
+        Streamer.Effects["random3"] = new RandomPack("random3", 3);
+        Streamer.Effects["storm"] = new Storm();
     }
 
     public static PlayerMaster Player => Singleton<GameManager>.HasMain ? Singleton<GameManager>.main.player : null;
@@ -36,6 +46,22 @@ internal static class Effects
         catch (System.Exception e) { Log.Warn($"Streaming: the glow: {e.Message}"); }
     }
 
+    /// <summary>One of the game's own extra effects on you (LifeRecovery, Spawn...), on a copy so it cuts nothing off.</summary>
+    public static void Burst(PlayerMaster p, string trigger)
+    {
+        var source = p ? p.extraFxAnimator : null;
+        if (!source) return;
+        try
+        {
+            var copy = Object.Instantiate(source, source.transform.parent);
+            copy.gameObject.name = "BS_Burst";
+            copy.gameObject.SetActive(true);
+            copy.SetTrigger(trigger);
+            Object.Destroy(copy.gameObject, 2f);
+        }
+        catch (System.Exception e) { Log.Warn($"Streaming: {trigger}: {e.Message}"); }
+    }
+
     public static readonly Color Green = new Color(0.35f, 1f, 0.3f), Red = new Color(1f, 0.25f, 0.25f), Ice = new Color(0.55f, 0.85f, 1f);
 
     /// <summary>The word over you when it lands (the game's floating combat text, as "Stunned" is); null: none.</summary>
@@ -49,6 +75,15 @@ internal static class Effects
         "chickens" => "Chickens!",
         "freeze" => "Frozen",
         "chest" => "A chest!",
+        "backwards" => "Backwards!", "autowalk" => "Can't stop!", "swapped" => "Buttons swapped", "randomdodge" => "Twitchy!",
+        "invisible" => "Invisible", "upsidedown" => "Upside down!", "mirror" => "Mirrored", "sideways" => "Sideways!",
+        "dizzy" => "Dizzy...", "seasick" => "Seasick", "earthquake" => "Earthquake!", "zoomin" => "Too close!", "zoomout" => "So far away",
+        "drunk" => "*hic*", "colourblind" => "Colour blind", "tunnel" => "Tunnel vision", "lightsout" => "Lights out!", "retro" => "Retro!", "cursors" => "Which one is me?",
+        "fists" => "Fists only!", "fire" => "On fire!", "storm" => "Storm!", "roulette" => "Weapon roulette!", "random2" => "Double trouble!", "random3" => "Triple trouble!",
+        "shield" => "Shielded!", "kymia" => "Infinite Kymia!", "regen" => "Regenerating", "haste" => "Haste!", "berserk" => "BERSERK!",
+        "smite" => "Smite!", "battlechickens" => "Bawk bawk!", "guardians" => "Guardians!", "secondwind" => "Second wind ready",
+        "loot" => "Loot!", "gold" => "Gold!", "goldenpet" => "Golden!", "fireworks" => "Woo!",
+        "shock" => "Shocked!", "hireling" => "Reinforcements!", "bleed" => "Bleeding!",
         _ => null,
     };
 
@@ -71,6 +106,18 @@ internal static class Effects
         "chickens" => new Color(1f, 0.8f, 0.3f),
         "freeze" => Ice,
         "chest" => new Color(1f, 0.82f, 0.35f),
+        "backwards" or "autowalk" or "swapped" or "randomdodge" => new Color(1f, 0.6f, 0.2f),          // controls: orange
+        "upsidedown" or "mirror" or "sideways" or "dizzy" or "seasick" or "earthquake" or "zoomin" or "zoomout" => new Color(1f, 0.45f, 0.75f),   // the camera: pink
+        "drunk" => new Color(0.95f, 0.75f, 0.3f), "colourblind" => new Color(0.75f, 0.75f, 0.75f), "tunnel" or "lightsout" => new Color(0.55f, 0.5f, 0.7f),
+        "retro" => new Color(0.62f, 0.78f, 0.42f), "invisible" => new Color(0.85f, 0.9f, 1f),
+        "fists" or "roulette" => new Color(0.9f, 0.35f, 0.3f),
+        "fire" => new Color(1f, 0.45f, 0.1f),
+        "random2" or "random3" => new Color(0.4f, 1f, 0.9f),
+        "shield" => new Color(0.5f, 0.85f, 1f), "kymia" => new Color(0.35f, 0.55f, 1f), "regen" => new Color(0.5f, 1f, 0.5f),
+        "haste" => new Color(1f, 1f, 0.45f), "berserk" => new Color(1f, 0.15f, 0.15f), "smite" => new Color(1f, 0.95f, 0.6f),
+        "battlechickens" => new Color(1f, 0.85f, 0.5f), "guardians" => new Color(0.55f, 1f, 0.6f), "secondwind" => new Color(1f, 0.75f, 0.85f),
+        "loot" or "gold" or "goldenpet" => new Color(1f, 0.82f, 0.3f), "fireworks" => new Color(1f, 0.5f, 1f),
+        "shock" => new Color(0.6f, 0.85f, 1f), "hireling" => new Color(0.4f, 0.9f, 0.85f), "bleed" => new Color(0.85f, 0.1f, 0.15f), "storm" => new Color(0.45f, 0.55f, 1f),
         _ => Color.white,
     };
 
@@ -92,27 +139,38 @@ internal sealed class Heal : IEffect
     public void Stop() { }
 }
 
-/// <summary>The game's poison, for the effect's time: it takes you down to 1 health, never further (TwitchDeath).</summary>
-internal sealed class Poison : IEffect
+/// <summary>
+/// One of the game's damage-over-time statuses on you, for the effect's time, with the game's own look (poison: green
+/// bubbles; burn: flames): poison, and on fire. They take you down to 1 health, never further (TwitchDeath).
+/// </summary>
+internal sealed class Status : IEffect
 {
-    public string Id => "poison";
+    public string Id { get; }
+    readonly EffectType type;
+
+    readonly System.Action<PlayerMaster> landing, ending;
+
+    public Status(string id, EffectType type, System.Action<PlayerMaster> landing = null, System.Action<PlayerMaster> ending = null)
+    { Id = id; this.type = type; this.landing = landing; this.ending = ending; }
+
     public bool Available(out string why) { why = ""; return true; }
     public bool Ready(out string why) => Effects.HavePlayer(out why);
 
-    /// <summary>For as long as the timer says (a second poison extends it: the game's reapply restarts the clock with
-    /// the first one's length, so the poison it has is given the whole time left).</summary>
+    /// <summary>For as long as the timer says (a second one extends it: the game's reapply restarts the clock with
+    /// the first one's length, so the status it has is given the whole time left).</summary>
     public bool Fire(Pending p, float size)
     {
         var fx = Effects.Player.effectsHandler;
         if (!fx) return false;
+        landing?.Invoke(Effects.Player);
         float secs = Mathf.Max(1f, (float)Streamer.Timers.Left(Id));
-        TwitchDeath.PoisonUntil = Time.time + secs + 2f;
-        fx.HandleEffect(new DamageEffect { Effect = EffectType.Poison, Chance = 100f, DamagePerSec = Mathf.RoundToInt(3f * size), Duration = secs });
-        foreach (var e in fx.effects) if (e != null && !e.IsRemoved && e.Type == EffectType.Poison) e.Duration = secs;
+        TwitchDeath.PoisonUntil = Mathf.Max(TwitchDeath.PoisonUntil, Time.time + secs + 2f);
+        fx.HandleEffect(new DamageEffect { Effect = type, Chance = 100f, DamagePerSec = Mathf.RoundToInt(3f * size), Duration = secs });
+        foreach (var e in fx.effects) if (e != null && !e.IsRemoved && e.Type == type) e.Duration = secs;
         return true;
     }
 
-    public void Stop() { }
+    public void Stop() { var me = Effects.Player; if (me) ending?.Invoke(me); }
 }
 
 /// <summary>Down you go: for real, unless the streamer made Twitch deaths free.</summary>
@@ -164,7 +222,10 @@ internal sealed class ChainLightning : IEffect
     }
 
     /// <summary>A jagged bolt from you to it: two lines (a blue glow, a white core), re-jagged once, gone in 0.2 s.</summary>
-    static void Bolt(Component from, Component to)
+    static void Bolt(Component from, Component to) => BoltAt(Middle(from), Middle(to));
+
+    /// <summary>A jagged bolt between two points (a bolt from the sky: Shocked, without Better Weather).</summary>
+    internal static void BoltAt(Vector3 a, Vector3 b)
     {
         if (!boltMaterial)
         {
@@ -172,7 +233,6 @@ internal sealed class ChainLightning : IEffect
             if (shader) boltMaterial = new Material(shader);
             else if (!noShaderSaid) { noShaderSaid = true; Log.Warn("Streaming: no sprite shader for the bolts: drawn on screen instead"); }
         }
-        Vector3 a = Middle(from), b = Middle(to);
         a.z = b.z = 0f;
         if (!boltMaterial) { screenBolts.Add((a, b, Time.unscaledTime + 0.2f, Random.Range(0, int.MaxValue))); return; }
         var sr = Effects.Player ? Effects.Player.GetComponentInChildren<SpriteRenderer>() : null;
@@ -423,6 +483,123 @@ internal sealed class MysteryChest : IEffect
     public bool Ready(out string why) => Available(out why) && Effects.HavePlayer(out why);
 
     public bool Fire(Pending p, float size) => Hooks.SpawnChest(Effects.Player.transform.position, Random.value < 0.5f, p.Viewer);
+
+    public void Stop() { }
+}
+
+/// <summary>
+/// A lightning storm: Better Weather's rain for its time (your weather before it comes back after), and strikes all
+/// around you, more for bigger cheers (one a second, x the size up to 3 a second). It hunts you: most land within a few
+/// steps, and standing still for 1.5 s brings the next one down on you, so keep moving. A strike lands first and
+/// hurts half a second later if you're still within reach (so it can be dodged): 8% of your health, a Twitch hit.
+/// </summary>
+internal sealed class Storm : IEffect
+{
+    public string Id => "storm";
+    static float until, nextStrike, every = 1f;
+    static bool raining;
+
+    public bool Available(out string why)
+    {
+        why = Hooks.Strike == null ? "needs the Emberville mod pack" : "";
+        return Hooks.Strike != null;
+    }
+
+    public bool Ready(out string why) => Available(out why) && Effects.HavePlayer(out why);
+
+    public bool Fire(Pending p, float size)
+    {
+        until = Time.time + (float)Streamer.Timers.Left(Id);
+        every = 1f / Mathf.Clamp(size, 1f, 3f);
+        nextStrike = Time.time + 1f;
+        if (!raining) raining = Hooks.StormOn?.Invoke() ?? false;
+        return true;
+    }
+
+    public void Stop()
+    {
+        until = 0f;
+        if (raining) { raining = false; Hooks.StormOff?.Invoke(); }
+    }
+
+    /// <summary>Every frame (Plugin.Update): the strikes.</summary>
+    public static void Tick()
+    {
+        if (Time.time >= until || Time.time < nextStrike) return;
+        nextStrike = Time.time + every * Random.Range(0.6f, 1.4f);
+        var me = Effects.Player;
+        if (!me || !Streamer.CanFight()) return;
+        // it hunts you: standing still (under half a step in 1.5 s), the next one is on you; else most land close
+        var here = me.transform.position;
+        bool still = ((Vector2)(here - stillFrom)).magnitude < 0.6f && Time.time - stillSince >= 1.5f;
+        var at = still ? here + (Vector3)(Random.insideUnitCircle * 0.3f)
+               : Random.value < 0.6f ? here + (Vector3)(Random.insideUnitCircle * 2.5f)
+               : here + (Vector3)(Random.insideUnitCircle * 6f);
+        Hooks.Strike?.Invoke(at);
+        pending.Add((at, Time.time + 0.5f));
+    }
+
+    static readonly System.Collections.Generic.List<(Vector3 at, float when)> pending = new();
+    static Vector3 stillFrom;
+    static float stillSince;
+
+    /// <summary>Every frame (Plugin.Update): strikes half a second old hurt whoever is still within reach.</summary>
+    public static void TickHits()
+    {
+        // where you've been standing (moved half a step or more: the clock starts again)
+        var p = Effects.Player;
+        if (p && ((Vector2)(p.transform.position - stillFrom)).magnitude >= 0.6f) { stillFrom = p.transform.position; stillSince = Time.time; }
+        if (pending.Count == 0) return;
+        var me = Effects.Player;
+        for (int i = pending.Count - 1; i >= 0; i--)
+        {
+            if (Time.time < pending[i].when) continue;
+            var at = pending[i].at;
+            pending.RemoveAt(i);
+            if (!me || me.IsDead || ((Vector2)(at - me.transform.position)).magnitude > 1.2f) continue;
+            int hurt = Mathf.Max(1, Mathf.RoundToInt(me.characterStats.GetSecondaryStatValue(SecondaryStat.HealthPoints) * 0.08f));
+            TwitchDeath.Mark(1f);
+            me.ApplyDamage(new DamageData(null, me, hurt, DamageHitType.Magic, KnockBack.Low) { Result = DamageResult.Success });
+        }
+    }
+}
+
+/// <summary>
+/// Random x2 / x3: that many different effects at once, picked at random from the naughty ones (switched on, able to
+/// happen here; never another random pack), each with its own banner from the same viewer and its own time.
+/// </summary>
+internal sealed class RandomPack : IEffect
+{
+    public string Id { get; }
+    readonly int count;
+
+    public RandomPack(string id, int count) { Id = id; this.count = count; }
+
+    static System.Collections.Generic.List<EffectDef> Pool() => Streamer.Defs.Where(d =>
+        d.Enabled && d.Mood != Mood.Nice && d.Id != "random2" && d.Id != "random3" &&
+        Streamer.Effects.TryGetValue(d.Id, out var fx) && fx.Ready(out _)).ToList();
+
+    public bool Available(out string why) { why = ""; return true; }
+
+    public bool Ready(out string why)
+    {
+        if (!Effects.HavePlayer(out why)) return false;
+        if (Pool().Count == 0) { why = "no naughty effects can happen here"; return false; }
+        return true;
+    }
+
+    public bool Fire(Pending p, float size)
+    {
+        var pool = Pool();
+        if (pool.Count == 0) return false;
+        for (int i = 0; i < count && pool.Count > 0; i++)
+        {
+            var d = pool[Random.Range(0, pool.Count)];
+            pool.Remove(d);
+            Streamer.Fire(new Pending { EffectId = d.Id, Viewer = p.Viewer, Message = "", Size = 1f, Source = p.Source, Mood = d.Mood });
+        }
+        return true;
+    }
 
     public void Stop() { }
 }

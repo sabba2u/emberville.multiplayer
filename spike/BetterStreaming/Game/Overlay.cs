@@ -53,8 +53,49 @@ internal static class Overlay
         Log.Info($"Streaming banner: {title}{(string.IsNullOrEmpty(sub) ? "" : " - " + sub)}");
     }
 
+    // ---- fireworks: bursts of coloured sparks over the screen for a few seconds ----
+
+    sealed class Spark { public Vector2 Pos, Vel; public Vector4 Col; public float Born, Life; }
+    static readonly List<Spark> sparks = new List<Spark>();
+    static float fireworksUntil, nextBurst;
+
+    public static void Fireworks() { fireworksUntil = Time.unscaledTime + 4f; nextBurst = 0f; }
+
+    static void DrawFireworks()
+    {
+        float now = Time.unscaledTime, dt = Time.unscaledDeltaTime;
+        var vp = ImGui.GetMainViewport();
+        if (now < fireworksUntil && now >= nextBurst)
+        {
+            nextBurst = now + Random.Range(0.25f, 0.5f);
+            var at = new Vector2(vp.Pos.x + vp.Size.x * Random.Range(0.15f, 0.85f), vp.Pos.y + vp.Size.y * Random.Range(0.15f, 0.5f));
+            var col = Color.HSVToRGB(Random.value, 0.7f, 1f);
+            for (int i = 0; i < 40; i++)
+            {
+                float a = Random.value * Mathf.PI * 2f, sp = Random.Range(80f, 260f);
+                sparks.Add(new Spark { Pos = at, Vel = new Vector2(Mathf.Cos(a) * sp, Mathf.Sin(a) * sp), Col = new Vector4(col.r, col.g, col.b, 1f), Born = now, Life = Random.Range(0.8f, 1.4f) });
+            }
+        }
+        if (sparks.Count == 0) return;
+        var dl = ImGui.GetForegroundDrawList();
+        for (int i = sparks.Count - 1; i >= 0; i--)
+        {
+            var s = sparks[i];
+            float age = now - s.Born;
+            if (age > s.Life) { sparks.RemoveAt(i); continue; }
+            s.Vel = new Vector2(s.Vel.x * (1f - dt * 1.5f), s.Vel.y * (1f - dt * 1.5f) + 160f * dt);   // (slowing, falling)
+            s.Pos = new Vector2(s.Pos.x + s.Vel.x * dt, s.Pos.y + s.Vel.y * dt);
+            float fade = 1f - age / s.Life;
+            dl.AddCircleFilled(s.Pos, 2.5f * fade + 1f, Col(s.Col, fade));
+        }
+    }
+
     public static void Draw()
     {
+        DrawFireworks();
+        Filters.DrawDark();     // (under everything else of ours)
+        Bubble.Draw();
+        Filters.DrawTunnel();
         ChainLightning.DrawScreen();
         DrawBanner();
         if (showCorner.Value) DrawCorner();
