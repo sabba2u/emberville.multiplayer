@@ -22,6 +22,10 @@ public sealed class TwitchEvent
     public string RewardTitle = "";
     public string RedemptionId = "";
     public string PollWinner = "";
+    public int PollVotes;
+    public string PollId = "";
+    /// <summary>completed (it ran its time), terminated (ended early, results shown), archived (ended, hidden).</summary>
+    public string PollStatus = "";
 }
 
 /// <summary>
@@ -96,6 +100,9 @@ public static class EventSub
                 var choices = ev["choices"] as JArray;
                 var best = choices?.OfType<JObject>().OrderByDescending(c => I(c["votes"])).FirstOrDefault();
                 e.PollWinner = S(best?["title"]);
+                e.PollVotes = I(best?["votes"]);
+                e.PollId = S(ev["id"]);
+                e.PollStatus = S(ev["status"]);
                 break;
         }
     }

@@ -58,7 +58,7 @@ public static class Catalogue
         new EffectDef { Id = "retro", Name = "Retro", Mood = Mood.Mean, Bits = 360, Seconds = 30f, Keywords = new[] { "retro", "gameboy" } },
         new EffectDef { Id = "fists", Name = "Fists only", Mood = Mood.Mean, Bits = 430, Seconds = 30f, Keywords = new[] { "fists", "punch" } },
         new EffectDef { Id = "fire", Name = "On fire", Mood = Mood.Mean, Bits = 370, Seconds = 30f, Keywords = new[] { "fire", "burn" } },
-        new EffectDef { Id = "roulette", Name = "Weapon roulette", Mood = Mood.Mean, Bits = 450, Seconds = 90f, Keywords = new[] { "roulette", "shuffle" } },
+        new EffectDef { Id = "roulette", Name = "Weapon roulette", Mood = Mood.Mean, Bits = 450, Seconds = 90f, Keywords = new[] { "shuffle", "weapons" } },
         new EffectDef { Id = "random2", Name = "Random x2", Mood = Mood.Mean, Bits = 650, Keywords = new[] { "random2", "double" } },
         new EffectDef { Id = "random3", Name = "Random x3", Mood = Mood.Mean, Bits = 900, Keywords = new[] { "random3", "triple" } },
         new EffectDef { Id = "fireworks", Name = "Fireworks", Mood = Mood.Nice, Bits = 105, Seconds = 0f, Keywords = new[] { "fireworks", "party" } },
@@ -77,6 +77,13 @@ public static class Catalogue
         new EffectDef { Id = "shock", Name = "Shocked", Mood = Mood.Mean, Bits = 375, Seconds = 30f, Keywords = new[] { "shock", "zapme" } },
         new EffectDef { Id = "bleed", Name = "Bleeding", Mood = Mood.Mean, Bits = 385, Seconds = 30f, Keywords = new[] { "bleed", "blood" } },
         new EffectDef { Id = "hireling", Name = "Hireling", Mood = Mood.Nice, Bits = 850, Seconds = 180f, Keywords = new[] { "hireling", "companion" } },
+        new EffectDef { Id = "wheel", Name = "Spin the Wheel", Mood = Mood.Gamble, Bits = 525, Keywords = new[] { "wheel", "fortune" } },
+        new EffectDef { Id = "dice", Name = "Roll the Dice", Mood = Mood.Gamble, Bits = 475, Keywords = new[] { "dice", "gamble" } },
+        new EffectDef { Id = "slots", Name = "Pull the Slots", Mood = Mood.Gamble, Bits = 495, Keywords = new[] { "slots", "slot" } },
+        new EffectDef { Id = "plinko", Name = "Plinko", Mood = Mood.Gamble, Bits = 510, Keywords = new[] { "plinko" } },
+        new EffectDef { Id = "coin", Name = "Coin flip", Mood = Mood.Gamble, Bits = 125, Keywords = new[] { "coin", "heads", "tails" } },
+        new EffectDef { Id = "casino", Name = "Roulette", Mood = Mood.Gamble, Bits = 540, Keywords = new[] { "roulette", "casino" } },
+        new EffectDef { Id = "race", Name = "Monster race", Mood = Mood.Gamble, Bits = 575, Keywords = new[] { "race", "racers" } },
         new EffectDef { Id = "storm", Name = "Lightning storm", Mood = Mood.Mean, Bits = 800, Scales = true, CapBits = 4000, Seconds = 30f, LongerWithBits = false, Keywords = new[] { "storm", "thunder" } },
     };
 }

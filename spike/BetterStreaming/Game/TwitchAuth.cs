@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
@@ -134,7 +135,13 @@ internal static class TwitchAuth
         finally { refreshing.Release(); }
     }
 
-    /// <summary>/oauth2/validate: who this token is (login, user id); Twitch wants it checked hourly.</summary>
+    /// <summary>The permissions this sign-in has (from /oauth2/validate; null: not checked yet).</summary>
+    public static System.Collections.Generic.HashSet<string> Granted;
+
+    /// <summary>This sign-in is known to lack that permission (signed in before the mod asked for it).</summary>
+    public static bool Lacks(string scope) => SignedIn && Granted != null && !Granted.Contains(scope);
+
+    /// <summary>/oauth2/validate: who this token is (login, user id, permissions); Twitch wants it checked hourly.</summary>
     static async Task Validate()
     {
         nextValidate = DateTime.UtcNow.AddHours(1);
@@ -150,6 +157,7 @@ internal static class TwitchAuth
                 var o = JObject.Parse(body);
                 saved.Login = (string)o["login"] ?? saved.Login;
                 saved.UserId = (string)o["user_id"] ?? saved.UserId;
+                if (o["scopes"] is JArray granted) Granted = new System.Collections.Generic.HashSet<string>(granted.Select(g => (string)g));
                 if ((int?)o["expires_in"] is int left) saved.ExpiresAt = DateTime.UtcNow.AddSeconds(left);
                 Write();
             }

@@ -35,7 +35,7 @@ namespace EmbervilleGhost;
 [BepInDependency("spike.emberville.bettertranslations", BepInDependency.DependencyFlags.SoftDependency)]   // (Better Translations: /lang)
 public class Plugin : BaseUnityPlugin, ITransportListener
 {
-    internal const string Version = "0.5.1";
+    internal const string Version = "0.6.0";
     internal const string ModName = "Sabba's Emberville Multiplayer Mod";
     internal static string Title => $"{ModName} v{Version}";
 
@@ -159,6 +159,7 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         Walls3D.Bind(Config);
         TiltShift.Bind(Config);
         Bestiary.Bind(Config);
+        UnlockClasses.Bind(Config);
         BuildMode.Bind(Config);
         TeamHud.Bind(Config);
         Hud.ShowStatus = Config.Bind("Hud", "ShowStatus", false, "The status line top-left (version, connection, fps); Delete shows / hides it");

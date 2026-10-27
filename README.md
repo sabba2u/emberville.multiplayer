@@ -113,6 +113,15 @@ Type the command in chat to get one, or MODS > Better Combat > **New Weapons**.
   **Controller (partial support):** hold the **right trigger** to lock on to the nearest enemy (hold again: let go), tap
   it for the next one; locked, you face it whatever the right stick does, so arrows and spells go at it.
 - **Better Combat:** move while attacking (`/moveattack`), bows that aim in any direction and lock on (`/bowlock`).
+- **Spell keys that answer every press** (Better Combat, on to start): the game ignores a spell key for 1 s after each
+  press and drops presses made mid-swing; now every press counts, and one made while you're busy (or just before the
+  cooldown ends) is remembered for 0.4 s and cast the moment it can. `/spellkeys` turns it off, `/spellkeys 0.6` sets the time.
+  A spell also cuts the end of a weapon swing short once the swing's hit has landed, and a dodge press you couldn't do
+  yet (cooling down, being hit, mid-spell) is remembered the same way, and so is an attack clicked during a roll (the
+  game drops it): it goes the moment you land. **No stun lock:** after a hit staggers you, you can't be staggered again for 0.5 s
+  (you still take the damage), so a pack of chickens can't keep you from casting; how long a stagger lasts is a
+  slider too (the game's 0.3 s, down to never). Each has its own switch in MODS > Better Combat, and **Before / after**
+  (or `/gamecombat`) turns them all off and back on, to show the difference.
 - **Centred camera** (Better Combat, off to start): `/centercam` keeps the camera on you, so a dash doesn't leave you at
   the edge of the screen; `/centercam 30` lets it trail a little (30% of the game's lag). Also in MODS > Better Combat.
   
@@ -236,9 +245,32 @@ by xxJoexx", their message under it).
 - **Messing with you** (30 s each, longer when bought again): backwards walking, can't stop walking, swapped buttons
   (attack and dodge), random dodges, invisible; upside down, mirror world, sideways, dizzy, seasick, earthquake, zoomed
   way in or out; drunk, colour blind, tunnel vision, lights out, retro; fists only (your own weapon comes back after); weapon
-  roulette (a random weapon from your bag every 30 s); random x2 / x3 (that many naughty effects at once); and a **lightning storm** (Better Weather's rain, strikes all around you;
+  roulette (every 5 s a weapon of a different type from your bag, never the same type twice in a row); random x2 / x3 (that many naughty effects at once); and a **lightning storm** (Better Weather's rain, strikes all around you;
   your weather comes back after). They work the same on a controller.
-- Coming next: Spin the Wheel and Roll the Dice; channel-point rewards and chat votes.
+- **Spin the Wheel** (`cheer525 wheel`): a game-show wheel pops up and spins. A peg sits on every line between
+  slices and a rubber flapper clicks over each one, slowing it more and more; a wheel too slow to clear a peg gets
+  thrown back into the slice it was leaving. Green slices are nice, red naughty, gold spins again, and instant death
+  is a thin black sliver. Where it stops happens. The streamer sets the slices and their widths.
+- **Roll the Dice** (`cheer475 dice`): three dice tumble across the screen; the total picks the outcome (low bad,
+  high good). Three 1s: instant death. Three 6s: the jackpot (a heal, chain lightning and a loot drop at once).
+- **The casino:** **Pull the Slots** (`cheer495 slots`: three reels; three of a kind is that effect doubled, three
+  7s the jackpot, three skulls instant death, two of a kind that effect), **Plinko** (`cheer510 plinko`: a ball
+  bounces down the pegs into a bin; the middle is mild, the edges are the jackpot and death), **Coin flip**
+  (`cheer125 coin`: heads nice, tails naughty, `heads`/`tails` in the cheer calls it and doubles it; once in a
+  while it lands on its edge) and **Roulette** (`cheer540 roulette red`: red naughty, black nice, the green 0 the
+  jackpot; bet a colour in the cheer and win it doubled). One gamble on screen at a time; the rest wait their turn.
+- **Chat plays together:** a **monster race** (`cheer575 race`, a button, or every few minutes): four of the game's
+  creatures race across the top of the screen, each carrying an effect, and chat cheers them on with `!1` to `!4`;
+  the winner's effect happens. A **raid party**: `!party` opens one, chatters `!join` for 45 seconds, and a raid comes
+  with a monster for every raider, each wearing their name. **Chatters as enemies**: the monsters wear the names of
+  people chatting, "RIP name" when they fall, and the one nearest when you go down gets the kill on the leaderboard.
+- **Free for chat:** **votes** (`!raid` from 10 different chatters within a minute sets it off; the counts show on
+  stream), **polls** ("What happens next?", from a button or every few minutes; the winner happens), and a
+  **"Will they survive?" prediction** that starts by itself when a big raid lands and settles itself when you fall or
+  win. A **leaderboard** of top raiders, top healers and most deaths caused shows on stream (`!top` in chat).
+  Polls and predictions need an Affiliate or Partner channel; if you connected Twitch before this version, sign out
+  and connect again to allow predictions.
+- Coming next: channel-point rewards.
 
 ## The mod menu
 **Insert**, or the **MODS** button on the title screen and the Esc menu (just above Options). Its tabs:
@@ -299,7 +331,8 @@ by xxJoexx", their message under it).
 ## Commands
 The full list is in [API.md](API.md#chat-commands). The main ones: `/tp`, `/summon`, `/sethome`, `/home`, `/homes`, `/delhome`, `/trade`, `/online`, `/sleep`,
 `/respec`, `/rain`, `/snow`, `/clear`, `/hook`, `/clucking`, `/risen`, `/pet`, `/companion`, `/dungeon`, `/estate`, `/repair`,
-`/resources`, `/stash`, `/tilt`, `/chase`, `/fps`, `/tiltshift`, `/bowlock`, `/moveattack`; testing: `/nodeath`, `/onehitkill`, `/noclip`, `/devmode`, `/devpanel`.
+`/resources`, `/stash`, `/tilt`, `/chase`, `/fps`, `/tiltshift`, `/bowlock`, `/moveattack`, `/spellkeys`, `/gamecombat`; testing: `/nodeath`, `/onehitkill`, `/noclip`, `/devmode`, `/devpanel`,
+`/unlockclasses` (every class, and the class tree open past the demo's level 15, to 40).
 
 ## API
 Other BepInEx mods (and NPC dialogue) can drive these mods; the full reference with examples is in [API.md](API.md).

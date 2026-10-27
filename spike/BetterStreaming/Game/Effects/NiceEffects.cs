@@ -181,7 +181,7 @@ internal static class NiceEffects
         foreach (var e in EnemiesManager.AllEnemies)
         {
             if (!e || e.IsDead || !e.gameObject.activeInHierarchy || e.initHealth <= 0f || e.name.StartsWith("NPC_") || Hooks.IsBoss(e) || Hooks.IsFriendly(e)) continue;
-            if (e.enemyType == EnemyType.None && !Hooks.IsTwitchCreature(e)) continue;
+            if (e.enemyType == EnemyType.None && !Hooks.IsTwitchCreature(e) && !Hooks.IsHostileFauna(e)) continue;
             var v = cam.WorldToViewportPoint(e.transform.position);
             if (v.z < 0f || v.x < 0f || v.x > 1f || v.y < 0f || v.y > 1f) continue;
             if (!best || e.currentHealth > best.currentHealth) best = e;

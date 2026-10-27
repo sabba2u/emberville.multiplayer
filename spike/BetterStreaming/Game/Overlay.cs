@@ -151,6 +151,13 @@ internal static class Overlay
                 ImGui.TextColored(new Vector4(1f, 0.55f, 0.45f, 1f), $"{mean} {(mean == 1 ? "curse" : "curses")} incoming...{(inS > 0.5 ? $" next in {inS:0} s" : "")}");
             }
             if (Streamer.Queue.BreatherLeft > 0.5) ImGui.TextColored(Dim, $"Breather: {Streamer.Queue.BreatherLeft:0} s");
+            foreach (var vote in ChatVotes.Progress()) ImGui.TextColored(new Vector4(0.6f, 0.85f, 1f, 1f), $"Vote {vote}");
+            if (Polls.Running) ImGui.TextColored(Purple, "Chat poll running: vote now!");
+            string party = Party.OverlayLine(), race = Race.OverlayLine();
+            if (party != "") ImGui.TextColored(new Vector4(1f, 0.6f, 0.4f, 1f), party.Replace("%", "%%"));
+            if (race != "") ImGui.TextColored(new Vector4(1f, 0.85f, 0.4f, 1f), race.Replace("%", "%%"));
+            string top = Board.OverlayLine();
+            if (top != "") ImGui.TextColored(new Vector4(1f, 0.85f, 0.4f, 1f), top);
             foreach (var id in Streamer.Timers.Running)
                 ImGui.TextColored(ColourOf(id), $"{Streamer.Def(id)?.Name ?? id}: {Streamer.Timers.Left(id):0} s");
         }

@@ -13,7 +13,7 @@ namespace BetterStreaming;
 public class Plugin : BaseUnityPlugin
 {
     public const string Guid = "spike.emberville.betterstreaming";
-    public const string Version = "0.1.0";
+    public const string Version = "0.2.0";
     internal static ManualLogSource Logger_;
 
     void Awake()
@@ -25,6 +25,19 @@ public class Plugin : BaseUnityPlugin
         Overlay.Bind(Config);
         TwitchDeath.Bind(Config);
         ChainLightning.Bind(Config);
+        Wheel.Bind(Config);
+        Dice.Bind(Config);
+        Slots.Bind(Config);
+        Plinko.Bind(Config);
+        Coin.Bind(Config);
+        CasinoRoulette.Bind(Config);
+        Race.Bind(Config);
+        ChatterEnemies.Bind(Config);
+        Party.Bind(Config);
+        ChatVotes.Bind(Config);
+        Polls.Bind(Config);
+        Prediction.Bind(Config);
+        Board.Bind(Config);
         Streamer.Init(Config);
         Effects.Register();
         TwitchAuth.LoadSaved();
@@ -41,7 +54,7 @@ public class Plugin : BaseUnityPlugin
     void Update()
     {
         if (!coinAsked && Singleton<GameManager>.HasMain) { coinAsked = true; NiceEffects.Preload(); }
-        try { Log.Flush(); Streamer.Tick(); ChainLightning.Tick(); TwitchDeath.Tick(); Controls.Tick(); CameraFx.Tick(); Filters.Tick(); Storm.Tick(); Storm.TickHits(); WeaponLock.Tick(); WeaponRoulette.Tick(); PixelPerfect.Tick(); NiceEffects.Tick(); FireSound.Tick(); Bubble.Tick(); }
+        try { Log.Flush(); Streamer.Tick(); ChainLightning.Tick(); TwitchDeath.Tick(); Controls.Tick(); CameraFx.Tick(); Filters.Tick(); Storm.Tick(); Storm.TickHits(); WeaponLock.Tick(); WeaponRoulette.Tick(); PixelPerfect.Tick(); NiceEffects.Tick(); FireSound.Tick(); Bubble.Tick(); Stage.Tick(); Race.Tick(); ChatterEnemies.Tick(); Party.Tick(); Polls.Tick(); Prediction.Tick(); Board.Tick(); }
         catch (System.Exception e) { Logger.LogWarning(e); }
     }
 

@@ -18,6 +18,9 @@ public sealed class VoteCounter
 
     public int Count => votes.Count;
 
+    /// <summary>How long it still rests after passing (0: votes count).</summary>
+    public double RestLeft(double now) => System.Math.Max(0.0, coolUntil - now);
+
     /// <summary>A vote at that time: true when it's the one that passes it.</summary>
     public bool Vote(string user, double now)
     {

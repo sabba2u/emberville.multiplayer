@@ -83,6 +83,9 @@ public class EventSubTests
         var e = EventSub.Parse(PollEnd);
         Assert.Equal(TwitchKind.PollEnd, e.Kind);
         Assert.Equal("Yellow", e.PollWinner);
+        Assert.Equal(140, e.PollVotes);
+        Assert.Equal("1243456", e.PollId);
+        Assert.Equal("completed", e.PollStatus);
     }
 
     [Fact] public void GarbageIsUnknown() => Assert.Equal(TwitchKind.Unknown, EventSub.Parse("{not json").Kind);

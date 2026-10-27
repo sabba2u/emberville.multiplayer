@@ -108,6 +108,21 @@ internal static class Bestiary
         return roster;
     }
 
+    /// <summary>Every proper creature with its picture, for Better Streaming's monster race: the Bestiary's names and
+    /// grid pictures (not chickens, NPCs or nameless props).</summary>
+    internal static IReadOnlyList<(string Name, IReadOnlyList<(UnityEngine.Sprite Sprite, UnityEngine.Rect Box, bool Flip, Color Colour)> Parts)> Pictures()
+    {
+        var list = new List<(string, IReadOnlyList<(UnityEngine.Sprite, UnityEngine.Rect, bool, Color)>)>();
+        foreach (var e in Roster())
+        {
+            if (!e.Prefab || e.Prefab.enemyType == EnemyType.None || e.Key.StartsWith("Chicken")) continue;
+            e.Parts ??= PartsOf(e.Prefab);
+            if (e.Parts.Count == 0) continue;
+            list.Add((NameOf(e.Key, e.Prefab), e.Parts.Select(p => (p.Sprite, p.Box, p.Flip, p.Colour)).ToList()));
+        }
+        return list;
+    }
+
     // ---- kills (per character) ----
 
     static readonly Dictionary<string, int> kills = new Dictionary<string, int>();

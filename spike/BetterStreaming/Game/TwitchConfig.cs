@@ -10,7 +10,7 @@ namespace BetterStreaming;
 /// </summary>
 internal static class TwitchConfig
 {
-    public const string Scopes = "bits:read channel:read:redemptions channel:manage:redemptions user:read:chat user:write:chat channel:manage:polls";
+    public const string Scopes = "bits:read channel:read:redemptions channel:manage:redemptions user:read:chat user:write:chat channel:manage:polls channel:manage:predictions";
     public static ConfigEntry<string> ClientId, EventSubUrl, SubscriptionsUrl, HelixUrl, MockUserId;
 
     public static void Bind(ConfigFile config)

@@ -73,7 +73,7 @@ public class CatalogueTests
         Assert.Equal(Mood.Mean, e.Mood);
         Assert.Equal(450, e.Bits);
         Assert.Equal(90f, e.Seconds);
-        Assert.Equal(new[] { "roulette", "shuffle" }, e.Keywords);
+        Assert.Equal(new[] { "shuffle", "weapons" }, e.Keywords);   // ("roulette" picks the casino's)
     }
 
     [Fact]
@@ -144,5 +144,44 @@ public class CatalogueTests
         Assert.Equal(850, e.Bits);
         Assert.Equal(180f, e.Seconds);
         Assert.Equal(new[] { "hireling", "companion" }, e.Keywords);
+    }
+
+    [Fact]
+    public void WheelAndDiceAreGambles()
+    {
+        var all = Catalogue.Defaults();
+        var wheel = all.Single(x => x.Id == "wheel");
+        var dice = all.Single(x => x.Id == "dice");
+        Assert.Equal(Mood.Gamble, wheel.Mood);
+        Assert.Equal(Mood.Gamble, dice.Mood);
+        Assert.Equal(525, wheel.Bits);
+        Assert.Equal(475, dice.Bits);
+        Assert.Equal(new[] { "wheel", "fortune" }, wheel.Keywords);
+        Assert.Equal(new[] { "dice", "gamble" }, dice.Keywords);
+        Assert.Equal(0f, wheel.Seconds);
+        Assert.False(wheel.Scales);
+    }
+
+    [Fact]
+    public void KeywordsDontClash()
+    {
+        var words = Catalogue.Defaults().SelectMany(e => e.Keywords).ToList();
+        Assert.Equal(words.Count, words.Distinct().Count());
+    }
+
+    [Fact]
+    public void TheCasinoGames()
+    {
+        var all = Catalogue.Defaults();
+        foreach (var (id, bits, word) in new[] { ("slots", 495, "slots"), ("plinko", 510, "plinko"), ("coin", 125, "coin"), ("casino", 540, "roulette"), ("race", 575, "race") })
+        {
+            var e = all.Single(x => x.Id == id);
+            Assert.Equal(Mood.Gamble, e.Mood);
+            Assert.Equal(bits, e.Bits);
+            Assert.Equal(word, e.Keywords[0]);
+            Assert.False(e.Scales);
+            Assert.Equal(0f, e.Seconds);
+        }
+        Assert.Equal("Roulette", all.Single(x => x.Id == "casino").Name);
     }
 }

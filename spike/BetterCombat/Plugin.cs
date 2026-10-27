@@ -13,7 +13,7 @@ namespace BetterCombat;
 public class Plugin : BaseUnityPlugin
 {
     public const string Guid = "spike.emberville.bettercombat";
-    public const string Version = "0.3.0";
+    public const string Version = "0.4.0";
     internal static ManualLogSource Logger_;
 
     void Awake()
@@ -24,14 +24,19 @@ public class Plugin : BaseUnityPlugin
         MoveAttack.Bind(Config);
         LockOn.Bind(Config);
         CenterCam.Bind(Config);
+        SpellKeys.Bind(Config);
+        DodgeKey.Bind(Config);
+        AttackKey.Bind(Config);
+        StaggerGuard.Bind(Config);
+        Compare.Bind(Config);
         Migrate.FromGhost(Config, firstRun, "Combat");
         new HarmonyLib.Harmony(Guid).PatchAll(typeof(Plugin).Assembly);
-        Logger.LogInfo($"Better Combat v{Version}: lock-on (G), bow lock-on (/bowlock), move while attacking (/moveattack)");
+        Logger.LogInfo($"Better Combat v{Version}: lock-on (G), bow lock-on (/bowlock), move while attacking (/moveattack), spell keys (/spellkeys)");
     }
 
     void Update()
     {
-        try { LockOn.Tick(); CenterCam.Tick(); }
+        try { LockOn.Tick(); CenterCam.Tick(); SpellKeys.Tick(); DodgeKey.Tick(); AttackKey.Tick(); }
         catch (System.Exception e) { Logger.LogWarning(e); }
     }
 
@@ -42,6 +47,8 @@ public class Plugin : BaseUnityPlugin
         if (cmd == "moveattack" || cmd.StartsWith("moveattack ")) { MoveAttack.Command(cmd.Length > 10 ? cmd.Substring(11) : ""); return true; }
         if (cmd.StartsWith("bowlock ") && float.TryParse(cmd.Substring(8).Trim().TrimEnd('°'), out float deg)) { BowAssist.SetAngle(deg); return true; }
         if (cmd == "bowlock") { BowAssist.Toggle(); return true; }
+        if (cmd == "gamecombat") { Compare.Toggle(); return true; }
+        if (cmd == "spellkeys" || cmd.StartsWith("spellkeys ")) { SpellKeys.Command(cmd.Length > 9 ? cmd.Substring(10) : ""); return true; }
         if (cmd == "centercam" || cmd.StartsWith("centercam ")) { CenterCam.Command(cmd.Length > 9 ? cmd.Substring(10) : ""); return true; }
         return false;
     }
@@ -49,8 +56,10 @@ public class Plugin : BaseUnityPlugin
     /// <summary>The switches, for the multiplayer mod's Insert menu (it draws ImGui).</summary>
     public static void DrawMenu()
     {
-        LockOn.DrawMenu();   // (first: the main one)
+        Compare.DrawMenu();
+        LockOn.DrawMenu();
         CenterCam.DrawMenu();
+        SpellKeys.DrawMenu();
         MoveAttack.DrawMenu();
         BowAssist.DrawMenu();
     }

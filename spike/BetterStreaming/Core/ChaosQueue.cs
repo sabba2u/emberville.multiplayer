@@ -11,7 +11,9 @@ public sealed class Pending
     public string Viewer;
     public string Message;
     public float Size = 1f;
-    /// <summary>bits, points, vote or test.</summary>
+    /// <summary>The Bits a cheer paid for it (0: not a cheer).</summary>
+    public int Bits;
+    /// <summary>bits, points, vote, poll, wheel, dice or test.</summary>
     public string Source;
     /// <summary>A channel-point redemption to mark fulfilled when it lands (else empty).</summary>
     public string RedemptionId;

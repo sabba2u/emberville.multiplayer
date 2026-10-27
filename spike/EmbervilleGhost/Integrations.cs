@@ -183,6 +183,8 @@ internal static class Integrations
         BetterStreaming.Hooks.ChickenRaid = StreamRaids.Chickens;
         BetterStreaming.Hooks.SpawnChest = StreamRaids.Chest;
         BetterStreaming.Hooks.IsBoss = MiniBoss.IsBoss;
+        BetterStreaming.Hooks.IsHostileFauna = Arena.IsHen;   // (the chicken level's chickens are fair game)
+        BetterStreaming.Hooks.Creatures = Bestiary.Pictures;   // (the monster race's racers)
         BetterStreaming.Hooks.Catalogue = () => { DungeonLoot.Preload(); return DungeonLoot.Pool; };   // (a weapon to lend)
         if (HasWeather) StormHooks();
         if (HasPets) StreamPetHooks();

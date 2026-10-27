@@ -51,6 +51,8 @@ Press **Enter**, type the command with a `/` in front, press Enter. `/help` list
 | `/bowlock`, `/bowlock 15` | Arrows curve onto a creature near your aim; the cone in degrees. |
 | `/moveattack`, `/moveattack 70` | Move while attacking; bow aiming speed in %. |
 | `/centercam`, `/centercam 30` | Camera centred on you, dashes too (off to start); its lag in % of the game's (0 = locked). |
+| `/spellkeys`, `/spellkeys 0.6` | Spell keys answer every press (on to start); how long a press is remembered, in seconds. |
+| `/gamecombat` | Before / after: every Better Combat switch off (the game's own combat), and back. |
 
 ### Weather (Better Weather)
 | Command | What it does |
@@ -60,7 +62,8 @@ Press **Enter**, type the command with a `/` in front, press Enter. `/help` list
 
 ### Testing
 `/nodeath` (no damage), `/onehitkill` (500 a hit), `/noclip` (walk through walls), `/devmode` (the game's developer
-tools), `/devpanel` (its panel), `/uidump` (the on-screen UI to `BepInEx/UIDumps`).
+tools), `/devpanel` (its panel), `/uidump` (the on-screen UI to `BepInEx/UIDumps`), `/unlockclasses` (every class
+learned, and the class tree open past the demo's level 15, to 40, its "coming soon" skills too), `/lockclasses` (back).
 
 ## NPC dialogue (Better NPCs and Quests)
 

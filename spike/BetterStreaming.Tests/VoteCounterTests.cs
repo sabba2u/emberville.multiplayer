@@ -31,4 +31,14 @@ public class VoteCounterTests
         Assert.False(v.Vote("d", 71));
         Assert.True(v.Vote("e", 72));
     }
+
+    [Fact]
+    public void ItSaysHowLongItRests()
+    {
+        var v = new VoteCounter(1, 60, 120);
+        Assert.Equal(0, v.RestLeft(0));
+        Assert.True(v.Vote("a", 10));
+        Assert.Equal(100, v.RestLeft(30), 3);
+        Assert.Equal(0, v.RestLeft(200));
+    }
 }

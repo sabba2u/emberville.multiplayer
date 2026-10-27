@@ -106,7 +106,7 @@ internal static class Streamer
         var buy = CheerRouter.Route(Buyable(), bits, message);
         string words = Filter.Clean(message);
         if (buy.Effect == null) { Overlay.Banner($"{viewer} cheered {bits} Bits: thank you!", words); return; }
-        Submit(new Pending { EffectId = buy.Effect.Id, Viewer = viewer, Message = words, Size = buy.Size, Source = source });
+        Submit(new Pending { EffectId = buy.Effect.Id, Viewer = viewer, Message = words, Size = buy.Size, Source = source, Bits = bits });
     }
 
     /// <summary>Can the player take a hit now? (Nothing lands in a cutscene, dialogue, a menu, loading, or dead.)</summary>
@@ -163,6 +163,8 @@ internal static class Streamer
             BetterStreaming.Effects.Say(BetterStreaming.Effects.Player, BetterStreaming.Effects.WordOf(d.Id));      // (and its word, floating up)
         }
         Overlay.Banner(p.EffectId == "raid" ? $"Twitch raid incoming by {p.Viewer}" : $"{d.Name} from {p.Viewer}", p.Message, d.Id);
+        Board.Landed(p, d);
+        Prediction.Landed(d.Id, size);
         Log.Info($"Streaming: {d.Name} from {p.Viewer} (x{size:0.##}, {p.Source})");
     }
 
@@ -175,11 +177,12 @@ internal static class Streamer
                 Cheer(TextFilter.Viewer(e.User, e.Anonymous), e.Bits, e.Message);
                 break;
             case TwitchKind.Chat:
-                if (e.Message.Trim().Equals("!effects", StringComparison.OrdinalIgnoreCase) && Now() >= nextEffectsLine)
-                {
-                    nextEffectsLine = Now() + 30;   // (once per 30 s: chat can't make the streamer's account spam)
-                    _ = TwitchHelix.Chat(EffectsLine());
-                }
+                Log.Info($"Twitch chat < {e.User}: {e.Message}");
+                Chat(e.User, e.Message);
+                break;
+            case TwitchKind.PollEnd:
+                Log.Info($"Twitch: poll ended ({e.PollStatus})");
+                Polls.OnEnd(e);
                 break;
             case TwitchKind.Redemption:
                 Log.Info($"Twitch: {e.User} redeemed {e.RewardTitle} (channel-point rewards come in part 3)");
@@ -187,14 +190,51 @@ internal static class Streamer
         }
     }
 
-    /// <summary>The "!effects" answer: what's on and its price.</summary>
-    public static string EffectsLine()
+    /// <summary>A chat line (real, or the tab's pretend one): its name for the monsters; a raid party ("!party", "!join"),
+    /// a race cheer ("!1"), "!effects", "!top", or a vote ("!raid").</summary>
+    public static void Chat(string user, string message)
+    {
+        string text = (message ?? "").Trim();
+        ChatterEnemies.Seen(user);
+        if (Party.OnChat(user, text) || Race.OnChat(user, text)) return;
+        if (text.Equals("!effects", StringComparison.OrdinalIgnoreCase))
+        {
+            if (Now() < nextEffectsLine) return;
+            nextEffectsLine = Now() + 60;   // (once a minute: chat can't make the streamer's account spam)
+            _ = SayAll(EffectsLines());
+            return;
+        }
+        if (text.Equals("!top", StringComparison.OrdinalIgnoreCase)) { Board.TopInChat(); return; }
+        ChatVotes.OnChat(user, text);
+    }
+
+    /// <summary>The "!effects" answer, as lines Twitch takes: how it works, then the gambles, the nice ones and the
+    /// naughty ones, each as its cheer word and price ("raid 500+": more Bits, a bigger one).</summary>
+    public static List<string> EffectsLines()
     {
         var on = Buyable();
-        if (on.Count == 0) return "No effects are switched on right now.";
-        return "Cheer to mess with the game (only while live in game): " +
-               string.Join(" | ", on.Select(d => $"{d.Name} {d.Bits}{(d.Scales ? "+" : "")} Bits (\"{d.Keywords.FirstOrDefault()}\")")) +
-               ". Put the word in your cheer, or cheer the exact amount.";
+        if (on.Count == 0) return new List<string> { "No effects are switched on right now." };
+        var lines = new List<string>
+        {
+            "Mess with my game: put an effect's word in a cheer (\"cheer525 wheel\"), or cheer its exact amount." +
+            (ChatVotes.On ? $" Free: type !word (\"!wheel\"){(ChatVotes.Needed > 1 ? $" and {ChatVotes.Needed} of you set it off" : " to set it off")}." : "") +
+            (Party.On ? " !party starts a raid party (then !join)." : "") + " !top: the leaderboard.",
+        };
+        string Item(EffectDef d) => $"{d.Keywords.FirstOrDefault() ?? d.Id} {d.Bits}{(d.Scales ? "+" : "")}";
+        lines.AddRange(ChatLines.Pack("Gambles:", on.Where(d => d.Mood == Mood.Gamble).Select(Item)));
+        lines.AddRange(ChatLines.Pack("Nice:", on.Where(d => d.Mood == Mood.Nice).Select(Item)));
+        lines.AddRange(ChatLines.Pack("Naughty:", on.Where(d => d.Mood == Mood.Mean).Select(Item)));
+        return lines;
+    }
+
+    /// <summary>Lines into chat one after another, in order (a moment apart).</summary>
+    static async System.Threading.Tasks.Task SayAll(List<string> lines)
+    {
+        foreach (var line in lines)
+        {
+            await TwitchHelix.Chat(line);
+            await System.Threading.Tasks.Task.Delay(400);
+        }
     }
 
     static void Save()

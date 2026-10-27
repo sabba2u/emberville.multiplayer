@@ -170,15 +170,16 @@ internal sealed class WeaponLock : IEffect
 }
 
 /// <summary>
-/// Weapon roulette: for its time (1.5 minutes), every 30 s your weapon swaps for a random other one from your bag (the
-/// first swap at once). With one other weapon or none, fists are in the draw too, so it always changes. Meanwhile no
+/// Weapon roulette: for its time (1.5 minutes), every 5 s your weapon swaps for one of a different type from your bag
+/// (the first swap at once), never the same type twice in a row. With fewer than two other types, fists are a type in
+/// the draw too, so it always changes. Meanwhile no
 /// other weapon goes in your hand. When it ends, the weapon you had goes back in your hand (you had none: fists). Not
 /// while a weapon lock is on (they'd fight).
 /// </summary>
 internal sealed class WeaponRoulette : IEffect
 {
     public string Id => "roulette";
-    const float Every = 30f;
+    const float Every = 5f;
     public static bool Running { get; private set; }
     /// <summary>Its own swap or its end under way (the lock lets those through).</summary>
     public static bool Swapping { get; private set; }
@@ -222,20 +223,25 @@ internal sealed class WeaponRoulette : IEffect
         {
             var hand = InHand();
             var others = bag.allItems.Where(x => (x.section == InventorySection.Main || x.section == InventorySection.Belt) && WeaponLock.HandWeapon(x.itemObject?.data)).ToList();
-            // the draw: every other weapon, and fists too when there's little else (and you're holding something)
-            int choices = others.Count + (others.Count < 2 && hand != null ? 1 : 0);
-            if (choices == 0) return;   // (no weapons at all: nothing to swap)
-            int pick = Random.Range(0, choices);
-            if (pick < others.Count)
-            {
-                var w = others[pick];
-                if (bag.TryToEquip(w.slotIndex, w.section, GearSlot.MainHand)) Effects.Say(Effects.Player, WeaponName(w.itemObject));
-            }
-            else if (bag.TryToUnequip(GearSlot.MainHand, -1, InventorySection.Main)) Effects.Say(Effects.Player, "Fists!");
+            // the draw: a different type of weapon from the one in hand, every time (fists are a type too, when
+            // there are fewer than two other types to go round)
+            var types = others.Select(TypeOf).Distinct().ToList();
+            if (hand != null && types.Count(t => t != TypeOf(hand)) < 2) types.Add(Fists);
+            string type = WeaponTypes.Next(hand == null ? Fists : TypeOf(hand), types, k => Random.Range(0, k));
+            if (type == "") return;   // (nothing of another type to swap to)
+            if (type == Fists) { if (bag.TryToUnequip(GearSlot.MainHand, -1, InventorySection.Main)) Effects.Say(Effects.Player, "Fists!"); return; }
+            var pick = others.Where(x => TypeOf(x) == type).ToList();
+            var w = pick[Random.Range(0, pick.Count)];
+            if (bag.TryToEquip(w.slotIndex, w.section, GearSlot.MainHand)) Effects.Say(Effects.Player, WeaponName(w.itemObject));
         }
         catch (System.Exception e) { Log.Warn($"Streaming: weapon roulette: {e.Message}"); }
         finally { Swapping = false; }
     }
+
+    const string Fists = "fists";
+
+    /// <summary>A weapon's type (the game's category: one-handed swords, bows, staffs...).</summary>
+    static string TypeOf(InventoryItem i) => i.itemObject?.data is CollectableWeapon w && w.weapon ? w.weapon.weaponCategory.ToString() : Fists;
 
     static string WeaponName(ItemObject o)
     {

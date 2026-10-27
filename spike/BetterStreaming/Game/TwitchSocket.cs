@@ -177,6 +177,7 @@ internal static class TwitchSocket
         bool cheers = await TwitchHelix.Subscribe("channel.cheer", "1", new { broadcaster_user_id = me }, session);
         await TwitchHelix.Subscribe("channel.channel_points_custom_reward_redemption.add", "1", new { broadcaster_user_id = me }, session);
         await TwitchHelix.Subscribe("channel.chat.message", "1", new { broadcaster_user_id = me, user_id = me }, session);
+        await TwitchHelix.Subscribe("channel.poll.end", "1", new { broadcaster_user_id = me }, session);
         if (!cheers) Log.Info("Twitch: Bits need an Affiliate or Partner channel; chat commands work for anyone", toast: true);
     }
 

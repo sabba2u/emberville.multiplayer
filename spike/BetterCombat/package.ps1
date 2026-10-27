@@ -32,7 +32,7 @@ Copy-Item (Join-Path $out "BetterCombat.dll") "$stage\BepInEx\plugins\BetterComb
 
 @"
 Better Combat v$version
-Lock-on, bow lock-on and moving while you attack, for the Emberville Demo. Not made or supported by Cygnus Cross.
+Lock-on, bow lock-on, moving while you attack and responsive spell keys, for the Emberville Demo. Not made or supported by Cygnus Cross.
 
 INSTALL
 1. Find the game folder: Steam > right-click Emberville Demo > Manage > Browse local files.
@@ -52,6 +52,10 @@ USE
   /moveattack 70 (bow speed 70%).
 - Centred camera (off to start): the camera stays on you, dashes too. Chat /centercam, /centercam 30 (it trails at
   30% of the game's lag; 0 = locked on you).
+- Spell keys that answer every press (on to start): no 1 s lockout, a press while busy is remembered for 0.4 s,
+  a spell cuts a swing's follow-through once its hit lands; dodge and attack presses remembered too. Chat /spellkeys.
+- No stun lock: after a stagger you can't be staggered again for 0.5 s; a stagger-length slider (the game's 0.3 s).
+- Before / after: /gamecombat turns everything off (the game's own combat) and back on.
 Without the multiplayer mod: switch them in BepInEx\config\spike.emberville.bettercombat.cfg ([Combat], [Camera]).
 
 UNINSTALL

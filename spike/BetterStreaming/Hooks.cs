@@ -19,10 +19,17 @@ public static class Hooks
     public static Func<UnityEngine.Object, bool> IsTwitchCreature = _ => false;
     /// <summary>A creature on the player's side or not to be hurt (pets, summons, story NPCs): chain lightning leaves it.</summary>
     public static Func<Enemy, bool> IsFriendly = _ => false;
+    /// <summary>A creature the game counts as wildlife (no enemy type) that's been turned against you, e.g. the chicken
+    /// level's chickens: a foe, for chain lightning and chatters' names.</summary>
+    public static Func<Enemy, bool> IsHostileFauna = _ => false;
     /// <summary>A boss (the multiplayer mod's mini-bosses): chain lightning takes less of its health.</summary>
     public static Func<Enemy, bool> IsBoss = _ => false;
     /// <summary>A mystery chest near there: (around, a trap?, viewer) → placed? A trap springs a raid when opened.</summary>
     public static Func<Vector3, bool, string, bool> SpawnChest;
+    /// <summary>The Bestiary's creatures (the multiplayer mod's): each one's name and its picture, as its parts (sprite,
+    /// where it sits in the creature's own units, mirrored, tint). Empty without the pack.</summary>
+    public static Func<System.Collections.Generic.IReadOnlyList<(string Name, System.Collections.Generic.IReadOnlyList<(Sprite Sprite, Rect Box, bool Flip, Color Colour)> Parts)>> Creatures =
+        () => new (string, System.Collections.Generic.IReadOnlyList<(Sprite, Rect, bool, Color)>)[0];
     /// <summary>The game's whole item catalogue once loaded (the multiplayer mod loads it), else null.</summary>
     public static Func<System.Collections.Generic.IReadOnlyList<ItemData>> Catalogue = () => null;
     /// <summary>The storm's weather: rain on (true: done; false: no weather mod), and the weather before it put back.</summary>

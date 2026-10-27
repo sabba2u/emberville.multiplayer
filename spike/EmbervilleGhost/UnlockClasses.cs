@@ -1,3 +1,5 @@
+using BepInEx.Configuration;
+using HarmonyLib;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
@@ -13,9 +15,51 @@ namespace EmbervilleGhost;
 /// /lockclasses [name]: every class forgotten (or just that one), but the one you have on.
 /// Both of the save's class lists: KnownClasses (the class screen shows its card, not "???") and LearnedClasses.
 /// Your save keeps it.
+/// /unlockclasses also opens the full class tree ([Testing] FullClassTree): the demo caps class levels at 15 (its
+/// MaxLevels table) though its XP table goes to 40, and blocks the later nodes ("coming soon"). XP earned past 15 was
+/// kept all along, so those levels come back at once. /lockclasses (all of them) puts the cap back.
 /// </summary>
+[HarmonyPatch]
 internal static class UnlockClasses
 {
+    static ConfigEntry<bool> fullTree;
+    static readonly HashSet<SkillNode> unblocked = new HashSet<SkillNode>();   // (the game's "coming soon" nodes we opened)
+
+    public static void Bind(ConfigFile config) =>
+        fullTree = config.Bind("Testing", "FullClassTree", false, "Set by /unlockclasses: class levels past the demo's 15 (to 40, the game's XP table) and its \"coming soon\" skills open; /lockclasses clears it");
+
+    static void FullTree(bool on)
+    {
+        fullTree.Value = on;
+        // every class's level again, from the XP it has (the cap only changes how it's counted)
+        foreach (var c in All())
+        {
+            var xp = GameData.playerData.GetPlayerExperience(c.playerClassType);
+            if (xp != null) GameData.playerData.SetXP(c.playerClassType, xp.TotalXP);
+        }
+        foreach (var u in Resources.FindObjectsOfTypeAll<UIClassUpgrade>())
+            if (u.activeCharStats) u.GatherStats(u.activeCharStats);   // (an open class screen redrawn)
+    }
+
+    [HarmonyPatch(typeof(PlayerData), "GetMaxLevel"), HarmonyPostfix]
+    static void ClassCap(object key, ref int __result)
+    {
+        if (fullTree != null && fullTree.Value && key is PlayerClassType t && t != PlayerClassType.None)
+            __result = System.Math.Max(__result, GameData.ClassXPTable.Count);
+    }
+
+    [HarmonyPatch(typeof(UISkillTree), nameof(UISkillTree.DrawTree), typeof(SkillTree), typeof(System.Action<SkillNode, UISkillNode>), typeof(System.Action<SkillNode, UISkillNode>)), HarmonyPrefix]
+    static void ComingSoon(SkillTree tree)
+    {
+        if (tree?.skillNodes == null || fullTree == null) return;
+        foreach (var n in tree.skillNodes)
+        {
+            if (!n) continue;
+            if (fullTree.Value && n.IsBlocked) { n.IsBlocked = false; unblocked.Add(n); }
+            else if (!fullTree.Value && unblocked.Remove(n)) n.IsBlocked = true;
+        }
+    }
+
     /// <summary>Every combat class the game has loaded: its class screens' lists, and any other copy in memory.</summary>
     public static List<PlayerCombatClass> All()
     {
@@ -112,8 +156,10 @@ internal static class UnlockClasses
             if (!learned.Contains(Id(c))) { learned.Add(Id(c)); added.Add(c.playerClassType.ToString()); }
         }
         GameData.gameBools[BoolID.UnlockedClasses] = true;
-        NetLog.Info(added.Count > 0 ? $"Classes learned: {string.Join(", ", added)} (the class screen is unlocked)" :
-            $"You already know {string.Join(", ", these.Select(c => c.playerClassType))}", toast: true);
+        FullTree(true);
+        NetLog.Info((added.Count > 0 ? $"Classes learned: {string.Join(", ", added)} (the class screen is unlocked)" :
+            $"You already know {string.Join(", ", these.Select(c => c.playerClassType))}") +
+            $"; class tree open to level {GameData.ClassXPTable.Count + 1}", toast: true);
     }
 
     /// <summary>/classscreen, /charscreen: that screen unlocked (its HUD button too) and opened; "off": locked
@@ -162,7 +208,10 @@ internal static class UnlockClasses
             bool was = learned.Remove(Id(c));
             if (GameData.playerData.KnownClasses.Remove(Id(c)) || was) removed.Add(c.playerClassType.ToString());
         }
+        bool capped = string.IsNullOrWhiteSpace(name) && fullTree.Value;
+        if (capped) FullTree(false);
         NetLog.Info((removed.Count > 0 ? $"Classes forgotten: {string.Join(", ", removed)}" : "Nothing to forget") +
-            (kept ? $" ({on.playerClassType} stays: you have it on)" : ""), toast: true);
+            (kept ? $" ({on.playerClassType} stays: you have it on)" : "") +
+            (capped ? "; class levels capped at the demo's 15 again" : ""), toast: true);
     }
 }

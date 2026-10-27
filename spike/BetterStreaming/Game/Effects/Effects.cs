@@ -21,6 +21,13 @@ internal static class Effects
         Streamer.Effects["random2"] = new RandomPack("random2", 2);
         Streamer.Effects["random3"] = new RandomPack("random3", 3);
         Streamer.Effects["storm"] = new Storm();
+        Streamer.Effects["wheel"] = new Wheel();
+        Streamer.Effects["dice"] = new Dice();
+        Streamer.Effects["slots"] = new Slots();
+        Streamer.Effects["plinko"] = new Plinko();
+        Streamer.Effects["coin"] = new Coin();
+        Streamer.Effects["casino"] = new CasinoRoulette();
+        Streamer.Effects["race"] = new Race();
     }
 
     public static PlayerMaster Player => Singleton<GameManager>.HasMain ? Singleton<GameManager>.main.player : null;
@@ -339,8 +346,9 @@ internal sealed class ChainLightning : IEffect
         foreach (var e in EnemiesManager.AllEnemies.ToList())
         {
             if (!e || e.IsDead || !e.gameObject.activeInHierarchy || e.initHealth <= 0f) continue;
-            // (not the townsfolk, the livestock, or anything on your side; Twitch's own chickens are fair game)
-            if (e.name.StartsWith("NPC_") || Hooks.IsFriendly(e) || (e.enemyType == EnemyType.None && !Hooks.IsTwitchCreature(e))) continue;
+            // (not the townsfolk, the livestock, or anything on your side; Twitch's own chickens and the chicken level's
+            // are fair game)
+            if (e.name.StartsWith("NPC_") || Hooks.IsFriendly(e) || (e.enemyType == EnemyType.None && !Hooks.IsTwitchCreature(e) && !Hooks.IsHostileFauna(e))) continue;
             var v = cam.WorldToViewportPoint(e.transform.position);
             if (v.z < 0f || v.x < 0f || v.x > 1f || v.y < 0f || v.y > 1f) continue;
             left.Add(e);

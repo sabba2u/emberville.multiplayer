@@ -5,19 +5,33 @@ using Newtonsoft.Json;
 
 namespace BetterStreaming;
 
-/// <summary>The Twitch API calls we make (off the main thread): EventSub subscriptions, and a line in chat.</summary>
+/// <summary>The Twitch API calls we make (off the main thread): EventSub subscriptions, a line in chat, polls and
+/// predictions.</summary>
 internal static class TwitchHelix
 {
     static readonly HttpClient http = new HttpClient { Timeout = System.TimeSpan.FromSeconds(15) };
 
-    static async Task<(int status, string body)> Post(string url, object json)
+    static Task<(int status, string body)> Post(string url, object json) => Send(HttpMethod.Post, url, json);
+
+    /// <summary>A Helix call (path: "/polls"...), as the streamer.</summary>
+    public static Task<(int status, string body)> Api(HttpMethod method, string path, object json) =>
+        Send(method, TwitchConfig.HelixUrl.Value.TrimEnd('/') + path, json);
+
+    static async Task<(int status, string body)> Send(HttpMethod method, string url, object json)
     {
         string token = await TwitchAuth.Token();
-        var req = new HttpRequestMessage(HttpMethod.Post, url) { Content = new StringContent(JsonConvert.SerializeObject(json), Encoding.UTF8, "application/json") };
+        string sent = JsonConvert.SerializeObject(json);
+        var req = new HttpRequestMessage(method, url) { Content = new StringContent(sent, Encoding.UTF8, "application/json") };
         req.Headers.TryAddWithoutValidation("Authorization", "Bearer " + token);
         req.Headers.TryAddWithoutValidation("Client-Id", TwitchConfig.ClientId.Value);
         using (var res = await http.SendAsync(req))
-            return ((int)res.StatusCode, await res.Content.ReadAsStringAsync());
+        {
+            // (everything to and from Twitch in the log; the token is only ever in the header, never written)
+            string got = await res.Content.ReadAsStringAsync();
+            Log.Info($"Twitch > {method} {new System.Uri(url).AbsolutePath} {Short(sent)}");
+            Log.Info($"Twitch < {(int)res.StatusCode} {Short(got)}");
+            return ((int)res.StatusCode, got);
+        }
     }
 
     /// <summary>Subscribe this socket session to an event type. False (logged) if Twitch said no.</summary>
@@ -39,10 +53,11 @@ internal static class TwitchHelix
     public static async Task Chat(string text)
     {
         if (string.IsNullOrEmpty(TwitchAuth.UserId) || TwitchConfig.Mock) { Log.Info($"Twitch chat (not sent): {text}"); return; }
+        Log.Info($"Twitch chat > {text}");
         var (status, body) = await Post(TwitchConfig.HelixUrl.Value.TrimEnd('/') + "/chat/messages",
             new { broadcaster_id = TwitchAuth.UserId, sender_id = TwitchAuth.UserId, message = text.Length > 480 ? text.Substring(0, 480) : text });
         if (status < 200 || status >= 300) Log.Warn($"Twitch: couldn't send to chat ({status}): {Short(body)}");
     }
 
-    static string Short(string s) => s == null ? "" : s.Length > 200 ? s.Substring(0, 200) : s;
+    internal static string Short(string s) => s == null ? "" : s.Length > 200 ? s.Substring(0, 200) : s;
 }
