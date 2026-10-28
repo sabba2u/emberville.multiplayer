@@ -232,7 +232,7 @@ Type the command in chat to get one, or MODS > Better Combat > **New Weapons**.
 
 ## Chests and loot
 - **F** on an item marks it a favourite (a gold star on its slot): favourites never get swept into chests.
-- **J** on an item marks it junk (a red X on its slot); **Shift+J** drops all your junk at your feet (on the ground its name is red with an X; a favourite's shimmers gold behind a star).
+- **J** on an item marks it junk (a red X on its slot); **Shift+J** drops all your junk at your feet (on the ground a red X marks junk, a gold star a favourite).
 - At a chest: **X** puts in everything the chest already holds; **V** customizes it (name, colour, and what it takes:
   items it refuses grey out in your bag).
 - **Search boxes** above your bag and an open chest.

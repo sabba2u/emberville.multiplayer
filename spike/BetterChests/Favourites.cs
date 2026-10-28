@@ -210,8 +210,8 @@ internal static class Favourites
 
     // ---- marked items on the ground ----
 
-    // its name on the ground (the game shows it while Shift is held, or when you're near): a favourite's in shimmering
-    // gold behind a big star, junk's in red behind a bold X (picked up as anything else is). The drops are pooled: a
+    // its name on the ground (the game shows it while Shift is held, or when you're near): a big gold star in front of
+    // a favourite's, a bold red X in front of junk's; the name itself as the game shows it. The drops are pooled: a
     // plain one gets its own colour back.
     [HarmonyPatch(typeof(ItemDropObject), nameof(ItemDropObject.Setup)), HarmonyPostfix]
     static void MarkOnName(ItemDropObject __instance)
@@ -222,49 +222,57 @@ internal static class Favourites
         if (!look.Kept) { look.Plain = t.color; look.Kept = true; }
         var item = __instance.itemObj;
         bool fav = Is(item), junk = !fav && IsJunk(item);
-        look.enabled = fav;   // (the shimmer)
-        if (fav) { t.text = "<b><size=240%><voffset=-0.3em>*</voffset></size> " + t.text + "</b>"; t.color = NameLook.Gold; }
-        else if (junk) { t.text = "<b><size=170%>X</size> " + t.text + "</b>"; t.color = new Color32(255, 70, 70, 255); }
-        else { t.color = look.Plain; t.ForceMeshUpdate(); }
-        // a dark edge round the letters of a marked one, so gold and red read on any ground (its own copy of the
-        // font's material: the plain names keep the game's)
-        if (fav || junk) { t.outlineColor = new Color32(20, 10, 0, 255); t.outlineWidth = 0.28f; }
-        else if (t.outlineWidth > 0f && look.Outlined) t.outlineWidth = 0f;
-        look.Outlined = fav || junk;
+        t.color = look.Plain;
+        if (fav || junk) t.text = "<space=1.1em>" + t.text;   // (room for the icon, inside the name's box)
+        look.Mark = fav ? Star() : junk ? Cross() : null;
+        look.enabled = look.Mark;   // (it places the icon while the name shows: hidden, it has no letters to go by)
+        if (!look.Mark) Icon(t, null);
+        if (look.Outlined) { t.outlineWidth = 0f; look.Outlined = false; }   // (an outline from before: gone)
         __instance.titleSizeFitter?.AdjustSize();
     }
 
-    /// <summary>A favourite's name on the ground: gold, with a band of light running across it every couple of seconds.</summary>
+    /// <summary>The little star / X just before the name, the letters' height (the same pixel icons as on the slots).</summary>
+    internal static void Icon(TMPro.TMP_Text t, Sprite sprite)
+    {
+        var at = t.transform.Find("BC_Mark");
+        if (!sprite) { if (at) at.gameObject.SetActive(false); return; }
+        SpriteRenderer r;
+        if (at) r = at.GetComponent<SpriteRenderer>();
+        else
+        {
+            var go = new GameObject("BC_Mark");
+            go.transform.SetParent(t.transform, false);
+            r = go.AddComponent<SpriteRenderer>();
+        }
+        r.sprite = sprite;
+        var mr = t.GetComponent<MeshRenderer>();
+        if (mr) { r.sortingLayerID = mr.sortingLayerID; r.sortingOrder = mr.sortingOrder + 1; }
+        // the first letter's own height (a capital, as names start): the icon a little taller, just before it
+        var info = t.textInfo;
+        if (info == null || info.characterCount == 0) return;
+        var first = info.characterInfo[0];
+        for (int i = 0; i < info.characterCount; i++) if (info.characterInfo[i].isVisible) { first = info.characterInfo[i]; break; }
+        float tall = first.topLeft.y - first.bottomLeft.y;
+        float side = tall * 1.15f;
+        r.transform.localPosition = new Vector3(first.bottomLeft.x - side * 0.62f, (first.topLeft.y + first.bottomLeft.y) * 0.5f, 0f);
+        r.transform.localScale = new Vector3(side, side, 1f);
+        r.gameObject.SetActive(true);
+    }
+
+    /// <summary>On a marked item's name on the ground: its star / X put before the first letter while the name shows.</summary>
     internal sealed class NameLook : MonoBehaviour
     {
-        public static readonly Color32 Gold = new(255, 200, 60, 255);
-        static readonly Color32 Bright = new(255, 250, 215, 255);
         public Color Plain;
         public bool Kept, Outlined;
+        public Sprite Mark;
         TMPro.TMP_Text text;
 
         void Awake() => text = GetComponent<TMPro.TMP_Text>();
 
-        void OnDisable() { if (text && Kept) text.ForceMeshUpdate(); }   // (the plain colours back)
-
         void LateUpdate()
         {
-            if (!text || !text.isActiveAndEnabled) return;
-            text.ForceMeshUpdate();
-            var info = text.textInfo;
-            int n = info.characterCount;
-            if (n == 0) return;
-            float band = Mathf.Repeat(Time.unscaledTime * 0.6f, 1.6f) * n - 0.3f * n;   // (where the light is: sweeps, then rests)
-            for (int i = 0; i < n; i++)
-            {
-                var c = info.characterInfo[i];
-                if (!c.isVisible) continue;
-                float glow = Mathf.Clamp01(1f - Mathf.Abs(i - band) / 2.5f);
-                var col = Color32.Lerp(Gold, Bright, glow);
-                var colors = info.meshInfo[c.materialReferenceIndex].colors32;
-                for (int v = 0; v < 4; v++) colors[c.vertexIndex + v] = col;
-            }
-            text.UpdateVertexData(TMPro.TMP_VertexDataUpdateFlags.Colors32);
+            if (!text || !Mark || !text.isActiveAndEnabled || text.textInfo == null || text.textInfo.characterCount == 0) return;
+            Icon(text, Mark);
         }
     }
 

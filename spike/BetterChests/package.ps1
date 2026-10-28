@@ -52,8 +52,8 @@ onto its stacks and then into free slots while there's room. Each item shows in 
 - F over an item in your inventory or a chest: a favourite (a gold star in its corner). Favourites never go into a
   chest by themselves (X, Shift+X, the chest screen's send buttons); F again to undo.
 - J over an item: junk (a red X in its corner); J again to undo. An item is a favourite or junk, not both.
-- Shift+J: drop everything marked junk from your bag at your feet. On the ground its name is red with
-  an X; favourites' names shimmer gold behind a star.
+- Shift+J: drop everything marked junk from your bag at your feet. On the ground an X marks it; a gold
+  star marks a favourite.
 Settings: BepInEx\config\spike.emberville.betterchests.cfg ([QuickStack] Key = X).
 
 UNINSTALL

@@ -319,13 +319,13 @@ internal static class Chat
                 if (l.Who.Length > 0)
                 {
                     var c = l.Color; c.w = alpha;
-                    ImGui.TextColored(c, l.Who + ":");
+                    ImGui.TextColored(c, (l.Who + ":").Replace("%", "%%"));   // (ImGui reads % as a format)
                     ImGui.SameLine();
                 }
                 ImGui.PushTextWrapPos(0f);   // at the window's edge
                 var tc = l.Who.Length > 0 ? new Vector4(1, 1, 1, 1) : l.Color;   // system lines (deaths...) in their own colour
                 tc.w = alpha;
-                ImGui.TextColored(tc, l.Text);
+                ImGui.TextColored(tc, l.Text.Replace("%", "%%"));
                 ImGui.PopTextWrapPos();
             }
 
