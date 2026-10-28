@@ -24,6 +24,7 @@ Careful where you step, {PlayerName}. Everything I own is in a pile on the groun
 I'm Nagedra. Carpenter, when I have a workshop. Could you craft me a wooden chest to carry my belongings?
 [[I'll make you one.|ChestStart]]
 [[Know any good dungeons?|Dungeons]]
+[[Could you help me change my look?|Restyle]]
 [[Not right now.|END]]
 
 :: ChestStart [NPC:Nagedra]
@@ -34,6 +35,7 @@ A plain wooden chest will do. Bring it to me when it's done.
 Got that chest for me?
 (if: $has_woodenchest)[[Here it is.|ChestGive]]
 [[Know any good dungeons?|Dungeons]]
+[[Could you help me change my look?|Restyle]]
 [[Still working on it.|END]]
 
 :: ChestGive [NPC:Nagedra]
@@ -45,6 +47,7 @@ My toolkit took a beating on the way here. Bring me 10 softwood and 5 metal part
 I'll draw you some blueprints for your workshop in return.
 [[Deal.|ToolsStart]]
 [[Know any good dungeons?|Dungeons]]
+[[Could you help me change my look?|Restyle]]
 [[Maybe later.|END]]
 
 :: ToolsStart [NPC:Nagedra]
@@ -55,6 +58,7 @@ Softwood and metal parts. You know where to find them better than I do.
 How are those materials coming along?
 (if: $has_softwood_10 and $has_metal_5)[[I have them.|ToolsGive]]
 [[Know any good dungeons?|Dungeons]]
+[[Could you help me change my look?|Restyle]]
 [[Not yet.|END]]
 
 :: ToolsGive [NPC:Nagedra]
@@ -78,6 +82,7 @@ That's not quite what I asked for.
 :: AllDone [NPC:Nagedra]
 Those blueprints should keep you busy. Come back when you've built something.
 [[Know any good dungeons?|Dungeons]]
+[[Could you help me change my look?|Restyle]]
 [[See you, Nagedra.|END]]
 
 :: Dungeons [NPC:Nagedra]
@@ -134,3 +139,7 @@ Tolcan's woods. Darker than mine, if you can believe it.
 :: GoBasement [NPC:Nagedra]
 (trigger: "command dungeon dungeonGeneration_stonebasement_first")
 Cold stone and colder company down there.
+
+:: Restyle [NPC:Nagedra]
+(trigger: "command restyle")
+A new look? Sit down, let me get my good scissors. And take your hat off first, or you won't see what I'm doing to your hair.

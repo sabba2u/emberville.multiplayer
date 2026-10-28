@@ -42,6 +42,7 @@ public class Plugin : BaseUnityPlugin
             }
             WorldFile.Tick();
             Npcs.Tick();
+            Shop.Tick();   // (the character creator, once a conversation that asked for it has closed)
             QuestBridge.Tick();
             Net.Tick();
             Events.Hook();

@@ -257,6 +257,13 @@ Type the command in chat to get one, or MODS > Better Combat > **New Weapons**.
 ## NPCs and quests
 - **Ellie** (in the starting area): a two-part quest (wood, then a sword) with a reward; she'll give you a chicken or
   either staff, and can respec you. Her portrait in the dialogue window is her, live.
+- **The camp** (next to Ellie): characters the demo has the art for but never lets you meet.
+  - **Atwor the blacksmith**, at his anvil: talk to him with a weapon in your hands and he sharpens it (+1, more damage).
+  - **Gumu**: his shop, with good-to-legendary gear by your level, fresh every day in the game.
+  - **Nagedra the carpenter**: her quests from the full game (a wooden chest, then her tools) for blueprints; she'll
+    send you into the dungeons she knows; and **"Could you help me change my look?"** opens the game's character
+    creator (hair, beard, face, skin, colours, body, name). **Hide your hat first** (the show / hide toggle by the head slot
+    in your inventory), or you won't see your new hair.
 - **Make your own:** NPCs, dialogue (Twine `.twee`) and quests from text files: see `README-BetterNPCsAndQuests.txt` in
   the download. Dialogue can run any chat command (`(trigger: "command snow on")`).
 - In co-op everyone shares the host's NPCs and story.

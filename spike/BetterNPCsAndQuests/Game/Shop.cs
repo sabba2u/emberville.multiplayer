@@ -99,6 +99,24 @@ internal static class Shop
         return list;
     }
 
+    // ---- the character creator ----
+
+    static bool restyle;
+
+    /// <summary>(trigger: "command restyle"): the game's own character creator (hair, beard, face, skin, colours, body,
+    /// name), as at the start of a new game; what you pick is saved with your character when the game saves. Opened
+    /// once the conversation has closed (it can't share the screen with it).</summary>
+    public static void Restyle() => restyle = true;
+
+    public static void Tick()
+    {
+        if (!restyle || Singleton<DialogueManager>.HasMain && Singleton<DialogueManager>.main.IsPlaying) return;
+        restyle = false;
+        var screen = UnityEngine.Object.FindAnyObjectByType<UICharCustomization>(FindObjectsInactive.Include);
+        if (screen) screen.Show();
+        else Hooks.Say("There's no mirror here");
+    }
+
     // ---- blueprints ----
 
     // the game's recipe ids (its quests' rewards), for when the recipe itself isn't loaded here
