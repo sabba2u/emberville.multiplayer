@@ -49,8 +49,10 @@ onto its stacks and then into free slots while there's room. Each item shows in 
 - Ctrl+click an item while a chest is open: it goes straight across (bag to chest, chest to bag).
 - U (or chat /stash): your shared stash, anywhere: 6 tabs of 30 slots, shared by every character on this PC. Right-click
   a tab to rename it and give it a colour. It's kept in its own file next to your saves (with a backup).
-- F over an item in your inventory or a chest: a favourite (a heart in its corner). Favourites never go into a
+- F over an item in your inventory or a chest: a favourite (a gold star in its corner). Favourites never go into a
   chest by themselves (X, Shift+X, the chest screen's send buttons); F again to undo.
+- J over an item: junk (a red X in its corner); J again to undo. An item is a favourite or junk, not both.
+- Shift+J: drop everything marked junk from your bag at your feet (you can still pick it back up).
 Settings: BepInEx\config\spike.emberville.betterchests.cfg ([QuickStack] Key = X).
 
 UNINSTALL

@@ -78,6 +78,7 @@ internal static class DebugPanel
         new Tab { Id = "respec", Label = "Respec", Draw = _ => Respec.DrawYou() },
         new Tab { Id = "pets", Label = "Pets", Installed = () => Integrations.HasPets, Draw = _ => Integrations.DrawPets() },
         new Tab { Id = "streaming", Label = "Streaming", Installed = () => Integrations.HasStreaming, Draw = _ => Integrations.DrawStreaming() },
+        new Tab { Id = "weather", Label = "Weather", Installed = () => Integrations.HasWeather, Draw = _ => Integrations.DrawWeather() },
         new Tab { Id = "log", Label = "Log", Draw = DrawLog },
         new Tab { Id = "construction", Label = "Construction", Show = () => BuildMode.Enabled, Draw = DrawConstruction },
     };

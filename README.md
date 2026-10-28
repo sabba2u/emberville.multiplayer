@@ -211,7 +211,8 @@ Type the command in chat to get one, or MODS > Better Combat > **New Weapons**.
 - More in **MODS > Respec**: − / + / Reset for your level, each class, each weapon and armour mastery and every job.
 
 ## Chests and loot
-- **F** on an item marks it a favourite (a heart on its slot): favourites never get swept into chests.
+- **F** on an item marks it a favourite (a gold star on its slot): favourites never get swept into chests.
+- **J** on an item marks it junk (a red X on its slot); **Shift+J** drops all your junk at your feet.
 - At a chest: **X** puts in everything the chest already holds; **V** customizes it (name, colour, and what it takes:
   items it refuses grey out in your bag).
 - **Search boxes** above your bag and an open chest.
@@ -354,7 +355,9 @@ it's rough. The art is borrowed for now (arrows until there are throwing stars),
 | F5-F8, hold Left Alt | wield a favourite weapon, weapon wheel |
 | G | lock on to the enemy under the mouse (again: let go); at nothing: the nearest / the next one |
 | Right trigger (controller) | hold: lock on to the nearest (hold again: let go); tap: the next one |
-| F (on an item) | favourite it (heart) |
+| F (on an item) | favourite it (gold star) |
+| J (on an item) | junk it (red X) |
+| Shift+J | drop all your junk at your feet |
 | X / V (at a chest) | put matching items in / customize the chest |
 | Ctrl+click (chest open) | move the item across |
 | U | the shared stash |

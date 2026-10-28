@@ -112,5 +112,6 @@ internal static class Weather
         if (ImGui.SmallButton("Lightning now (test)")) Lightning.StrikeSomewhere();
         ImGui.SameLine();
         if (ImGui.SmallButton("Melt the snow now")) Snow.MeltAll();
+        Reflections.DrawMenu();
     }
 }

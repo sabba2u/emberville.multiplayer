@@ -34,6 +34,10 @@ internal static class Rain
     static string layeredFor, waterFor;
     static int sortingLayer;
     static readonly List<Tilemap> water = new();
+    /// <summary>The water layers found (IsWater looks for them).</summary>
+    internal static List<Tilemap> WaterMaps => water;
+    /// <summary>Layers() has run for this scene (with the player there).</summary>
+    internal static bool Layered => layeredFor == SceneManager.GetActiveScene().name;
 
     public static void Tick(float strength)
     {
@@ -142,7 +146,13 @@ internal static class Rain
     static float nextWaterScan;
     static int waterSig;
 
-    internal static bool IsWater(Vector3 at)
+    internal static bool IsWater(Vector3 at) => WaterAt(at) != null;
+
+    /// <summary>The land drawn over a water layer (banks, islands, cliffs, the floor the river runs on under).</summary>
+    internal static IEnumerable<Tilemap> Over(Tilemap w) => w && over.TryGetValue(w, out var l) ? l : Enumerable.Empty<Tilemap>();
+
+    /// <summary>The water layer showing at a spot (none: land, or something drawn over the water there).</summary>
+    internal static Tilemap WaterAt(Vector3 at)
     {
         string scene = SceneManager.GetActiveScene().name;
         // (looked at again every few seconds: the map loads in pieces as you go, the river's with its own)
@@ -167,9 +177,9 @@ internal static class Rain
             if (!w || !w.isActiveAndEnabled || !w.HasTile(w.WorldToCell(at))) continue;
             bool covered = false;
             foreach (var o in over[w]) if (o && o.isActiveAndEnabled && o.HasTile(o.WorldToCell(at))) { covered = true; break; }
-            if (!covered) return true;
+            if (!covered) return w;
         }
-        return false;
+        return null;
     }
 
     /// <summary>A tilemap you see (not collision, colliders or fog).</summary>

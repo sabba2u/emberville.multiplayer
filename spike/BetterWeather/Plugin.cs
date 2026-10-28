@@ -31,6 +31,7 @@ public class Plugin : BaseUnityPlugin
         snowDensity = Config.Bind("Snow", "Density", 1f, "How hard it snows (1 = steady; 0.1 - 4)");
         snowDarkness = Config.Bind("Snow", "Darkness", 0.7f, "How much darker the world gets while it snows (0 - 0.9)");
         snowSettle = Config.Bind("Snow", "Settle", 1f, "How fast snow covers the ground (1 = about 7-8 minutes to white; 0.2 - 5)");
+        Reflections.Bind(Config);
         outdoors = Config.Bind("Rain", "OutdoorScenes", "Town,TutorialArea", "The scenes where it rains (the rest are inside)");
         Logger.LogInfo($"Better Weather v{Version}: /rain or Insert > Weather");
     }
@@ -43,7 +44,7 @@ public class Plugin : BaseUnityPlugin
 
     void LateUpdate()
     {
-        try { Sky.Tick(); }
+        try { Sky.Tick(); Reflections.Tick(); }
         catch (Exception e) { Logger.LogWarning(e); }
     }
 
