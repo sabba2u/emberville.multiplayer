@@ -32,7 +32,7 @@ bet on whether you'll survive. MODS (Insert) > **Streaming** > **Connect Twitch*
 
 ## Contents
 [Better Streaming: Twitch](#better-streaming-twitch-plays-along) · [Playing together](#playing-together) · [Travel: homes, portals, /tp](#travel-homes-portals-tp) ·
-[The descent and the boss arena](#the-descent-and-the-boss-arena) · [Weapons and summons](#weapons-and-summons) ·
+[The descent and the boss arena](#the-descent-and-the-boss-arena) · [Hidden dungeons](#dungeons-hidden-in-the-demo) · [Weapons and summons](#weapons-and-summons) ·
 [Your character](#your-character) · [Levels: no cap](#levels-no-cap-and-test-keys) · [Chests and loot](#chests-and-loot) · [Weather](#weather) ·
 [NPCs and quests](#npcs-and-quests) · [Fishing](#fishing) · [Pets](#pets) · [Companion: an AI adventurer](#companion-an-ai-adventurer) ·
 [The Ninja (early alpha)](#the-ninja-a-new-class-early-alpha) ·
@@ -136,6 +136,26 @@ by xxJoexx", their message under it).
   wake after a minute, the arrows after three. Survive as long as you can: your time and your best time are kept.
   Your companion fights the chickens with you.
 
+## Dungeons hidden in the demo
+The demo ships about 20 of the full game's dungeons that you never get to visit. Type **`/dungeons`** in chat (Enter)
+to list them, and **`/dungeon <name>`** to build one and go straight in: any part of the name works, and each time is a
+new layout. `/dungeon` on its own goes back out.
+
+| Type `/dungeon ...` | What it is |
+|---|---|
+| `fullmap` | the big cave: the world map's own dungeon |
+| `cave_small` | a small cave |
+| `df_small`, `negedra`, `tolcan` | the Dark Forest (Negedra's is where you find the carpenter; Tolcan's is someone we haven't met) |
+| `mining_01`, `mining_02`, `morcha` | the mines, and Morcha's mine |
+| `nature_01`, `nature_02` | overgrown caves |
+| `lab` | Mordaxius' lab |
+| `morchahideout` | Morcha's hideout |
+| `library` | the library |
+| `kl` | a dungeon only called "KL" (Kaldhor's? his altar and throne are in the files) |
+| `basement_first`, `basement_second`, `stonebasement_first`, `stonebasement_second` | wooden and stone basements |
+
+Everyone in a session goes in together and gets the same layout.
+
 
 ## Weapons and summons
 Type the command in chat to get one, or MODS > Better Combat > **New Weapons**.
@@ -212,7 +232,7 @@ Type the command in chat to get one, or MODS > Better Combat > **New Weapons**.
 
 ## Chests and loot
 - **F** on an item marks it a favourite (a gold star on its slot): favourites never get swept into chests.
-- **J** on an item marks it junk (a red X on its slot); **Shift+J** drops all your junk at your feet.
+- **J** on an item marks it junk (a red X on its slot); **Shift+J** drops all your junk at your feet (on the ground its name is red with an X; a favourite's shimmers gold behind a star).
 - At a chest: **X** puts in everything the chest already holds; **V** customizes it (name, colour, and what it takes:
   items it refuses grey out in your bag).
 - **Search boxes** above your bag and an open chest.
@@ -370,7 +390,7 @@ it's rough. The art is borrowed for now (arrows until there are throwing stars),
 
 ## Commands
 The full list is in [API.md](API.md#chat-commands). The main ones: `/tp`, `/summon`, `/sethome`, `/home`, `/homes`, `/delhome`, `/trade`, `/online`, `/sleep`,
-`/respec`, `/rain`, `/snow`, `/clear`, `/hook`, `/clucking`, `/risen`, `/pet`, `/companion`, `/dungeon`, `/estate`, `/repair`,
+`/respec`, `/rain`, `/snow`, `/clear`, `/hook`, `/clucking`, `/risen`, `/pet`, `/companion`, `/dungeon`, `/dungeons`, `/dungeon negedra`, `/estate`, `/repair`,
 `/resources`, `/stash`, `/tilt`, `/chase`, `/fps`, `/tiltshift`, `/bowlock`, `/moveattack`, `/spellkeys`, `/gamecombat`; testing: `/nodeath`, `/onehitkill`, `/noclip`, `/devmode`, `/devpanel`,
 `/unlockclasses` (every class, and the class tree open past the demo's level 15, to 40).
 

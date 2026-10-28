@@ -82,4 +82,29 @@ internal static class DemoEnd
             return true;
         }
     }
+
+    /// <summary>Gumu runs a shop in Town (the game's own: a StoreComponent named "Gumu", stocked), which the demo never
+    /// opens: his intro sends him off instead. By the time you reach him the demo is done, so talking to him (F) opens
+    /// his shop, always.</summary>
+    [HarmonyPatch(typeof(DialogueTrigger), nameof(DialogueTrigger.OnInteract))]
+    static class GumuShop
+    {
+        static bool Prefix(DialogueTrigger __instance)
+        {
+            if (!IsGumu(__instance.transform)) return true;
+            StoreComponent shop = null;
+            foreach (var s in Object.FindObjectsByType<StoreComponent>(FindObjectsSortMode.None))
+                if (s && s.storeName == "Gumu") { shop = s; break; }
+            if (!shop || !Singleton<StoreManager>.HasMain || !Singleton<StoreManager>.main.HasID(shop.ID)) return true;   // (not set up yet: his talk)
+            if (!shop.isOpened) shop.OpenStore();
+            Plugin.Log.LogInfo("Gumu: his shop opened");
+            return false;
+        }
+
+        static bool IsGumu(Transform t)
+        {
+            for (; t; t = t.parent) if (t.name.IndexOf("Gumu", System.StringComparison.OrdinalIgnoreCase) >= 0 && t.name.IndexOf("Cutscene", System.StringComparison.OrdinalIgnoreCase) < 0 && !t.name.StartsWith("===")) return true;
+            return false;
+        }
+    }
 }

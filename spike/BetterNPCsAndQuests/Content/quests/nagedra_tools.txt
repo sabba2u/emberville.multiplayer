@@ -1,0 +1,10 @@
+# Nagedra's second quest: materials for her toolkit, blueprints in return
+id       = nagedra_tools
+title    = Tools of the Trade
+text     = Nagedra needs materials to repair her toolkit. In exchange, she promised you a few blueprints for your workshop.
+step     = Bring Nagedra 10 softwood and 5 metal parts
+collect  = softwood x10 take
+collect  = metal x5 take
+complete = command learn cooking pot
+complete = command learn recycle machine
+reward   = xp 100

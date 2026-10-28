@@ -128,6 +128,8 @@ internal sealed class CompanionBody
                     if (vis != null && !vis.IsVisible) Stats.ShowGear(g.gear, false);
                 }
             }
+            CompanionLook.Apply(Unit.Addons, data);   // (again: the game's own start-up dressed it as you)
+            CompanionLook.Head(Unit.Addons, Stats);
             Unit.RefreshHealth();
             Arms.PickFavourites(this);
             Log.Info($"Companion body: stats ok, {k} items worn, HP {Unit.Health}/{Unit.MaxHealth}, weapon {(Unit.Weapon ? Unit.Weapon.name : "bare hands")}");

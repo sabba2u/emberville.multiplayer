@@ -24,7 +24,8 @@ public sealed class ItemSpec
 
 public sealed class NpcDef
 {
-    public string Id, Name, Scene, Facing = "down", Outfit = "light", Holding = "none", Color = "#ffffff", Dialogue, Portrait, Folder;
+    public string Id, Name, Scene, Facing = "down", Outfit = "light", Holding = "none", Color = "#ffffff", Dialogue, Portrait, Folder, Sheet, Prop;
+    public float PropX, PropY;   // (where the prop stands, from their spot)
     public float X, Y, Wander, PauseMin = 3f, PauseMax = 8f;
     public int Hair = -1;   // -1: keep the copied character's hair
 }

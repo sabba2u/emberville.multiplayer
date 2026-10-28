@@ -1,0 +1,23 @@
+:: StoryTitle
+Atwor
+
+(BetterNPCsAndQuests: the game skips the first two passages of every file, so keep these two at the top.
+ Write your conversation below the line.)
+
+:: StoryData
+(Don't remove this passage either. Never type two colons in a row anywhere in your lines:
+ the game reads them as the start of a new passage.)
+
+-------- start your edit below --------
+
+:: DialogStart [NPC:Atwor]
+(if: $holding_weapon)[[x|Sharpen]]
+[[x|NoWeapon]]
+
+:: Sharpen [NPC:Atwor]
+(trigger: "command sharpen")
+That looks kinda dull, let me fix that for you.
+[[Thanks, Atwor.|END]]
+
+:: NoWeapon [NPC:Atwor]
+Bring me something with an edge, {PlayerName}, and I'll put one on it.

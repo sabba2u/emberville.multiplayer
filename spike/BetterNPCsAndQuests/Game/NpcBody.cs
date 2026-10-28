@@ -62,6 +62,9 @@ internal sealed class NpcBody
         int minimap = LayerMask.NameToLayer("Minimap");
         if (minimap >= 0) foreach (var r in copy.GetComponentsInChildren<Renderer>(true)) if (r.gameObject.layer == minimap) r.enabled = false;
         copy.transform.position = at;
+        if (def.Sheet != null && !SheetBody.Dress(copy, def))
+            Log.Warn($"NPCs and quests: {def.Name}'s sheet \"{def.Sheet}\" isn't loaded here (Atwor_Anim comes with TutorialArea): looks like you for now");
+        if (def.Prop != null) Props.Place(def, copy.transform);
         body.DressHair(me, copy);
         body.Label(copy, def);
         copy.SetActive(true);

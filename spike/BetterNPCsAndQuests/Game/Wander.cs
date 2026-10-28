@@ -37,7 +37,7 @@ internal static class Wander
             plan.WaitUntil = Time.time + Random.Range(n.Def.PauseMin, n.Def.PauseMax);
             return;
         }
-        if (n.Def.Wander <= 0f) return;
+        if (n.Def.Wander <= 0f || n.Def.Sheet != null) return;   // (a sheet NPC has no walk)
 
         if (plan.Target == null)
         {

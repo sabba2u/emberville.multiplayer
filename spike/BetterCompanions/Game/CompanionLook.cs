@@ -40,6 +40,9 @@ internal static class CompanionLook
     {
         if (!addons) return;
         var setup = data?.playerSetup;
+        Log.Info($"Companion look: {data?.playerName} saved setup [{(data?.playerSetup == null ? "none" : string.Join(",", data.playerSetup))}], {addons.hairAssets.Count} hairstyles" +
+                 (data?.playerSetup != null && data.playerSetup.Count > 0 && addons.hairAssets.Count > 0
+                     ? $", hairstyle {data.playerSetup[0] % addons.hairAssets.Count} = overlay {addons.hairAssets[data.playerSetup[0] % addons.hairAssets.Count].overlayHairIndex} front {addons.hairAssets[data.playerSetup[0] % addons.hairAssets.Count].frontHairIndex} behind {addons.hairAssets[data.playerSetup[0] % addons.hairAssets.Count].behindHairIndex}" : ""));
         if (setup == null || setup.Count < 8) setup = new List<int> { 0, 0, 0, 0, 0, 0, 0, 0 };
         int Wrap(int v, int n) => n <= 0 ? 0 : ((v % n) + n) % n;
 
@@ -56,6 +59,34 @@ internal static class CompanionLook
         Mine(screen.hairMaterial)?.SetColor("_Color", Pick(screen.hairColors, setup[4]));
         Mine(screen.facialHairMaterial)?.SetColor("_Color", Pick(screen.hairColors, setup[5]));
         Mine(screen.clothesMaterial)?.SetColor("_Color", Pick(screen.clothesColors, setup[6]));
+    }
+
+    /// <summary>Once it's dressed: its head as its own gear has it. The rig is a copy of yours, so a hood you wear came
+    /// with it (and your hair switched off under it), and nothing it wears ever clears that: without a helmet of its
+    /// own, the head slot emptied the game's way, which brings the hair back.</summary>
+    public static void Head(AddonsHandler addons, CharacterStats stats)
+    {
+        if (!addons || stats == null) return;
+        bool helmet = stats.EquippedItems.Any(i => i?.data is CollectableGear g && (g.gear.gearSlot & GearSlot.Head) != 0);
+        if (!helmet) addons.ShowEquipment(GearSlot.Head, -1);
+        // (testing: what its hair is doing)
+        var sb = new System.Text.StringBuilder($"Companion hair: helmet {helmet}; hair folders ");
+        foreach (var h in addons.hairFolders) sb.Append(h ? $"{h.name}:{(h.activeInHierarchy ? "on" : h.activeSelf ? "parent off" : "off")} " : "null ");
+        foreach (var slot in new[] { AddonSlot.HairOverlay, AddonSlot.HairFront, AddonSlot.HairBehind })
+        {
+            var af = addons.addonFolders.Find(f => f.slot == slot);
+            if (af.folders == null) { sb.Append($"| {slot}: none "); continue; }
+            foreach (var f in af.folders)
+            {
+                if (!f) continue;
+                int on = -1;
+                for (int i = 0; i < f.childCount; i++) if (f.GetChild(i).gameObject.activeSelf) { on = i; break; }
+                var sr = on >= 0 ? f.GetChild(on).GetComponentInChildren<SpriteRenderer>(true) : null;
+                sb.Append($"| {slot} {f.name}{(f.gameObject.activeInHierarchy ? "" : " (hidden)")} shows {on}/{f.childCount}" +
+                          (sr ? $" sprite {(sr.sprite ? sr.sprite.name : "none")} {(sr.enabled ? "" : "off ")}col {sr.color} mat {(sr.sharedMaterial ? sr.sharedMaterial.name + " " + (sr.sharedMaterial.HasProperty("_Color") ? sr.sharedMaterial.GetColor("_Color").ToString() : "") : "none")}" : "") + " ");
+            }
+        }
+        Log.Info(sb.ToString());
     }
 
     public static void Forget(GameObject copy)

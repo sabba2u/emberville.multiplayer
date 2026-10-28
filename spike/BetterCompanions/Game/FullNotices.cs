@@ -24,8 +24,17 @@ internal static class FullNotices
     }
 
     [HarmonyPatch(typeof(PlayerMaster), nameof(PlayerMaster.RestoreKymia)), HarmonyPrefix]
-    static bool Kymia(PlayerMaster __instance, float value, ref bool __result)
+    static bool Kymia(PlayerMaster __instance, float value, bool showFeedback, ref bool __result)
     {
+        // a kill reward (the companion's class: kymia back on a kill) can point at a player that never woke: the copy of
+        // you companions are made from, which its graph still names. The companion that made the kill gets it instead
+        // (a companion swapped out since: nobody does)
+        if (!__instance || !__instance.myTransform)
+        {
+            var now = RealPlayer.Current;
+            __result = now && now != __instance && now.myTransform && now.RestoreKymia(value, showFeedback);
+            return false;
+        }
         bool full = value != 0f && Mathf.Min(value, __instance.currentMaxKymia - __instance.currentKymia) <= 0f;
         if (!full || Shown(kymiaAt, __instance)) return true;
         __result = false;   // (as the game returns for a full bar, without its notice)

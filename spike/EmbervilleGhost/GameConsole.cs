@@ -24,7 +24,7 @@ internal static class GameConsole
     public static ConfigEntry<Key> ConsoleKey;
     public static bool IsOpen { get; private set; }
 
-    struct Line { public string Text; public Vector4 Color; }
+    struct Line { public string Text; public Vector4 Color; public string Fill; }   // (Fill: clicked, it goes on the command line)
     static readonly List<Line> lines = new();
     static readonly object sync = new();
     static readonly List<string> history = new();
@@ -51,6 +51,17 @@ internal static class GameConsole
         Add(text, color);
         return false;
     }
+
+    /// <summary>Lines you can click: each puts its command on the command line, ready for Enter (/dungeons).</summary>
+    internal static void Links(string title, IEnumerable<(string label, string fill)> links)
+    {
+        Add(title, Gold);
+        lock (sync)
+            foreach (var (label, fill) in links) lines.Add(new Line { Text = "  " + label, Color = Link, Fill = fill });
+        scrollDown = true;
+    }
+
+    static readonly Vector4 Link = new(0.55f, 0.8f, 1f, 1f);
 
     static void Add(string text, Vector4 color)
     {
@@ -112,7 +123,15 @@ internal static class GameConsole
         float inputHeight = ImGui.GetFrameHeightWithSpacing();
         ImGui.BeginChild("##lines", new Vector2(0, -inputHeight), ImGuiChildFlags.None, ImGuiWindowFlags.HorizontalScrollbar);
         lock (sync)
-            foreach (var l in lines) { ImGui.PushStyleColor(ImGuiCol.Text, l.Color); ImGui.TextUnformatted(l.Text); ImGui.PopStyleColor(); }
+            foreach (var l in lines)
+            {
+                ImGui.PushStyleColor(ImGuiCol.Text, l.Color); ImGui.TextUnformatted(l.Text); ImGui.PopStyleColor();
+                if (l.Fill == null || !ImGui.IsItemHovered()) continue;
+                var min = ImGui.GetItemRectMin(); var max = ImGui.GetItemRectMax();   // underlined, a hand: it's a link
+                ImGui.GetWindowDrawList().AddLine(new Vector2(min.x, max.y), max, ImGui.ColorConvertFloat4ToU32(l.Color));
+                ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);
+                if (ImGui.IsItemClicked()) { typing = l.Fill; focus = true; }
+            }
         if (scrollDown) { ImGui.SetScrollHereY(1f); scrollDown = false; }
         ImGui.EndChild();
 

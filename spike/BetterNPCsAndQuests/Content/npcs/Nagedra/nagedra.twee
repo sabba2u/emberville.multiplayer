@@ -1,0 +1,136 @@
+:: StoryTitle
+Nagedra
+
+(BetterNPCsAndQuests: the game skips the first two passages of every file, so keep these two at the top.
+ Write your conversation below the line.)
+
+:: StoryData
+(Don't remove this passage either. Never type two colons in a row anywhere in your lines:
+ the game reads them as the start of a new passage.)
+
+-------- start your edit below --------
+
+:: DialogStart [NPC:Nagedra]
+(if: $just_gave)[[x|GaveThanks]]
+(if: $give_failed)[[x|GiveFailed]]
+(if: $quest_nagedra_tools_done)[[x|AllDone]]
+(if: $quest_nagedra_tools_active)[[x|ToolsWait]]
+(if: $quest_nagedra_chest_done)[[x|Tools]]
+(if: $quest_nagedra_chest_active)[[x|ChestWait]]
+[[x|Hello]]
+
+:: Hello [NPC:Nagedra]
+Careful where you step, {PlayerName}. Everything I own is in a pile on the ground.
+I'm Nagedra. Carpenter, when I have a workshop. Could you craft me a wooden chest to carry my belongings?
+[[I'll make you one.|ChestStart]]
+[[Know any good dungeons?|Dungeons]]
+[[Not right now.|END]]
+
+:: ChestStart [NPC:Nagedra]
+(trigger: "start nagedra_chest")
+A plain wooden chest will do. Bring it to me when it's done.
+
+:: ChestWait [NPC:Nagedra]
+Got that chest for me?
+(if: $has_woodenchest)[[Here it is.|ChestGive]]
+[[Know any good dungeons?|Dungeons]]
+[[Still working on it.|END]]
+
+:: ChestGive [NPC:Nagedra]
+(trigger: "give nagedra_chest")
+Let's see it.
+
+:: Tools [NPC:Nagedra]
+My toolkit took a beating on the way here. Bring me 10 softwood and 5 metal parts and I'll fix it up.
+I'll draw you some blueprints for your workshop in return.
+[[Deal.|ToolsStart]]
+[[Know any good dungeons?|Dungeons]]
+[[Maybe later.|END]]
+
+:: ToolsStart [NPC:Nagedra]
+(trigger: "start nagedra_tools")
+Softwood and metal parts. You know where to find them better than I do.
+
+:: ToolsWait [NPC:Nagedra]
+How are those materials coming along?
+(if: $has_softwood_10 and $has_metal_5)[[I have them.|ToolsGive]]
+[[Know any good dungeons?|Dungeons]]
+[[Not yet.|END]]
+
+:: ToolsGive [NPC:Nagedra]
+(trigger: "give nagedra_tools")
+Put them in here.
+
+:: GaveThanks [NPC:Nagedra]
+(set: $just_gave to false)
+(if: $quest_nagedra_tools_done)[[x|AllDone]]
+(if: $quest_nagedra_chest_done)[[x|ChestThanks]]
+[[x|ChestWait]]
+
+:: ChestThanks [NPC:Nagedra]
+It's perfect! Here, take the sawmill blueprint. You'll need planks if you mean to build anything.
+[[Thanks, Nagedra.|Tools]]
+
+:: GiveFailed [NPC:Nagedra]
+(set: $give_failed to false)
+That's not quite what I asked for.
+
+:: AllDone [NPC:Nagedra]
+Those blueprints should keep you busy. Come back when you've built something.
+[[Know any good dungeons?|Dungeons]]
+[[See you, Nagedra.|END]]
+
+:: Dungeons [NPC:Nagedra]
+Oh, there's a really cool one. The dark forest where I was holed up... I'd say it's my forest by now.
+And plenty of others, if you've got the nerve. Where do you want to go? I'll send you there.
+[[Your forest.|GoNegedra]]
+[[Mordaxius' lab.|GoLab]]
+[[The library.|GoLibrary]]
+[[Morcha's hideout.|GoMorcha]]
+[[What else is there?|MoreDungeons]]
+[[Never mind.|END]]
+
+:: MoreDungeons [NPC:Nagedra]
+Let me think... the place they call KL, the old mines, the overgrown caves, Tolcan's forest, and the basements.
+[[KL.|GoKL]]
+[[The mines.|GoMines]]
+[[The overgrown caves.|GoNature]]
+[[Tolcan's forest.|GoTolcan]]
+[[The stone basement.|GoBasement]]
+[[Never mind.|END]]
+
+:: GoNegedra [NPC:Nagedra]
+(trigger: "command dungeon b01_df_negedra")
+Watch the roots. And don't touch my stuff.
+
+:: GoLab [NPC:Nagedra]
+(trigger: "command dungeon b01_lab_full")
+Mordaxius never cleaned up after himself. Mind the glowing bits.
+
+:: GoLibrary [NPC:Nagedra]
+(trigger: "command dungeon dungeon_b01_library")
+Bring me back a book on joinery, if they have one.
+
+:: GoMorcha [NPC:Nagedra]
+(trigger: "command dungeon dungeon_b01_morchahideout")
+Morcha won't be happy to see you. Good luck.
+
+:: GoKL [NPC:Nagedra]
+(trigger: "command dungeon dungeon_b01_kl")
+Nobody knows what KL means. Tell me if you find out.
+
+:: GoMines [NPC:Nagedra]
+(trigger: "command dungeon b01_sd_mining_01")
+If you find good iron down there, it's mine.
+
+:: GoNature [NPC:Nagedra]
+(trigger: "command dungeon b01_sd_nature_01")
+Lovely timber in there. Shame about everything that wants to eat you.
+
+:: GoTolcan [NPC:Nagedra]
+(trigger: "command dungeon b01_df_tolcan")
+Tolcan's woods. Darker than mine, if you can believe it.
+
+:: GoBasement [NPC:Nagedra]
+(trigger: "command dungeon dungeonGeneration_stonebasement_first")
+Cold stone and colder company down there.

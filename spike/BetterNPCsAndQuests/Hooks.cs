@@ -21,6 +21,9 @@ public static class Hooks
     /// </summary>
     public static Func<string, bool> Command = cmd =>
     {
+        if (cmd.Trim().Equals("sharpen", StringComparison.OrdinalIgnoreCase)) { Smith.Sharpen(); return true; }   // (our own: Smith)
+        if (cmd.Trim().StartsWith("shop ", StringComparison.OrdinalIgnoreCase)) { Shop.Open(cmd.Trim().Substring(5)); return true; }   // (our own: Shop)
+        if (cmd.Trim().StartsWith("learn ", StringComparison.OrdinalIgnoreCase)) { Shop.Learn(cmd.Trim().Substring(6)); return true; }
         foreach (var info in BepInEx.Bootstrap.Chainloader.PluginInfos.Values)
         {
             var mod = info.Instance;
@@ -39,6 +42,7 @@ public static class Hooks
     /// </summary>
     public static Func<string, int?> Flag = name =>
     {
+        if (name == "holding_weapon") return Smith.Holding() ? 1 : 0;   // (our own: a weapon in your hands, for Smith)
         if (flagMethods == null)
         {
             flagMethods = new System.Collections.Generic.List<System.Reflection.MethodInfo>();

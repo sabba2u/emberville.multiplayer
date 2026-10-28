@@ -1,0 +1,8 @@
+# Gumu, the trader (the one from Town, at the camp in the tutorial area too): talk to him and his shop opens
+name     = Gumu
+scene    = TutorialArea
+spot     = -33.4, 65.6
+sheet    = Gumu_Anim
+color    = #7fb4ff
+dialogue = gumu.twee
+wander   = 0

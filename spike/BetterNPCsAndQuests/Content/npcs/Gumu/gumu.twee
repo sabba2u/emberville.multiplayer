@@ -1,0 +1,20 @@
+:: StoryTitle
+Gumu
+
+(BetterNPCsAndQuests: the game skips the first two passages of every file, so keep these two at the top.
+ Write your conversation below the line.)
+
+:: StoryData
+(Don't remove this passage either. Never type two colons in a row anywhere in your lines:
+ the game reads them as the start of a new passage.)
+
+-------- start your edit below --------
+
+:: DialogStart [NPC:Gumu]
+Hmm? A customer. Look, don't touch... then buy.
+[[Show me what you've got.|Shop]]
+[[Later.|END]]
+
+:: Shop [NPC:Gumu]
+(trigger: "command shop gumu")
+Take your time. Not too much time.

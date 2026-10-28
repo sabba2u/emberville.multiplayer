@@ -29,6 +29,11 @@ npc.txt   (one "key = value" per line; lines starting with # are notes)
   portrait = portrait.png           optional
   wander   = 3                      how far they walk around their spot (0 = they stand still)
   pause    = 3-8                    seconds they wait between walks
+  sheet    = Atwor_Anim             drawn from one of the game's own character sheets instead of looking like you:
+                                    Atwor_Anim (the blacksmith at his anvil), Gumu_Anim, Nagedra_Anim. They stay at
+                                    their spot and stop moving while they talk
+  prop     = CampTent_Square_Big_Front Variant, 0, 2.5
+                                    one of the game's own objects set down by them (x, y from their spot)
 They never walk through walls, water or closed doors, and they stop when someone comes close.
 
 ------------------------------------------------------------------------------------------------------------------
@@ -43,6 +48,8 @@ They play in the game's own dialogue window. Write them by hand from TEMPLATE.tw
   (set: $flag to true)             change a flag when the passage shows
   (trigger: "start my_quest")      do something: start / turnin / advance <quest id>, or set $x to ...
   (trigger: "command clucking")    run another mod's chat command for the player talking (pet chicken, clucking, risen...)
+                                   and this mod's own: "command sharpen" (the weapon in their hands +1),
+                                   "command shop gumu" (Gumu's shop), "command learn sawmill" (a blueprint)
   (trigger: "give my_quest")       once the conversation closes: a box (the game's chest screen) to drag what the quest's
                                    step wants into; only matching items can go in. Close it: they take what fits, the rest
                                    comes back, and they talk again with $just_gave (or $give_failed) set: route on it first

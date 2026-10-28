@@ -1,0 +1,9 @@
+# Nagedra's quests (the full game's Carpenter Request and Tools of the Trade, without the house repairs)
+id       = nagedra_chest
+title    = The Carpenter's Request
+text     = Nagedra asked you to craft a wooden chest to carry her belongings.
+start    = command learn woodenchest
+step     = Give Nagedra a wooden chest
+collect  = woodenchest x1 take
+complete = command learn sawmill
+reward   = xp 50

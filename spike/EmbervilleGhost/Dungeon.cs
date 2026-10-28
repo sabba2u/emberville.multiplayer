@@ -158,6 +158,27 @@ internal static class Dungeon
         Enter(main.name, seed, 0);
     }
 
+    /// <summary>/dungeons: every dungeon type the game has, by name.</summary>
+    public static void ListNames()
+    {
+        var names = AllSettings().Select(s => s.name).ToList();
+        if (MainSettings()) names.Insert(0, MainSettings().name);
+        if (GameConsole.IsOpen) GameConsole.Links("Dungeons (click one, then Enter):", names.Select(n => (n, "/dungeon " + n)));
+        else Chat.System("Dungeons: " + string.Join(", ", names) + "  (in the ~ console you can click them)");
+    }
+
+    /// <summary>/dungeon negedra: into the dungeon type whose name has that in it (a new seed each time).</summary>
+    public static void EnterNamed(string part)
+    {
+        part = (part ?? "").Trim();
+        var list = AllSettings().ToList();
+        if (MainSettings()) list.Insert(0, MainSettings());   // (the world map's own too: "fullmap")
+        var s = list.FirstOrDefault(x => x.name.Equals(part, System.StringComparison.OrdinalIgnoreCase))
+             ?? list.FirstOrDefault(x => x.name.IndexOf(part, System.StringComparison.OrdinalIgnoreCase) >= 0);
+        if (!s) { NetLog.Warn($"No dungeon called \"{part}\" (/dungeons lists them)", toast: true); return; }
+        Enter(s.name, UnityEngine.Random.Range(1, int.MaxValue), 0);
+    }
+
     /// <summary>Arrive at this spot next time a floor is built (the town portal's far end), not its usual arrival.</summary>
     internal static void ArriveNextAt(Vector3 at) => placeAt = at;
     static Vector3? placeAt;
@@ -242,6 +263,8 @@ internal static class Dungeon
             if (arriveAt != null && Teleporter.GlobalTeleporters.TryGetValue(arriveAt, out var tp) && tp && tp.gameObject.scene.IsValid() && tp.transform.IsChildOf(root.transform))
             { at = tp.DestPosition; dir = tp.SpawnDirection; }
             else if (built.entry) { at = built.entry.DestPosition; dir = built.entry.SpawnDirection; }
+            Teleporter came = arriveAt != null && Teleporter.GlobalTeleporters.TryGetValue(arriveAt, out var c0) && c0 && c0.transform.IsChildOf(root.transform) ? c0 : built.entry;
+            if (where.Floor == 0 && came) at = Inside(at, came);
             if (where.Floor > 0) at = Delve.SetUpFloor(where, at);   // the descent: arrival, stairs down, the way home
             if (placeAt is Vector3 there) { at = there; dir = Direction.Down; placeAt = null; }   // (through a town portal)
             DungeonLoot.Place(root, where, genSeed, at);   // chests
@@ -970,6 +993,8 @@ internal static class Dungeon
         var c = current.Value;
         if (parents.Count > 0) { Go(parents.Pop(), entranceId, true).Forget(); return; }   // in a sub-dungeon: this one leads back up
         if (!settings) return;
+        // a dungeon you came straight into (/dungeon negedra, Nagedra): its own entrance leads to itself; it's the way out
+        if (settings.name == c.Settings) { NetLog.Info("Dungeon: out through the way you came in", toast: false); Leave(); return; }
         parents.Push(c);
         int seed = unchecked(c.Seed * 31 + fromChunk.x * 7393 + fromChunk.y * 1931);
         Go(new Where(settings.name, seed, 0), entranceId, true).Forget();
@@ -998,6 +1023,24 @@ internal static class Dungeon
             }
             return false;
         }
+    }
+
+    /// <summary>An entrance's arrival point can sit outside the map (Negedra's forest, Morcha's hideout: north of the
+    /// doorway, on dark ground that still counts as walkable, so the first step goes back through the door): instead,
+    /// 3 squares from the door the way it faces (the way you face arriving through it, its glow spreading into the
+    /// room), on the walkable ground there.</summary>
+    static Vector3 Inside(Vector3 at, Teleporter door)
+    {
+        var d = door.SpawnDirection;
+        var into = d == Direction.Up ? Vector2.up : d == Direction.Down ? Vector2.down : d == Direction.Left ? Vector2.left : Vector2.right;
+        var from = door.transform.position;
+        var want = from + (Vector3)(into * 3f);
+        var p = want;
+        if (UnityEngine.AI.NavMesh.SamplePosition(new Vector3(want.x, want.y, 0f), out var hit, 1.5f, UnityEngine.AI.NavMesh.AllAreas)) p = hit.position;
+        var glow = string.Join(", ", door.GetComponentsInChildren<SpriteRenderer>(true).Where(r => r.sprite).Take(4)
+            .Select(r => $"{r.sprite.name} at {r.transform.position.x - from.x:+0.0;-0.0},{r.transform.position.y - from.y:+0.0;-0.0}{(r.flipY ? " flipped" : "")} rot {r.transform.eulerAngles.z:0}"));
+        NetLog.Info($"Dungeon: arrival {d} of the door {door.name} at {from.x:0.0},{from.y:0.0} (its own spot {at.x:0.0},{at.y:0.0}) -> {p.x:0.0},{p.y:0.0}; door sprites: {glow}", toast: false);
+        return new Vector3(p.x, p.y, at.z);
     }
 
     [HarmonyPatch(typeof(TeleporterDungeonRegion), nameof(TeleporterDungeonRegion.Teleport))]
@@ -1234,6 +1277,24 @@ internal static class Dungeon
     }
 }
 
+
+/// <summary>
+/// Some of the dungeons the demo never opens (Negedra's forest) have gathering spots with parts missing: their Start
+/// throws. In a generated dungeon such a spot is taken away, quietly, instead of standing there half made.
+/// </summary>
+[HarmonyPatch(typeof(GatheringObject), "Start")]
+internal static class BrokenGathering
+{
+    static int told;
+
+    static System.Exception Finalizer(GatheringObject __instance, System.Exception __exception)
+    {
+        if (__exception == null || !Dungeon.Active || !__instance) return __exception;
+        if (told++ < 3) NetLog.Info($"Dungeon: a gathering spot with parts missing taken away ({__instance.name})", toast: false);
+        __instance.gameObject.SetActive(false);
+        return null;
+    }
+}
 
 /// <summary>
 /// The same floor on every game: most of the game's dungeon generator rolls the seeded number it's given, but a few of

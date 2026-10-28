@@ -87,6 +87,9 @@ internal static class Integrations
         BetterNPCsAndQuests.Hooks.Command = cmd =>
         {
             if (string.Equals(cmd?.Trim(), "respec", System.StringComparison.OrdinalIgnoreCase)) { Respec.Run(); return true; }
+            // a trip into a dungeon (Nagedra): once, when the conversation has closed (the passage's trigger can run
+            // again while it's still up, and each run would build the dungeon anew)
+            if (cmd != null && cmd.Trim().StartsWith("dungeon", System.StringComparison.OrdinalIgnoreCase)) { npcTrip = cmd.Trim(); return true; }
             return others(cmd) || Chat.Run(cmd);   // (then any of our chat commands: /tp, /summon, /dungeon...)
         };
     }
@@ -372,8 +375,15 @@ internal static class Integrations
 
     static bool catalogueAsked;
 
+    static string npcTrip;
+
     public static void Tick()
     {
+        if (npcTrip != null && !(Singleton<DialogueManager>.HasMain && Singleton<DialogueManager>.main.IsPlaying))
+        {
+            var go = npcTrip; npcTrip = null;
+            Chat.Run(go);
+        }
         // the game's item list, loading in the background once you're in a world (companions' and Twitch's gear need it)
         if (!catalogueAsked && LocalPlayer.Get()) { catalogueAsked = true; DungeonLoot.Preload(); }
         if (HasCompanion) CompanionSync.Tick();

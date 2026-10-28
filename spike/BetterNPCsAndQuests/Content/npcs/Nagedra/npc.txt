@@ -1,0 +1,8 @@
+# Nagedra, the carpenter (her quests from the full game: a wooden chest, then her tools; no house repairs here)
+name     = Nagedra
+scene    = TutorialArea
+spot     = -38.6, 67.2
+sheet    = Nagedra_Anim
+color    = #e0905a
+dialogue = nagedra.twee
+wander   = 0

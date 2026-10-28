@@ -70,6 +70,13 @@ public static class Parse
                 case "color": case "colour": n.Color = value; break;
                 case "dialogue": n.Dialogue = value; break;
                 case "portrait": n.Portrait = value; break;
+                case "sheet": n.Sheet = value; break;
+                case "prop":   // the game's object, x, y (from their spot)
+                    var pp = (value ?? "").Split(',');
+                    n.Prop = pp[0].Trim();
+                    if (pp.Length == 3 && Num(pp[1], out n.PropX) && Num(pp[2], out n.PropY)) { }
+                    else if (pp.Length != 1) Bad(line, "prop = the game's object name, x, y");
+                    break;
                 case "wander": if (!Num(value, out n.Wander)) Bad(line, "wander must be a number (0 = stands still)"); break;
                 case "pause":
                     var ab = (value ?? "").Split('-');

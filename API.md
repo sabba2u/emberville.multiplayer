@@ -31,6 +31,8 @@ Press **Enter**, type the command with a `/` in front, press Enter. `/help` list
 | Command | What it does |
 |---|---|
 | `/dungeon` | Into a generated dungeon, or back out. |
+| `/dungeons` | Lists every dungeon type in the game. |
+| `/dungeon <name>` | Builds that dungeon type (any part of its name: `negedra`, `library`, `lab`...) with a new seed and takes you in. |
 | `/arena` | To this scene's test arena. |
 | `/walls` | Show what's solid (debug). |
 | `/exitarrow`, `/exitpath` | An arrow / a line to the stairs down (testing). |

@@ -168,6 +168,8 @@ internal static class RealPlayer
                     }
                 }
             }
+            CompanionLook.Apply(p.GetComponent<AddonsHandler>(), data);   // (again: the game's own start-up dressed it as you)
+            CompanionLook.Head(p.GetComponent<AddonsHandler>(), stats);
             if (p != Current) return;
             RealGear.Bag = items.Where(i => i.section == InventorySection.Main).ToList();
             RealGear.Other = items.Where(i => i.section != InventorySection.Main && i.section != InventorySection.Gear).ToList();
