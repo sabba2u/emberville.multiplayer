@@ -27,7 +27,8 @@ bet on whether you'll survive. MODS (Insert) > **Streaming** > **Connect Twitch*
 - **Combat that answers you** (Better Combat): spell keys that never eat a press, a spell that cuts a swing's
   follow-through, dodge and attack presses remembered, **no stun lock**, a slowdown slider for moving while you
   attack, and a **Before / after** button. [Details](#your-character).
-- **No level caps:** your character levels past the demo's 15, and `/unlockclasses` opens the class tree to level 40.
+- **No level caps:** your character levels past the demo's 15, every class is unlocked and goes to level 50, with 50
+  class points to spend in each, and − / + / Reset buttons on the class screen.
   **Shift + `+`** on the character screen gives you a level. [Details](#levels-no-cap-and-test-keys).
 
 ## Contents
@@ -214,10 +215,16 @@ Type the command in chat to get one, or MODS > Better Combat > **New Weapons**.
 ## Levels: no cap, and test keys
 - **Your level has no cap** (Better Companions): the demo stops at 15; you keep levelling, each level past the game's
   table costing what its last one did. Your companion too.
-- **Classes past 15:** `/unlockclasses` learns every class and opens the class tree to **level 40** (the game's own XP
-  table goes that far), its "coming soon" skills too (they may be unfinished in the demo). XP your class earned while
-  capped was kept, so those levels come back at once. You get 2 skill points every 5 class levels. `/lockclasses`
-  puts the cap back.
+- **Every class, to level 50:** every class is learned and the class screen unlocked as soon as a world loads, and the
+  class tree goes to **level 50** (past the game's XP table, which ends at 40, each level costs what level 40 did), its "coming soon" skills too (they may be
+  unfinished in the demo). XP your class earned while capped was kept, so those levels come back at once.
+  `/lockclasses` puts the demo's way back (and stops it at the next load); `/unlockclasses` turns it on again.
+- **Every class starts at level 50** (yours and your companion's), raised when a world loads (never lowered: the
+  class screen's **−** and **Reset** still take it down). `AllClassesAtTop = false` in the config turns it off.
+- **50 class points in every class** (yours and your companion's), on top of the game's 2 every 5 class levels:
+  spend them on whatever you like. `BonusPoints` in `BepInEx/config/spike.embervilleghost.cfg` sets how many.
+- **Buttons on the class screen:** under it, **−** / **+** a class level, **Reset** (level 1, every point back) and
+  **Refund points** (every point back, the level kept). The same on your companion's class screen.
 - **Test keys on the character screen** (open it, hold **Shift**):
 
   | Keys | What it does |

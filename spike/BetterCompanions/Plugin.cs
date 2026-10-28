@@ -113,6 +113,10 @@ public class Plugin : BaseUnityPlugin
 
     /// <summary>Its body (the real one: null with the old body, or none out) and its save.</summary>
     public static PlayerMaster CompanionPlayer => RealPlayer.Current;
+    /// <summary>The game's class screen is showing its class (not yours).</summary>
+    public static bool ShowingItsClass => CompanionPanel.Classes.On;
+    /// <summary>The game's character screen is showing its attributes (not yours).</summary>
+    public static bool ShowingItsStats => CompanionPanel.Attributes.On || GearScreen.CompanionMode;
     public static PlayerData CompanionData => CompanionSave.Data;
     public static void SaveCompanion() => CompanionSave.Write();
 

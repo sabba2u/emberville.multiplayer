@@ -22,6 +22,10 @@
 !/spike/BetterStreaming/
 !/spike/BetterStreaming.Tests/
 !/spike/BetterClasses/
+!/spike/MonsterArt/
+/spike/MonsterArt/*
+!/spike/MonsterArt/build.py
+!/spike/MonsterArt/MonsterArt.csproj
 !/spike/MapKit/
 !/spike/LoadTimer/
 !/spike/BetterNPCsAndQuests.Tests/

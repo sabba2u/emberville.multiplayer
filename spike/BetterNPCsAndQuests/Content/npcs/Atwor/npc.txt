@@ -1,7 +1,7 @@
 # Atwor, the blacksmith (the demo has his art but never puts him in the world): at his anvil, sharpening your weapon
 name     = Atwor
 scene    = TutorialArea
-spot     = -31.0, 71.3
+spot     = -31.0, 71.8
 sheet    = Atwor_Anim
 color    = #f0b060
 dialogue = atwor.twee

@@ -28,6 +28,10 @@ foreach ($mod in $mods) {
     Copy-Item "$($built.FullName)\*" $stage -Recurse -Force
 }
 
+# the monster art (MonsterArt.dll, its sheets) is bought art: never in the pack
+$art = Get-ChildItem $stage -Recurse -File | Where-Object { $_.Name -like "MonsterArt*" -or $_.FullName -match "Tiny ?Swords|Bumblebee" }
+if ($art) { throw "Monster art in the pack: $($art.FullName -join ', ')" }
+
 @"
 Emberville Mod Pack v$version
 Everything in one download: the co-op multiplayer mod, Favourite Weapons (F5-F8, the weapon wheel), Better Chests

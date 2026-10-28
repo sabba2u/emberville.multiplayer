@@ -94,6 +94,7 @@ I've got a few odds and ends lying around the workshop. What would you like?
 (if: $has_pet)[[I'd like to give my pet back.|ReturnPet]]
 [[The Staff of Clucking.|GiftClucking]]
 [[The Staff of the Risen.|GiftRisen]]
+[[The Hunter's Hook.|GiftHook]]
 [[Never mind.|Bye]]
 
 :: GiftChicken [NPC:Ellie]
@@ -118,6 +119,12 @@ The Staff of Clucking! Right-click calls up a battle chicken. Don't ask where th
 :: GiftRisen [NPC:Ellie]
 (trigger: "command risen")
 The Staff of the Risen. Creatures that fall near you will get back up and fight for you. Spooky, isn't it?
+[[Anything else?|Gifts]]
+[[Thanks, Ellie!|Bye]]
+
+:: GiftHook [NPC:Ellie]
+(trigger: "command hook")
+The Hunter's Hook! Throw it and the first thing it catches gets dragged right to you. Try not to hook the chickens.
 [[Anything else?|Gifts]]
 [[Thanks, Ellie!|Bye]]
 

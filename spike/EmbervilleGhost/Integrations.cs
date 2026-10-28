@@ -340,6 +340,13 @@ internal static class Integrations
     }
     [MethodImpl(MethodImplOptions.NoInlining)] static void CompanionMenu() => BetterCompanions.Plugin.DrawMenu();
 
+    /// <summary>The companion's levels when the class screen shows its class (null: it shows yours).</summary>
+    public static Respec.Target CompanionClassShowing() => HasCompanion && ShowingItsClass() ? RespecOf() : null;
+    [MethodImpl(MethodImplOptions.NoInlining)] static bool ShowingItsClass() => BetterCompanions.Plugin.ShowingItsClass;
+    /// <summary>The companion's levels when the character screen shows its attributes (null: it shows yours).</summary>
+    public static Respec.Target CompanionStatsShowing() => HasCompanion && ShowingItsStats() ? RespecOf() : null;
+    [MethodImpl(MethodImplOptions.NoInlining)] static bool ShowingItsStats() => BetterCompanions.Plugin.ShowingItsStats;
+
     /// <summary>Its levels by hand (Respec), for Insert > Companions: null when it has no real body out.</summary>
     public static Respec.Target CompanionRespec() => HasCompanion ? RespecOf() : null;
     [MethodImpl(MethodImplOptions.NoInlining)] static Respec.Target RespecOf()

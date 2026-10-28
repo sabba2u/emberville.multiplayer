@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Monster art: no code, just the creatures' sprite sheets (made by build.py from the Tiny Swords enemy pack) packed
+       into MonsterArt.dll, which the multiplayer mod (Monsters.cs) reads them from. Local only: never in git or the mod
+       pack (the pack's licence forbids passing its art on). -->
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <AssemblyName>MonsterArt</AssemblyName>
+    <GamePath Condition="'$(GamePath)' == ''">K:\__games\steamapps\common\Emberville Demo</GamePath>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="sheets\*.png;sheets\*.txt" LogicalName="MonsterArt.%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <Target Name="DeployToGame" AfterTargets="Build">
+    <Copy SourceFiles="$(OutDir)MonsterArt.dll" DestinationFolder="$(GamePath)\BepInEx\plugins\MonsterArt" SkipUnchangedFiles="true" />
+  </Target>
+
+</Project>

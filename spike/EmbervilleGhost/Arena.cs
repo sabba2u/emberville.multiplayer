@@ -61,6 +61,7 @@ internal static partial class Arena
     {
         if (!Active || busy) return;
         EndChickens("over (you left)");
+        EndTiny("over (you left)");
         var gm = Singleton<GameManager>.main;
         var old = root;
         DeathSafety.Forget(old);   // the creatures go with the arena, after the teleport (removing them mid-fade froze it)
@@ -232,6 +233,7 @@ internal static partial class Arena
         if (hovered || ImGuiUnity.Typing && Active) GameInput.Block("arena"); else GameInput.Unblock("arena");
         Rush();
         Chickens();
+        Tiny();
         Engage();
     }
 
@@ -269,6 +271,7 @@ internal static partial class Arena
     static void StartRush()
     {
         EndChickens("stopped");
+        EndTiny("stopped");
         ClearSpawned();
         rushWave = 0;
         rushBoss = null;
@@ -368,6 +371,12 @@ internal static partial class Arena
                 ImGui.SameLine();
                 if (ImGui.SmallButton("Stop##chickens")) EndChickens("stopped");
             }
+            else if (TinyOn)
+            {
+                ImGui.TextColored(new Vector4(0.55f, 0.9f, 0.45f, 1f), $"Tiny Swords: wave {tinyWave}/{waveList.Count}");
+                ImGui.SameLine();
+                if (ImGui.SmallButton("Stop##tiny")) EndTiny("stopped");
+            }
             else if (rushWave > 0)
             {
                 ImGui.TextColored(new Vector4(1f, 0.55f, 0.3f, 1f), $"Rush: wave {rushWave}/{MiniBoss.Presets.Length}");
@@ -383,7 +392,12 @@ internal static partial class Arena
             ImGui.SameLine();
             if (ImGui.SmallButton("Leave")) Leave();
             if (ImGui.IsItemHovered()) ImGui.SetTooltip("Back to the pads. Loot still on the floor here is lost!");
-            if (!chickensOn && rushWave == 0 && ImGui.SmallButton("There is no chicken level")) StartChickens();   // (its own row)
+            if (!chickensOn && rushWave == 0 && !TinyOn)   // (their own row)
+            {
+                if (ImGui.SmallButton("There is no chicken level")) StartChickens();
+                ImGui.SameLine();
+                if (ImGui.SmallButton("Tiny Swords waves")) StartTiny();
+            }
             FoldEnd();
             return;
         }
@@ -428,6 +442,7 @@ internal static partial class Arena
             ImGui.SameLine();
             ImGui.TextDisabled(bestChickens.Value > 0f ? $"survive the chickens (best: {Clock(bestChickens.Value)})" : "survive the chickens as long as you can");
         }
+        DrawTinyRow();
         if (rushWave == 0)
         {
             if (ImGui.Button("  BOSS RUSH  ")) StartRush();

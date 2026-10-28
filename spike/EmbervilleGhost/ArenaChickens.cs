@@ -51,6 +51,7 @@ internal static partial class Arena
     static void StartChickens()
     {
         if (rushWave > 0) EndRush("stopped");
+        EndTiny("stopped");
         ClearSpawned();
         hens.Clear();
         if (!Chicken()) { NetLog.Warn("No chickens loaded in this game yet (look for one in the world first)", toast: true); return; }

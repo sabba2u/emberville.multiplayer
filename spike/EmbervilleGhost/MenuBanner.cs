@@ -68,7 +68,14 @@ internal static class MenuBanner
         float vy = vp.WorkPos.y + vp.WorkSize.y - vs.y - 12f;
         dl.AddRectFilled(new Vector2(cx - vs.x / 2 - 8, vy - 3), new Vector2(cx + vs.x / 2 + 8, vy + vs.y + 3), ImGui.ColorConvertFloat4ToU32(new Vector4(0f, 0f, 0f, 0.5f)), 4f);
         dl.AddText(new Vector2(cx - vs.x / 2, vy), ImGui.ColorConvertFloat4ToU32(new Vector4(0.45f, 0.95f, 0.85f, 0.95f)), version);
+        // and just above it, the credit for snowshackle's loading work (github.com/snowshackle/emberville-loading-patch)
+        var cs = ImGui.CalcTextSize(SnowCredit);
+        float cy = vy - cs.y - 10f;
+        dl.AddRectFilled(new Vector2(cx - cs.x / 2 - 8, cy - 3), new Vector2(cx + cs.x / 2 + 8, cy + cs.y + 3), ImGui.ColorConvertFloat4ToU32(new Vector4(0f, 0f, 0f, 0.5f)), 4f);
+        dl.AddText(new Vector2(cx - cs.x / 2, cy), ImGui.ColorConvertFloat4ToU32(new Vector4(0.75f, 0.88f, 1f, 0.9f)), SnowCredit);
     }
+
+    const string SnowCredit = "with Snow's Faster Loader Patch v0.2.2";
 
     // ---- the demo's "welcome to Steam Next Fest" text at start-up: skipped (as if Continue had been pressed) ----
 

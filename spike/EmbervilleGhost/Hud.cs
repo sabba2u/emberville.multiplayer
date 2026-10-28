@@ -315,6 +315,7 @@ internal static class Hud
         Chat.Draw();
         Emotes.Draw();
         MenuBanner.Draw();
+        ClassScreen.Draw();   // the class screen's level buttons
         JoinWindow.Draw();
         Delve.DrawSetup();   // the descent's setup box (clickable)
         NoDeath.Draw();

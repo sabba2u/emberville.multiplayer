@@ -66,13 +66,22 @@ internal static class Respec
         if (ImGui.Button("Unlock everything")) { UnlockClasses.AllScreens(""); UnlockClasses.Run(""); Arsenal.UnlockMasteries(); }
         ImGui.TextDisabled("Screens: inventory, quests, masteries, classes, character, minimap. Locking again: /unlockscreens off, /lockclasses, /lockmasteries.");
         ImGui.SeparatorText("Levels");
-        Draw(new Target
+        Draw(You());
+    }
+
+    /// <summary>Your character's levels (null: none loaded).</summary>
+    public static Target You()
+    {
+        var p = Singleton<GameManager>.HasMain ? Singleton<GameManager>.main.player : null;
+        var data = GameData.HasPlayerData ? GameData.playerData : null;
+        if (!p || data == null) return null;
+        return new Target
         {
             Id = "you", Who = "You", You = true, P = p, Data = data,
             Save = () => { },   // (the game saves yours itself)
             SkillsChanged = () => YourSkillsChanged(p),
             KillXp = need => p.GainXP(need, multiply: false),   // (the game's own: no difficulty scaling here)
-        });
+        };
     }
 
     public static void Draw(Target t)
@@ -183,9 +192,26 @@ internal static class Respec
             if (stats.GetAvailablePoints() < 0) { Attributes(t); more = " (attributes reset)"; }   // (more spent than the level gives)
             if (now > 1 && to > 1) t.P.PlayExtraVFX("LevelUp");
         }
-        else if (key is PlayerClassType c && ClassPoints(data, c) < 0) { Tree(t, c); more = " (class points reset)"; }
+        else if (key is PlayerClassType c && (ClassPoints(data, c) < 0 || AboveLevel(data, c, now))) { Tree(t, c); more = " (class points reset)"; }
         else if ((key is WeaponCategory || key is GearWeight) && t.You) Masteries(t.P);   // (what its levels unlock: as they are now)
         Done(t, $"{Whose(t)} {name}: level {now}{(to > now ? " (its highest)" : "")}{more}.");
+    }
+
+    /// <summary>Its highest level (no cap: Better Companions says int.MaxValue for the character level).</summary>
+    static int Top(PlayerData data, object key)
+    {
+        int max = data.GetMaxLevel(key);
+        return max >= int.MaxValue - 1 ? int.MaxValue : max + 1;
+    }
+
+    /// <summary>A class at its highest level (UnlockClasses: 50), never lowered; true when it went up.</summary>
+    public static bool ToTop(PlayerData data, PlayerClassType c)
+    {
+        data.GetPlayerExperience(c);   // (first: SetXP on a key it hasn't got goes wrong)
+        int top = Top(data, c);
+        if (data.GetCurrentLevel(c) >= top) return false;
+        data.SetXP(c, XpAt(data.GetTable(c), top));
+        return true;
     }
 
     /// <summary>The total XP that puts it at the start of a level (past the table: its last step again).</summary>
@@ -249,7 +275,64 @@ internal static class Respec
         int level = Has(data, c) ? data.GetCurrentLevel(c) : 1;
         var ids = NodeIds(c);
         int spent = data.nodeInfos.Where(i => i != null && ids.Contains(i.Id)).Sum(i => i.CurrentPoints);
-        return level / 5 * 2 + 2 - spent;
+        return level / 5 * 2 + 2 + UnlockClasses.Bonus - spent;
+    }
+
+    /// <summary>Points spent on a node the level doesn't reach yet (after a level down).</summary>
+    static bool AboveLevel(PlayerData data, PlayerClassType c, int level)
+    {
+        var above = new HashSet<string>(Nodes(c).Where(n => n.requiredLevel > level).Select(n => n.uniqueID));
+        return data.nodeInfos.Any(i => i != null && i.CurrentPoints > 0 && above.Contains(i.Id));
+    }
+
+    /// <summary>The class screen's buttons (ClassScreen), beside its level: the class on, a level down / up, Reset
+    /// (level 1, its tree empty), Refund points (its tree empty, the level kept).</summary>
+    public static void DrawClassStrip(Target t)
+    {
+        var stats = t.P ? t.P.characterStats : null;
+        var cls = stats ? stats.equippedClass : null;
+        if (!cls || stats.primStatDict == null) { ImGui.TextDisabled("No class on"); return; }
+        var c = cls.playerClassType;
+        string name = ClassName(c);
+        if (!t.You) { ImGui.TextUnformatted(t.Who); ImGui.SameLine(); }
+        Steps(t, c, false, name);
+        ImGui.SameLine();
+        if (ImGui.Button($"Reset##cr{t.Id}")) { Tree(t, c); SetLevel(t, c, 1, false, name); }
+        if (ImGui.IsItemHovered()) ImGui.SetTooltip("Back to level 1, every point back to spend");
+        ImGui.SameLine();
+        if (ImGui.Button($"Refund points##cp{t.Id}")) { Tree(t, c); Done(t, $"{Whose(t)} {name} tree reset: {ClassPoints(t.Data, c)} points to spend."); }
+        if (ImGui.IsItemHovered()) ImGui.SetTooltip("Every point back to spend, the level kept");
+    }
+
+    /// <summary>The character screen's buttons (ClassScreen), beside its level: the character level down / up, Reset
+    /// (level 1: the attributes back to spend).</summary>
+    public static void DrawCharacterStrip(Target t)
+    {
+        var stats = t.P ? t.P.characterStats : null;
+        if (!stats || !stats.baseClass || stats.primStatDict == null) return;
+        object key = stats.baseClass.playerClassType;
+        if (!t.You) { ImGui.TextUnformatted(t.Who); ImGui.SameLine(); }
+        Steps(t, key, true, "Character level");
+        ImGui.SameLine();
+        if (ImGui.Button($"Reset##br{t.Id}")) SetLevel(t, key, 1, true, "Character level");
+        if (ImGui.IsItemHovered()) ImGui.SetTooltip("Back to level 1 (your attribute points come back to spend)");
+    }
+
+    /// <summary>− and + a level (greyed at level 1 / its highest).</summary>
+    static void Steps(Target t, object key, bool isBase, string name)
+    {
+        var data = t.Data;
+        int level = Has(data, key) ? data.GetCurrentLevel(key) : 1;
+        int top = Top(data, key);
+        if (level <= 1) ImGui.BeginDisabled();
+        if (ImGui.Button($" - ##sd{t.Id}{isBase}")) SetLevel(t, key, level - 1, isBase, name);
+        if (level <= 1) ImGui.EndDisabled();
+        if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) ImGui.SetTooltip("A level down");
+        ImGui.SameLine();
+        if (level >= top) ImGui.BeginDisabled();
+        if (ImGui.Button($" + ##su{t.Id}{isBase}")) SetLevel(t, key, level + 1, isBase, name);
+        if (level >= top) ImGui.EndDisabled();
+        if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) ImGui.SetTooltip(level >= top ? $"Level {top}: its highest" : "A level up");
     }
 
     /// <summary>The tree empty: each node's points to 0 (in its save), the skills they gave gone.</summary>

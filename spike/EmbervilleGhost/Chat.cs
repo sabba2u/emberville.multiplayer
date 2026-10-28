@@ -130,6 +130,8 @@ internal static class Chat
         if (cmd == "classscreen" || cmd.StartsWith("classscreen ")) { UnlockClasses.Screen(cmd.Length > 11 ? cmd.Substring(12) : ""); return true; }   // the class screen unlocked and opened (off: locked)
         if (cmd == "unlockclasses" || cmd.StartsWith("unlockclasses ")) { UnlockClasses.Run(cmd.Length > 13 ? cmd.Substring(14) : ""); return true; }   // testing: every class (or one) learned
         if (cmd == "lockclasses" || cmd.StartsWith("lockclasses ")) { UnlockClasses.Lock(cmd.Length > 11 ? cmd.Substring(12) : ""); return true; }   // testing: classes forgotten
+        if (cmd == "monsters") { Monsters.List(); return true; }   // every creature of ours, clickable in the console
+        if (cmd == "monster" || cmd.StartsWith("monster ")) { Monsters.Command(cmd.Length > 7 ? cmd.Substring(8) : ""); return true; }   // a new creature beside you (Bumblebee)
         if (cmd == "classes") { UnlockClasses.List(); return true; }   // every class: learned, equipped
         if (cmd.StartsWith("classes ")) { UnlockClasses.Detail(cmd.Substring(8)); return true; }   // one class: what it is
         if (cmd == "lockmasteries" || cmd.StartsWith("lockmasteries ")) { Arsenal.LockMasteries(cmd.Length > 13 ? cmd.Substring(14) : ""); return true; }   // testing: masteries back off

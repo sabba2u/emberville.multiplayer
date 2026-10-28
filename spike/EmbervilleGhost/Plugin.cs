@@ -219,6 +219,8 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         SteamBoot.Tick();
         CharacterSafety.Tick();
         DemoEnd.Tick();
+        UnlockClasses.Tick();
+        Monsters.Tick();
         Stockpile.Tick();
         Arsenal.Tick();
         MenuLightWatch.Tick();
