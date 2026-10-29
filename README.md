@@ -23,6 +23,8 @@ bet on whether you'll survive. MODS (Insert) > **Streaming** > **Connect Twitch*
 "Twitch off: I'm not streaming" switches it off again.)
 
 ### What's new in 0.8: monsters
+![Tiny Swords: the monsters now in the game (art by Pixel Frog)](https://img.itch.zone/aW1nLzI5NzY1MDkxLmdpZg==/original/KnPM3t.gif)
+
 - **60 new creatures** from the Tiny Swords packs, each with its own AI and its own tricks: bees that charge, gnomes
   that split in two, a thief you can't see, a Minotaur that flips your controls, goblins that throw lit TNT (kick it
   back at them!), a Barrel Goblin that blows itself up, five armies of knights, lancers, monks and catapults, and the
@@ -140,6 +142,8 @@ by xxJoexx", their message under it).
   **`/summon all`:** bring them to you, now.
 
 ## Monsters: the Tiny Swords creatures
+![The Tiny Swords creatures, now in Emberville](https://img.itch.zone/aW1nLzI5NzY1MDkxLmdpZg==/original/KnPM3t.gif)
+
 Sixty creatures from Pixel Frog's **Tiny Swords** packs, each wearing one of the game's own creatures underneath (so
 the game's health, hits, knock-back, XP and loot all still work) with an AI of its own on top. They turn up in the
 dungeons, the descent, the arena, Twitch raids, and as bosses. Many of them do something to you besides damage:
