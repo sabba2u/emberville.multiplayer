@@ -41,7 +41,7 @@ public class Plugin : BaseUnityPlugin
         Streamer.Init(Config);
         Effects.Register();
         TwitchAuth.LoadSaved();
-        if (TwitchAuth.SignedIn || TwitchConfig.Mock) TwitchSocket.Start();
+        if (TwitchAuth.SignedIn && !Streamer.Paused || TwitchConfig.Mock) TwitchSocket.Start();   // (Twitch off by default: only once you've switched it on)
         Logger.LogInfo($"Better Streaming v{Version}");
     }
 

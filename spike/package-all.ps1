@@ -28,9 +28,14 @@ foreach ($mod in $mods) {
     Copy-Item "$($built.FullName)\*" $stage -Recurse -Force
 }
 
-# the monster art (MonsterArt.dll, its sheets) is bought art: never in the pack
-$art = Get-ChildItem $stage -Recurse -File | Where-Object { $_.Name -like "MonsterArt*" -or $_.FullName -match "Tiny ?Swords|Bumblebee" }
-if ($art) { throw "Monster art in the pack: $($art.FullName -join ', ')" }
+# the monsters' art: Pixel Frog's Tiny Swords sheets, packed into MonsterArt.dll (built by spike/MonsterArt from the
+# game's plugins folder). The DLL ships; the loose sheets never do (the repo keeps them out too)
+$artDll = Join-Path $GamePath "BepInEx\plugins\MonsterArt\MonsterArt.dll"
+if (-not (Test-Path $artDll)) { throw "No MonsterArt.dll at $artDll (python spike/MonsterArt/build.py, then dotnet build spike/MonsterArt -c Release)" }
+New-Item -ItemType Directory -Force "$stage\BepInEx\plugins\MonsterArt" | Out-Null
+Copy-Item $artDll "$stage\BepInEx\plugins\MonsterArt\MonsterArt.dll"
+$loose = Get-ChildItem $stage -Recurse -File | Where-Object { $_.Extension -in ".png", ".aseprite" -and $_.FullName -notmatch "EmbervilleMultiplayer\\Assets" }
+if ($loose) { throw "Loose sprite sheets in the pack: $($loose.FullName -join ', ')" }
 
 @"
 Emberville Mod Pack v$version
@@ -39,8 +44,7 @@ Everything in one download: the co-op multiplayer mod, Favourite Weapons (F5-F8,
 Better Pets and Summons (/pet, the Staff of Clucking, the Staff of the Risen), Better Fishing (a catch from every
 cast, spots at the fish shadows) and Better NPCs and Quests (Ellie and her quest; add your own NPCs and quests with
 text files) and Better Weather (a rain storm: /rain) and Better Companions (an adventurer from your other save slot: /companion 2) and Better Streaming (your Twitch chat sets off effects: MODS > Streaming) and Better Classes (the Ninja: /ninja or the class screen). Not made or supported by Cygnus Cross.
-The Tiny Swords monsters' art is a paid pack and isn't included: without it you get the game's own creatures in their
-place (the GitHub README says how to add it).
+The monsters' art is Pixel Frog's Tiny Swords (pixelfrog-assets.itch.io), packed in BepInEx\plugins\MonsterArt.
 
 INSTALL
 1. Find the game folder: Steam > right-click Emberville Demo > Manage > Browse local files.

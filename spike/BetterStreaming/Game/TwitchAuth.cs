@@ -84,6 +84,7 @@ internal static class TwitchAuth
                     Write();
                     Status = $"Signed in as {Login}";
                     Log.Info($"Twitch: signed in as {Login}");
+                    Streamer.Paused = false;   // (signing in: you're streaming; Twitch on)
                     TwitchSocket.Start();
                     return;
                 }

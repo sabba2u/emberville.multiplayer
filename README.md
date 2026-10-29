@@ -19,14 +19,14 @@ Not made or supported by Cygnus Cross.
 Hook the game up to your Twitch chat: bits, cheers and votes set off heals, loot, monster raids, lightning storms or a
 random weapon swap every few seconds, right in your game. Chat can spin a wheel, roll dice, pull slots, drop a Plinko
 ball, cheer on a monster race, form a raid party where every raider shows up as a monster wearing their name... and
-bet on whether you'll survive. MODS (Insert) > **Streaming** > **Connect Twitch**.
+bet on whether you'll survive. MODS (Insert) > **Streaming** > **Connect Twitch**. (Twitch is off until you connect;
+"Twitch off: I'm not streaming" switches it off again.)
 
 ### What's new in 0.8: monsters
 - **60 new creatures** from the Tiny Swords packs, each with its own AI and its own tricks: bees that charge, gnomes
   that split in two, a thief you can't see, a Minotaur that flips your controls, goblins that throw lit TNT (kick it
   back at them!), a Barrel Goblin that blows itself up, five armies of knights, lancers, monks and catapults, and the
-  **Mad King**. [What each one does](#monsters-the-tiny-swords-creatures). (Their art is a paid pack and isn't in the
-  download: [how to add it](#adding-the-monster-art).)
+  **Mad King**. [What each one does](#monsters-the-tiny-swords-creatures). Art by Pixel Frog (Tiny Swords), included.
 - **Nagedra's dungeons:** ask her "Know any good dungeons?" and she sends you into one of the demo's hidden dungeons,
   now **full of monsters**, a new layout and new creatures every time, with a **boss guarding a treasure chest and the
   way home** at the far end. [Details](#nagedras-dungeons).
@@ -196,15 +196,13 @@ in them for 3 seconds**, the thrower included.
 
 Settings (the `[Monsters]` section of `BepInEx/config/spike.embervilleghost.cfg`): how big they're drawn (`/monsterscale 1.5` tries it live), and how many of a dungeon's groups are ours.
 
-### Adding the monster art
-The Tiny Swords art is Pixel Frog's (itch.io), and three of the four packs are paid, so it isn't in this repository or
-in the download. Without it the mod runs fine; you just get the game's own creatures in their place. To add it:
-1. Get **Tiny Swords**, **Tiny Swords (Free Pack)**, **Tiny Swords (Enemy Pack)** and **Warfare** from
-   [pixelfrog-assets.itch.io](https://pixelfrog-assets.itch.io) and unzip them into `spike/tiny.swords.extract/`.
-2. `python spike/MonsterArt/build.py` (cuts the sheets), then `dotnet build spike/MonsterArt -c Release` (packs them
-   into `MonsterArt.dll` in the game's `BepInEx/plugins/MonsterArt`).
-
-In co-op, everyone who wants to see them needs the art; the creatures are the same for everyone either way.
+### The monster art
+The creatures' art is **Tiny Swords** by Pixel Frog ([pixelfrog-assets.itch.io](https://pixelfrog-assets.itch.io)),
+packed into `MonsterArt.dll` (in the download, `BepInEx/plugins/MonsterArt`). The loose sheets aren't in this
+repository; to rebuild the DLL from your own copy of the packs: unzip **Tiny Swords**, **Tiny Swords (Free Pack)**,
+**Tiny Swords (Enemy Pack)** and **Warfare** into `spike/tiny.swords.extract/`, run `python spike/MonsterArt/build.py`,
+then `dotnet build spike/MonsterArt -c Release`. Delete the `MonsterArt` folder and you get the game's own creatures in
+their place.
 
 ## Nagedra's dungeons
 Talk to **Nagedra** (the carpenter, at her camp) and ask **"Know any good dungeons?"**. She sends you into one of the

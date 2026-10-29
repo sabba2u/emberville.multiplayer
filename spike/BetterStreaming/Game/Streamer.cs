@@ -46,7 +46,7 @@ internal static class Streamer
 
     public static void Init(ConfigFile config)
     {
-        paused = config.Bind("Twitch", "Paused", false, "Twitch off (not streaming): chat commands, votes, cheers, polls and rewards are ignored");
+        paused = config.Bind("Twitch", "Paused", true, "Twitch off (not streaming): no connection to Twitch at start, and chat commands, votes, cheers, polls and rewards are ignored. On to start with; signing in (Connect Twitch) turns it off");
         dial = config.Bind("Chaos", "Dial", 2, "How often a mean effect may land: 0 Chill (one per 2 min), 1, 2 (middle), 3, 4 Mayhem (one per 15 s)");
         extraWords = config.Bind("Text", "ExtraWords", "", "Your own words to hide in viewers' messages (comma separated)");
         Filter = new TextFilter(extraWords.Value.Split(','));
