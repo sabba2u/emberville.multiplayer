@@ -150,7 +150,7 @@ internal static class DebugWalls
         var cell = new Vector3Int(Mathf.FloorToInt(w.x / cs.x), Mathf.FloorToInt(w.y / cs.y), 0);
         string ours = Dungeon.wallCells.Contains(cell) ? "SOLID" : Dungeon.floorCells.Contains(cell) ? "walkable" : "not ours (no room tile)";
         var why = new List<string>();
-        foreach (var layer in new[] { "wall", "wall top", "water" })
+        foreach (var layer in new[] { "wall", "wall top", "water", "edge of a hole", "pit", "room's own water", "room's own wall" })
             if (Dungeon.DebugLayers.TryGetValue(layer, out var set) && set.Contains(cell)) why.Add(layer);
         var lines = new List<string> { $"cell {cell.x},{cell.y} at {w.x:0.0},{w.y:0.0}: our collision says {ours}{(why.Count > 0 ? " (from " + string.Join(", ", why) + ")" : "")}" };
         if (Dungeon.DebugCells.TryGetValue(cell, out var here)) lines.AddRange(here.Select(h => "  tile: " + h));
@@ -158,6 +158,19 @@ internal static class DebugWalls
         var p = new UnityEngine.Vector2(w.x, w.y);
         foreach (var c in Physics2D.OverlapPointAll(p))
             if (c) lines.Add($"  collider: {c.GetType().Name} on {Path(c.transform)}{(c.isTrigger ? " (trigger)" : "")}{(c.enabled ? "" : " (off)")}, layer {LayerMask.LayerToName(c.gameObject.layer)}");
+        // every tilemap drawing a tile here (ours merged, the rooms' own still on, anything else)
+        int maps = 0;
+        foreach (var tm in Object.FindObjectsByType<UnityEngine.Tilemaps.Tilemap>(FindObjectsSortMode.None))
+        {
+            if (!tm || !tm.gameObject.activeInHierarchy) continue;
+            var tr = tm.GetComponent<UnityEngine.Tilemaps.TilemapRenderer>();
+            var at = tm.WorldToCell(new Vector3(w.x, w.y, tm.transform.position.z));
+            var tile = tm.GetTile(at);
+            if (!tile) continue;
+            if (++maps > 10) { lines.Add("  ... more tilemaps here"); break; }
+            var drawnSprite = tm.GetSprite(at);
+            lines.Add($"  tilemap: {tile.name}{(drawnSprite ? $" (picture {drawnSprite.name})" : "")} on {Path(tm.transform)}{(tr ? $" ({SortingLayer.IDToName(tr.sortingLayerID)}/{tr.sortingOrder}{(tr.enabled ? "" : ", off")})" : " (not drawn)")}");
+        }
         int drawn = 0;
         foreach (var r in Object.FindObjectsByType<SpriteRenderer>(FindObjectsSortMode.None))
         {

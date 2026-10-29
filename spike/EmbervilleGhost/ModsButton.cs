@@ -18,18 +18,23 @@ internal static class ModsButton
     public static void Tick()
     {
         if (Time.unscaledTime < nextLook) return;
-        nextLook = Time.unscaledTime + 0.5f;
+        nextLook = Time.unscaledTime + 1f;
         try
         {
-            var menu = UnityEngine.Object.FindAnyObjectByType<MainMenuManager>();
-            if (menu && menu.buttonsMain) AddButton(menu.buttonsMain.transform);
-            var ui = UnityEngine.Object.FindAnyObjectByType<UIManager>();
-            if (ui && ui.buttonsPause) AddButton(ui.buttonsPause.transform);
+            // (the menus kept once found, and a button row done once: two searches of the whole scene twice a second,
+            // and a walk of every button, were a hitch you could see)
+            if (!menu) menu = UnityEngine.Object.FindAnyObjectByType<MainMenuManager>();
+            if (menu && menu.buttonsMain && done.Add(menu.buttonsMain.GetInstanceID())) AddButton(menu.buttonsMain.transform);
+            if (!ui) ui = UnityEngine.Object.FindAnyObjectByType<UIManager>();
+            if (ui && ui.buttonsPause && done.Add(ui.buttonsPause.GetInstanceID())) AddButton(ui.buttonsPause.transform);
         }
         catch (Exception e) { NetLog.Warn($"Mods button: {e.Message}", toast: false); nextLook = Time.unscaledTime + 10f; }
     }
 
     static readonly HashSet<int> noOptions = new();
+    static readonly HashSet<int> done = new();   // (button rows given ours already)
+    static MainMenuManager menu;
+    static UIManager ui;
 
     static void AddButton(Transform buttons)
     {

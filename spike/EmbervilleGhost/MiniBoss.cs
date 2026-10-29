@@ -27,6 +27,7 @@ internal static class MiniBoss
         public float Health = 6f;      // x the creature's own (and the floor's)
         public float Damage = 1.5f;    // x the creature's own (and the floor's)
         public int LootFloor = 1;      // how good its loot is (as a descent floor)
+        public string Family;          // the line under its name on the bar (none: "<the creature it's made from> mini-boss")
     }
 
     /// <summary>
@@ -343,8 +344,12 @@ internal static class MiniBoss
 
     /// <summary>"Rodent Melee mini-boss": the creature it's made from, by its prefab's name. Not Enemy.enemyType: the
     /// game's list of kinds has no rats, so they carry a leftover one (a rat boss would say "Spiderling").</summary>
+    /// <summary>One of our bosses?</summary>
+    public static bool Is(Enemy e) => e && bosses.ContainsKey(e);
+
     static string Family(Enemy e, Look look)
     {
+        if (!string.IsNullOrEmpty(look.Family)) return look.Family;
         var prefab = string.IsNullOrEmpty(look.Base) ? null : Find(look.Base);
         string n = BaseName((prefab ? prefab.name : e.name).Replace("(Clone)", "").Trim());
         if (n.StartsWith("Mob_")) n = n.Substring(4);

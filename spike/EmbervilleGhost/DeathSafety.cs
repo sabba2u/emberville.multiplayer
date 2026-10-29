@@ -12,6 +12,31 @@ namespace EmbervilleGhost;
 /// </summary>
 internal static class DeathSafety
 {
+    // ---- creatures kept through your death ----
+    // After a death the game puts every creature back as it last saved it (Enemy.ResetToLastState), and one it never
+    // saved is switched off for good. It saves them on entering an area: ours, and a dungeon's that come as you near,
+    // come after that, so a death took them all (the floor then "cleared"). So: a living creature with nothing saved
+    // is saved where it stands (a death puts it back there, alive); and in our places (dungeons, the arena) and for
+    // our own creatures anywhere, one you've killed is saved dead (a death doesn't undo your clearing). The game's own
+    // areas keep theirs: their creatures come back after a death as they always have.
+
+    static float nextKeep;
+
+    /// <summary>Once a second (Plugin.Update).</summary>
+    public static void Keep()
+    {
+        if (Time.unscaledTime < nextKeep) return;
+        nextKeep = Time.unscaledTime + 1f;
+        bool ours = Dungeon.Active || Arena.Active;
+        foreach (var e in EnemiesManager.AllEnemies)
+        {
+            if (!e) continue;
+            var saved = e.GetSavedState();
+            if (!e.IsDead && saved == null && e.gameObject.activeInHierarchy) e.SaveState();
+            else if (e.IsDead && saved != null && !saved.IsDead && (ours || e.GetComponent<Monster>())) e.SaveState();
+        }
+    }
+
     /// <summary>Take these creatures off the game's lists (call before destroying them).</summary>
     public static void Forget(GameObject root)
     {

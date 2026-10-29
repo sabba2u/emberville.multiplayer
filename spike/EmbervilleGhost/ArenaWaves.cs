@@ -17,7 +17,7 @@ internal static partial class Arena
     // the order, easier to harder (any creature not listed comes just before the bosses)
     static readonly string[] WaveOrder =
     {
-        "Bumblebee", "Gnome", "Snake", "Giant Bat", "Slingshot Gnome", "Thief", "Spear Goblin", "Torch Goblin", "Lizard",
+        "Bumblebee", "Pig", "Gnome", "Snake", "Giant Bat", "Slingshot Gnome", "Thief", "Spear Goblin", "Pig Rider", "Torch Goblin", "Lizard",
         "Gnoll", "Imp", "Turtle", "Spider", "Paddle Shark", "Harpoon Shark", "Bomb Fish", "Hex Shaman", "Skull", "Panda",
         "Minotaur", "Bear",
     };
@@ -32,12 +32,62 @@ internal static partial class Arena
 
     static bool TinyOn => tinyWave > 0;
 
+    // ---- potions: any of ours that falls during a run, one time in four ----
+
+    const float PotionChance = 0.25f;
+    static bool potionsHooked;
+
+    static void HookPotions()
+    {
+        if (potionsHooked) return;
+        potionsHooked = true;
+        Monsters.Died += m =>
+        {
+            if (!TinyOn || !Active || !m || Random.value >= PotionChance) return;
+            var data = HealthPotion();
+            if (!data) return;
+            new ItemObject(data, 1, -1).DropToWorld(m.transform.position, 1, 1f);
+        };
+    }
+
+    /// <summary>The game's health potion (the smallest kind: not Kymia), from the loot catalogue.</summary>
+    static ItemData HealthPotion()
+    {
+        var pool = DungeonLoot.Pool;
+        if (pool == null) return null;
+        var potions = pool.Where(d => d && d.name.StartsWith("Item_Potion") && d.name.IndexOf("Kymia", System.StringComparison.OrdinalIgnoreCase) < 0).ToList();
+        return potions.FirstOrDefault(d => d.name.IndexOf("Small", System.StringComparison.OrdinalIgnoreCase) >= 0) ?? potions.FirstOrDefault();
+    }
+
+    static bool kingBattle;
+
+    /// <summary>The King battle: one King of a random colour (his soldiers, his catapults' barrage), the far side of
+    /// the arena; over when he's down (or you are).</summary>
+    static void StartKing()
+    {
+        StartTiny();
+        if (!TinyOn) return;
+        var kings = Monsters.Names().Where(n => n.EndsWith(" King")).ToList();
+        if (kings.Count == 0) { EndTiny("stopped (no Kings: MonsterArt.dll)"); return; }
+        waveList = new List<string> { kings[Random.Range(0, kings.Count)] };
+        kingBattle = true;
+        NetLog.Warn($"KING BATTLE: the {waveList[0]}!", toast: true);
+    }
+
     static void StartTiny()
     {
+        kingBattle = false;
+        HookPotions();
+        DungeonLoot.Preload();   // (the catalogue the potions come from)
         EndChickens("stopped");
         EndRush("stopped");
         ClearSpawned();
         var have = Monsters.Names();
+        // the troops in colours ("Red Warrior", "Black Monk"): one colour of each, picked at random each run
+        string[] colours = { "Black ", "Blue ", "Purple ", "Red ", "Yellow " };
+        string Troop(string n) => colours.FirstOrDefault(n.StartsWith) is string c ? n.Substring(c.Length) : null;
+        var oneEach = have.Where(n => Troop(n) != null).GroupBy(Troop).Select(g => g.ElementAt(Random.Range(0, g.Count())));
+        have = have.Where(n => Troop(n) == null).Concat(oneEach).ToList();
         if (have.Count == 0) { NetLog.Warn("No Tiny Swords creatures: MonsterArt.dll isn't installed", toast: true); return; }
         waveList = WaveOrder.Where(have.Contains)
             .Concat(have.Where(n => !WaveOrder.Contains(n) && !WaveBosses.Contains(n)))
@@ -77,7 +127,7 @@ internal static partial class Arena
             return;
         }
         if (tinyFoe && !tinyFoe.IsDead) return;
-        if (tinyWave >= waveList.Count) { EndTiny("won"); NetLog.Success("You beat every Tiny Swords creature!", toast: true); return; }
+        if (tinyWave >= waveList.Count) { EndTiny("won"); NetLog.Success(kingBattle ? $"You beat the {waveList[0]}!" : "You beat every Tiny Swords creature!", toast: true); return; }
         bestTiny = Mathf.Max(bestTiny, tinyWave);
         tinyWave++;
         tinyPending = true;
@@ -112,6 +162,9 @@ internal static partial class Arena
             if (ImGui.SmallButton("Stop##tiny2")) EndTiny("stopped");
             return;
         }
+        if (ImGui.Button("King battle")) StartKing();
+        ImGui.SameLine();
+        ImGui.TextDisabled("a King of a random colour: his soldiers, his catapults");
         if (ImGui.Button("Tiny Swords waves")) StartTiny();
         ImGui.SameLine();
         ImGui.TextDisabled(bestTiny > 0 ? $"every creature, one at a time (best: wave {bestTiny})" : "every creature, one at a time, bosses last");

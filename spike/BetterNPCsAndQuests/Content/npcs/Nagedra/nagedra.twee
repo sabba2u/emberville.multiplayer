@@ -86,18 +86,39 @@ Those blueprints should keep you busy. Come back when you've built something.
 [[See you, Nagedra.|END]]
 
 :: Dungeons [NPC:Nagedra]
-Oh, there's a really cool one. The dark forest where I was holed up... I'd say it's my forest by now.
-And plenty of others, if you've got the nerve. Where do you want to go? I'll send you there.
+There's one I'd only send you to if you're ready: Kaldhor's Throne. A mad king sits on it now, and his army fills the halls. It's very tough... but what he guards is worth it.
+Or the dark forest where I was holed up... I'd say it's my forest by now. And plenty of others, if you've got the nerve. Where do you want to go? I'll send you there.
+[[Kaldhor's Throne.|GoKL]]
 [[Your forest.|GoNegedra]]
 [[Mordaxius' lab.|GoLab]]
 [[The library.|GoLibrary]]
 [[Morcha's hideout.|GoMorcha]]
 [[What else is there?|MoreDungeons]]
+[[Somewhere to just fight?|Arena]]
 [[Never mind.|END]]
 
+:: Arena [NPC:Nagedra]
+The arena, then. I can send you to a boss rush, one brute after another, or to waves of those little soldiers in their coloured coats.
+And just so you know... there is no chicken level.
+[[The boss rush.|GoRush]]
+[[The soldiers' waves.|GoTiny]]
+[[...is there a chicken level?|GoChickens]]
+[[Never mind.|END]]
+
+:: GoRush [NPC:Nagedra]
+(trigger: "command arena rush")
+One after another, and each one meaner. Don't stop to catch your breath.
+
+:: GoTiny [NPC:Nagedra]
+(trigger: "command arena tiny")
+Small, but there are a lot of them. Mind the ones with the barrels.
+
+:: GoChickens [NPC:Nagedra]
+(trigger: "command arena chickens")
+I told you. There is no chicken level.
+
 :: MoreDungeons [NPC:Nagedra]
-Let me think... the place they call KL, the old mines, the overgrown caves, Tolcan's forest, and the basements.
-[[KL.|GoKL]]
+Let me think... the old mines, the overgrown caves, Tolcan's forest, and the basements.
 [[The mines.|GoMines]]
 [[The overgrown caves.|GoNature]]
 [[Tolcan's forest.|GoTolcan]]
@@ -122,7 +143,7 @@ Morcha won't be happy to see you. Good luck.
 
 :: GoKL [NPC:Nagedra]
 (trigger: "command dungeon dungeon_b01_kl")
-Nobody knows what KL means. Tell me if you find out.
+Kaldhor's Throne. Fight your way through his halls, then the throne room. Beat the Mad King and his sword is yours. Good luck... you'll need it.
 
 :: GoMines [NPC:Nagedra]
 (trigger: "command dungeon b01_sd_mining_01")

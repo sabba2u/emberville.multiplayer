@@ -75,14 +75,19 @@ internal static class Fishing
 
     /// <summary>Every frame: new fish shadows (looked for every couple of seconds) get a spot.</summary>
     static int owed;   // catches made before the item list was in
-    static float nextCatalogue;
+    static float nextCatalogue, arrived;
+    static string lookedIn;
 
     public static void Tick()
     {
         if (Catalogue.Pool == null) { if (Time.unscaledTime >= nextCatalogue) { nextCatalogue = Time.unscaledTime + 1f; Catalogue.Preload(); } }   // (at the game's start the catalogue isn't up yet: asked once a second until it is)
         else if (owed > 0) { owed--; Catch(); }
         if (Time.unscaledTime < nextLook) return;
-        nextLook = Time.unscaledTime + 2f;
+        // (a look at every object in the scene: 10-25 ms, a hitch you see. Often while a new place is still coming in,
+        // then seldom: the shadows are part of the place, they don't come and go)
+        string scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name;
+        if (scene != lookedIn) { lookedIn = scene; arrived = Time.unscaledTime; }
+        nextLook = Time.unscaledTime + (Time.unscaledTime - arrived < 12f ? 2f : 20f);
         if (!Singleton<GameManager>.HasMain || !Singleton<GameManager>.main.player) return;
         spotted.RemoveWhere(t => !t);
         foreach (var t in UnityEngine.Object.FindObjectsByType<Transform>(FindObjectsSortMode.None))

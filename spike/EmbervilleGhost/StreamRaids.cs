@@ -150,7 +150,7 @@ internal static class StreamRaids
 
     /// <summary>The teleport flash there (the player's own "Teleport" effect, as the companion arrives with it): a copy,
     /// moved to the spot, gone after 3 s.</summary>
-    static void Poof(Vector3 at)
+    internal static void Poof(Vector3 at)
     {
         var me = LocalPlayer.Get();
         var fx = me ? me.extraFxAnimator : null;

@@ -59,7 +59,10 @@ internal static class DungeonLoot
     // ---- chests ----
 
     /// <summary>What each of our chests will hold (filled when the game sets the chest up).</summary>
-    static readonly Dictionary<Chest, (int seed, int floor)> planned = new Dictionary<Chest, (int, int)>();
+    static readonly Dictionary<Chest, (int seed, int floor, bool upgrade)> planned = new Dictionary<Chest, (int, int, bool)>();
+
+    /// <summary>A dungeon chest's chance of holding a weapon better than the one you carry.</summary>
+    const double UpgradeChance = 0.25;
 
     /// <summary>
     /// Chests for a freshly built dungeon (still switched off): the rooms' own get steady ids and aren't saved; ours go
@@ -88,7 +91,8 @@ internal static class DungeonLoot
         var start = new Vector3Int(Mathf.FloorToInt(arrival.x / cs.x), Mathf.FloorToInt(arrival.y / cs.y), 0);
         if (!cells.Contains(start)) start = cells.OrderBy(c => (c - start).sqrMagnitude).First();
         var dist = Delve.Distances(start, cells);
-        var spots = dist.Where(p => p.Value >= 12 && Delve.Open(p.Key, cells, 1)).Select(p => p.Key).OrderBy(c => c.x).ThenBy(c => c.y).ToList();
+        var clear = Delve.Free != null && Delve.Free.Count > 0 && where.Floor > 0 ? Delve.Free : cells;   // (not on the furniture)
+        var spots = dist.Where(p => p.Value >= 12 && Delve.Open(p.Key, clear, 1)).Select(p => p.Key).OrderBy(c => c.x).ThenBy(c => c.y).ToList();
         var picked = new List<Vector3Int>();
         for (int tries = 0; tries < 400 && picked.Count < want && spots.Count > 0; tries++)
         {
@@ -114,7 +118,7 @@ internal static class DungeonLoot
             chest.shareContent = ChestShare.None;
             chest.isInitialized = false;
             chest.isOpened = chest.alreadyOpened = false;
-            planned[chest] = (unchecked(genSeed * 31 + n * 977 + 7), floor);   // rolled when the chest is set up (the catalogue may still be loading now)
+            planned[chest] = (unchecked(genSeed * 31 + n * 977 + 7), floor, true);   // rolled when the chest is set up (the catalogue may still be loading now)
             n++;
         }
         NetLog.Info($"Dungeon loot: {n} chests ({decorCount} were decorative ones, now real; +{i} of the rooms' own)", toast: false);
@@ -136,9 +140,72 @@ internal static class DungeonLoot
         chest.shareContent = ChestShare.None;
         chest.isInitialized = false;
         chest.isOpened = chest.alreadyOpened = false;
-        planned[chest] = (empty ? int.MinValue : seed, floor);
+        planned[chest] = (empty ? int.MinValue : seed, floor, false);
         go.SetActive(true);
         return chest;
+    }
+
+    /// <summary>A boss's chest at a dungeon's end (DungeonEnd): bigger, and full of gear better than yours (BossLoot).</summary>
+    internal static Chest MakeBossChest(Transform parent, Vector3 at, string id, int seed)
+    {
+        var c = MakeChest(at, id, seed, 1, false);
+        if (!c) return null;
+        planned.Remove(c);
+        bossChests[c] = seed;
+        c.transform.SetParent(parent, true);
+        c.transform.localScale = Vector3.one * 1.5f;
+        return c;
+    }
+
+    static readonly Dictionary<Chest, int> bossChests = new Dictionary<Chest, int>();
+
+    /// <summary>
+    /// A boss's treasure: 3 weapons (the first of your own weapon's kind) and 2-3 pieces of armour or gear, at high
+    /// quality, each as strong as gear 5-8 levels above yours (of up to 40 tries, the one whose level is nearest that,
+    /// at or over it first), but asking only your level; and a stack of potions.
+    /// </summary>
+    internal static List<InventoryItem> BossLoot(System.Random rng)
+    {
+        if (pool == null || pool.Count == 0) return null;
+        int yours = Integrations.YourGearLevel();
+        var weapons = pool.Where(d => Has(d, ItemCategory.Weapon)).ToList();
+        var armour = pool.Where(d => Has(d, ItemCategory.Armor) || Has(d, ItemCategory.Gear)).ToList();
+        var mine = LocalPlayer.Get() ? LocalPlayer.Get().currentWeaponItem?.data as CollectableWeapon : null;
+        var kin = mine && mine.weapon ? weapons.OfType<CollectableWeapon>().Where(d => d.weapon && d.weapon.weaponCategory == mine.weapon.weaponCategory).Cast<ItemData>().ToList() : new List<ItemData>();
+        var picks = new List<List<ItemData>> { kin.Count > 0 ? kin : weapons, weapons, weapons };
+        int pieces = rng.Next(2, 4);
+        for (int i = 0; i < pieces; i++) picks.Add(armour.Count > 0 ? armour : weapons);
+        var items = new List<InventoryItem>();
+        foreach (var from in picks)
+        {
+            if (from.Count == 0) continue;
+            int target = yours + rng.Next(5, 9);
+            ItemObject best = null;
+            int bestScore = int.MaxValue, bestLevel = 0;
+            for (int tries = 0; tries < 40 && bestScore > 0; tries++)
+            {
+                var data = from[rng.Next(from.Count)];
+                int quality = Mathf.Clamp(rng.Next(4, 7), data.qualityRange.x, data.qualityRange.y);
+                ItemObject candidate;
+                try { candidate = new ItemObject(data, 1, quality); }
+                catch (System.Exception) { continue; }
+                int level = LevelOf(candidate);
+                int score = level >= target ? level - target : (target - level) * 3;
+                if (score < bestScore) { bestScore = score; best = candidate; bestLevel = level; }
+            }
+            if (best == null) continue;
+            foreach (var a in best.randomValues.intAttributes)   // (as strong as that level's, asking only yours)
+                if (a != null && a.Key == ItemRandomValues.Attr.LevelRequirement && a.Value > yours) a.Value = yours;
+            items.Add(new InventoryItem(best, items.Count, InventorySection.Chest));
+            NetLog.Info($"Boss treasure: {best.data.name} (quality {best.randomValues.quality}, as strong as level {bestLevel}, asks level {yours})", toast: false);
+        }
+        var potions = pool.Where(d => d.name.StartsWith("Item_Potion")).ToList();
+        if (potions.Count > 0)
+        {
+            var p = potions[rng.Next(potions.Count)];
+            try { items.Add(new InventoryItem(new ItemObject(p, rng.Next(2, 5), -1), items.Count, InventorySection.Chest)); } catch { }
+        }
+        return items;
     }
 
     static int decorCount;
@@ -211,6 +278,37 @@ internal static class DungeonLoot
 
     static bool Has(ItemData d, ItemCategory c) => (d.itemCategory & c) != 0;
 
+    /// <summary>
+    /// A weapon better than the one you carry (as Minecraft Dungeons does it: going back down again and again is how
+    /// your weapon gets better): the same weapon or another of its kind (sword, axe, bow...), at least your quality, its
+    /// damage 15-30% over yours (both ends), and asking no higher a level than yours does. Null: fists (nothing to beat),
+    /// or the catalogue isn't loaded.
+    /// </summary>
+    internal static ItemObject BetterWeapon(System.Random rng)
+    {
+        var me = LocalPlayer.Get();
+        var mine = me ? me.currentWeaponItem : null;
+        if (pool == null || mine?.data is not CollectableWeapon cw || mine.randomValues == null) return null;
+        var kin = pool.OfType<CollectableWeapon>().Where(d => cw.weapon && d.weapon && d.weapon.weaponCategory == cw.weapon.weaponCategory).ToList();
+        var data = kin.Count > 0 && rng.NextDouble() < 0.5 ? kin[rng.Next(kin.Count)] : cw;
+        int quality = (int)mine.randomValues.quality;
+        if (quality < data.qualityRange.x || quality > data.qualityRange.y) data = cw;   // (that kind can't come as good as yours)
+        ItemObject item;
+        try { item = new ItemObject(data, 1, quality); }
+        catch (System.Exception e) { NetLog.Warn($"Better weapon {data.addressKey}: {e.Message}", toast: false); return null; }
+        var was = mine.randomValues.damageRange;
+        float up = 1.15f + (float)rng.NextDouble() * 0.15f;
+        var rv = item.randomValues;
+        int lo = Mathf.Max(rv.damageRange.x, Mathf.Max(was.x + 1, Mathf.CeilToInt(was.x * up)));
+        int hi = Mathf.Max(rv.damageRange.y, Mathf.Max(was.y + 1, Mathf.CeilToInt(was.y * up)));
+        rv.damageRange = new Vector2Int(lo, Mathf.Max(lo, hi));
+        int yours = LevelOf(mine);
+        foreach (var a in rv.intAttributes)
+            if (a != null && a.Key == ItemRandomValues.Attr.LevelRequirement && a.Value > yours) a.Value = yours;
+        NetLog.Info($"Dungeon loot: a better weapon: {data.name} {lo}-{hi} (yours: {mine.data.name} {was.x}-{was.y})", toast: false);
+        return item;
+    }
+
     /// <summary>An item's level requirement, as its card shows it (0: none).</summary>
     internal static int LevelOf(ItemObject item)
     {
@@ -268,10 +366,22 @@ internal static class DungeonLoot
     {
         static bool Prefix(Chest __instance)
         {
+            if (bossChests.TryGetValue(__instance, out int bossSeed))   // (a boss's: its treasure)
+            {
+                var loot = BossLoot(new System.Random(bossSeed));
+                if (loot == null) return true;
+                bossChests.Remove(__instance);
+                var m = Singleton<ChestManager>.main;
+                if (!m.HasID(__instance.chestID)) m.AddChest(__instance.chestID, loot, false, ChestShare.None);
+                return false;
+            }
             if (!planned.TryGetValue(__instance, out var plan)) return true;
             planned.Remove(__instance);
             var items = plan.seed == int.MinValue ? new List<InventoryItem>() : Roll(new System.Random(plan.seed), plan.floor);   // (MinValue: a trap, empty)
             if (items == null) return true;   // the catalogue didn't load: the chest's own loot table
+            var lucky = new System.Random(plan.seed ^ 0x0B377E2);
+            if (plan.upgrade && lucky.NextDouble() < UpgradeChance && BetterWeapon(lucky) is ItemObject better)
+                items.Add(new InventoryItem(better, items.Count, InventorySection.Chest));   // (the next free slot)
             var manager = Singleton<ChestManager>.main;
             if (manager.HasID(__instance.chestID)) return false;
             manager.AddChest(__instance.chestID, items, false, ChestShare.None);   // not storage for crafting / building

@@ -15,11 +15,15 @@ internal static class MenuBanner
     public static Plugin Plugin;
     static MainMenuManager menu;
 
+    static float nextMenuLook;
+
     public static void Draw()
     {
         // Out of the way while one of our windows is up (the Insert menu, joining, hosting, Online Players).
         if (Plugin == null || JoinWindow.Visible || ImGuiUnity.IsOpen || HostWindow.Visible || OnlinePlayers.Visible) return;
-        if (!menu) menu = Object.FindAnyObjectByType<MainMenuManager>();
+        // (looked for once a second at most: in the game there's no main menu, and a search of the whole scene every
+        // frame for it cost 5 ms a frame)
+        if (!menu && Time.unscaledTime >= nextMenuLook) { nextMenuLook = Time.unscaledTime + 1f; menu = Object.FindAnyObjectByType<MainMenuManager>(); }
         if (!menu || menu.state != MainMenuState.MainScreen) return;
 
         string title, line1, line2, line3 = "";

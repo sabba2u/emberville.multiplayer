@@ -21,6 +21,22 @@ random weapon swap every few seconds, right in your game. Chat can spin a wheel,
 ball, cheer on a monster race, form a raid party where every raider shows up as a monster wearing their name... and
 bet on whether you'll survive. MODS (Insert) > **Streaming** > **Connect Twitch**.
 
+### What's new in 0.8: monsters
+- **60 new creatures** from the Tiny Swords packs, each with its own AI and its own tricks: bees that charge, gnomes
+  that split in two, a thief you can't see, a Minotaur that flips your controls, goblins that throw lit TNT (kick it
+  back at them!), a Barrel Goblin that blows itself up, five armies of knights, lancers, monks and catapults, and the
+  **Mad King**. [What each one does](#monsters-the-tiny-swords-creatures). (Their art is a paid pack and isn't in the
+  download: [how to add it](#adding-the-monster-art).)
+- **Nagedra's dungeons:** ask her "Know any good dungeons?" and she sends you into one of the demo's hidden dungeons,
+  now **full of monsters**, a new layout and new creatures every time, with a **boss guarding a treasure chest and the
+  way home** at the far end. [Details](#nagedras-dungeons).
+- **Kaldhor's Throne:** fight through the Mad King's halls to his throne room, and take his sword.
+- **The arena, rewritten:** the **boss rush** is now every boss there is, the game's and ours (about 60), in a random
+  order each time; **Tiny Swords waves**; the **King battle**; and still, there is no chicken level.
+- **Endless dungeons** (the descent): smaller, tidier floors, creatures from both worlds, chests with a 25% chance of
+  a weapon better than yours, and stairs that glow red while their guardian lives.
+- Faster: two mods were each spending 5-6 ms a frame on nothing (40-60 fps to 70-90). `/perf` measures it.
+
 ### What's new in 0.6
 - **Twitch integration** (above): the wheel, dice, the casino, the monster race, raid parties, chatters as enemies,
   votes, polls, predictions and a leaderboard.
@@ -33,7 +49,7 @@ bet on whether you'll survive. MODS (Insert) > **Streaming** > **Connect Twitch*
 
 ## Contents
 [Better Streaming: Twitch](#better-streaming-twitch-plays-along) · [Playing together](#playing-together) · [Travel: homes, portals, /tp](#travel-homes-portals-tp) ·
-[The descent and the boss arena](#the-descent-and-the-boss-arena) · [Hidden dungeons](#dungeons-hidden-in-the-demo) · [Weapons and summons](#weapons-and-summons) ·
+[Monsters](#monsters-the-tiny-swords-creatures) · [Nagedra's dungeons](#nagedras-dungeons) · [The descent and the boss arena](#the-descent-and-the-boss-arena) · [Hidden dungeons](#dungeons-hidden-in-the-demo) · [Weapons and summons](#weapons-and-summons) ·
 [Your character](#your-character) · [Levels: no cap](#levels-no-cap-and-test-keys) · [Chests and loot](#chests-and-loot) · [Weather](#weather) ·
 [NPCs and quests](#npcs-and-quests) · [Fishing](#fishing) · [Pets](#pets) · [Companion: an AI adventurer](#companion-an-ai-adventurer) ·
 [The Ninja (early alpha)](#the-ninja-a-new-class-early-alpha) ·
@@ -123,15 +139,109 @@ by xxJoexx", their message under it).
 - **`/tp <name>`:** go to one of your homes, or to a player, even onto their dungeon floor. **`/summon <name>`** or
   **`/summon all`:** bring them to you, now.
 
+## Monsters: the Tiny Swords creatures
+Sixty creatures from Pixel Frog's **Tiny Swords** packs, each wearing one of the game's own creatures underneath (so
+the game's health, hits, knock-back, XP and loot all still work) with an AI of its own on top. They turn up in the
+dungeons, the descent, the arena, Twitch raids, and as bosses. Many of them do something to you besides damage:
+
+**Creatures**
+| Creature | What it does |
+|---|---|
+| Bumblebee | From 3 away a quick wind-up, then a charge that stings when it reaches you. |
+| **Queen Bee** (boss) | Bigger, a poison sting, and calls in a swarm of Bumblebees. Guards Nagedra's forest. |
+| Giant Bat | Swoops in; its bite makes you bleed. |
+| Turtle | Its bite slows you to a fifth of your speed for 10 s; hitting it, shell and all, hurts you a little too. |
+| Spider | Webs you: you can't move, attack or roll until you wriggle free (left, right, left...). |
+| Snake | Poison; its second bite paralyses you for 10 s. |
+| Gnome | Its bonk knocks your weapon aside (2 s, no attacks); kill it and it splits into two smaller gnomes. |
+| Slingshot Gnome | An acorn in your eye: blinded for 4 s, dark all round you. |
+| Thief | Unseen but for a shimmer, there only as it strikes; its slash knocks your weapon away for 10 s (fists only). |
+| Spear Goblin | Every third attack a piercing lunge from 4 away, twice the damage. |
+| Torch Goblin | Sets you on fire. |
+| Pig | No attack: it charges straight into you and bowls you over. |
+| Pig Rider | A trampling charge from 5 away, right through you, dust flying. |
+| Lizard | Flares its frill: rooted 2 s (you can't walk or roll, but you can fight). |
+| Imp | Breathes fire at you: it burns. |
+| Gnoll | Throws 3 bones at once, and they bounce off the walls for 6 s. |
+| Hex Shaman | Its hex turns you into a **chicken** for 5 s (no attacks, no skills), and poisons you. |
+| Skull | Blocks; kill it and it breaks into 4 little skeletons. |
+| Paddle Shark | Its paddle knocks you back and drenches you (half speed, 10 s). |
+| Harpoon Shark | Its harpoon hooks you and reels you in. |
+| Bomb Fish | Throws bombs, and drops one last bomb where it dies. |
+| Panda | Blocks, then hits back hard. |
+| Minotaur | Blocks; hits so hard your controls are **reversed** for 3 s. |
+| Bear | Rears up, then a swipe with a short charge. |
+| **Great Bear** (boss) | Bigger; its ground pound knocks back everyone near, dust and a shake. |
+| **Troll** (boss) | A slow wind-up you can see coming, a huge swing that stuns 2 s, then it stands there tired. |
+
+**Armies** (five colours: Black, Blue, Purple, Red, Yellow; squads of one colour fight together)
+| Troop | What it does |
+|---|---|
+| Pawn, Peasant | Foot soldiers; the Peasant's knife makes you bleed. |
+| Warrior, Knight | Every third blow a **shield bash**: stunned 5 s. The Knight also blocks. |
+| Archer, Bowman | Shoot from 6 away; a hit **marks** you (their next hits hurt more). |
+| Swordsman | A long, heavy overhand swing, then a thrust: two hits. |
+| Lancer | Lowers its lance and charges from 5 away; hit it and it blocks and strikes back. |
+| Berserker | A whirlwind: spins after you for 3 s cutting everything near (bleed), untouchable while it spins, then rests: your opening. |
+| Horseman | A cavalry charge from 6 away, right through you, then round again. |
+| Monk | Never attacks: keeps its distance and **heals** the most hurt creature near it. Kill it first. |
+| Catapult | From far away lobs a stone where you're standing. |
+| TNT Goblin | Throws 3 lit sticks of TNT in a fan; they tumble through the air and land with a burning fuse. **Hit a stick to kick it away**, back at the thrower: it hurts them too. |
+| Barrel Goblin | Hides in a barrel until you come near, pops out, runs at you, and **blows itself up**. |
+| Torch Goblin | Sets you on fire. |
+| **The Mad King** (boss) | Calls in his Monk and a soldier, again every 20 s; teleports away when hit; his armour lets through only a third of your damage; every swing sticks his weapon in the ground for 3 s (hit his back then); charges into walls and dazes himself; every 15 s his catapults rain stones on marked spots. |
+
+**Explosions** (TNT, bombs, the Barrel Goblin) hit three times as hard as the thrower's own attack and **stun everyone
+in them for 3 seconds**, the thrower included.
+
+Settings (the `[Monsters]` section of `BepInEx/config/spike.embervilleghost.cfg`): how big they're drawn (`/monsterscale 1.5` tries it live), and how many of a dungeon's groups are ours.
+
+### Adding the monster art
+The Tiny Swords art is Pixel Frog's (itch.io), and three of the four packs are paid, so it isn't in this repository or
+in the download. Without it the mod runs fine; you just get the game's own creatures in their place. To add it:
+1. Get **Tiny Swords**, **Tiny Swords (Free Pack)**, **Tiny Swords (Enemy Pack)** and **Warfare** from
+   [pixelfrog-assets.itch.io](https://pixelfrog-assets.itch.io) and unzip them into `spike/tiny.swords.extract/`.
+2. `python spike/MonsterArt/build.py` (cuts the sheets), then `dotnet build spike/MonsterArt -c Release` (packs them
+   into `MonsterArt.dll` in the game's `BepInEx/plugins/MonsterArt`).
+
+In co-op, everyone who wants to see them needs the art; the creatures are the same for everyone either way.
+
+## Nagedra's dungeons
+Talk to **Nagedra** (the carpenter, at her camp) and ask **"Know any good dungeons?"**. She sends you into one of the
+demo's hidden dungeons, the ones the game ships but never lets you visit, now filled with monsters, the game's and ours:
+
+| Ask her for | What's there |
+|---|---|
+| Kaldhor's Throne | The Mad King's army fills two caves; the throne room at the end: **the Mad King**, his sword, and the way home. |
+| Her forest | Bees and gnomes everywhere (and soldiers); **the Queen Bee** at the end. |
+| Mordaxius' lab | Two floors: the lab, and its basement below; the boss is in the basement. |
+| The library, Morcha's hideout | A single room each, a boss in it. |
+| The mines, the overgrown caves, Tolcan's forest, the stone basement | Long winding dungeons. |
+| Somewhere to just fight? | The **arena**: the boss rush, the Tiny Swords waves, or... is there a chicken level? |
+
+- **A new one every time:** a new layout and new creatures each visit (about half as many as the descent: you can walk).
+- **The end:** at the far end of each, a **boss** (a mini-boss made from one of the creatures, a different one every
+  time) guards a **big chest** that won't open while it lives, and the **way home**: when it falls, a portal back to
+  Nagedra opens. The chest holds weapons and armour as strong as gear 5-8 levels above yours, that you can still wear.
+- **Treasure on the way:** chests along the paths, each with a 25% chance of a weapon better than the one you carry.
+- The exit doors at the far end take you home to Nagedra too.
+
 ## The descent and the boss arena
 - **The descent:** the full game's dungeon generator ships in the demo; the mod builds the levels. Up the path from the
   starting door, the **water well** is the way down (and the **lamp** the boss arena, with **Rory** the archer between).
   Set a seed, how many floors, how much stronger each floor gets, how many creatures, and the layout (Sprawl). Each
-  floor has chests (better loot deeper), the stairs at the far end, a mini-boss guardian every 5th floor (now and then
-  it drops a staff), a minimap, and a blue pad or the Leave button back to where you came in. Everyone gets the same
-  floors.
+  floor has chests (better loot deeper, and a 25% chance of a weapon better than yours), the stairs at the far end
+  (glowing red while a guardian lives), a mini-boss guardian every 5th floor (now and then it drops a staff), a
+  minimap, and a blue pad or the Leave button back to where you came in. Every floor is a fresh, compact layout (at
+  most FootprintRooms rooms across, 10 to start) with at least your MaxEnemiesAlive creatures, the game's and ours
+  mixed. Everyone gets the same floors. **Endless:** set as many floors as you like and keep going down.
 - **Boss arena** (the lamp): a walled floor with pillars, spike traps and arrow shooters, and a panel to make mini-bosses
-  from the game's creatures (name, colour, size, health, damage). **Boss rush:** 30 bosses, tougher each wave.
+  from the game's creatures (name, colour, size, health, damage).
+- **Boss rush:** every boss there is, one after another: the game's 21 creature kinds and all of ours (every creature,
+  the Troll, the Great Bear, the Queen Bee, and each kind of soldier in a random colour), about 60, **in a random order
+  every time**, tougher each wave. Nagedra can send you straight into it.
+- **Tiny Swords waves:** wave after wave of the armies and creatures, bigger each time. **King battle:** the Mad King
+  and his army.
 - **There is no chicken level:** a button in the arena's panel. Hostile chickens come at you from every side every
   5 seconds, a little tougher each wave; big chickens every minute, **The Colonel** every 3 minutes; the spike traps
   wake after a minute, the arrows after three. Survive as long as you can: your time and your best time are kept.

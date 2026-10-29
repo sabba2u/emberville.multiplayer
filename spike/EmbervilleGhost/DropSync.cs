@@ -60,6 +60,22 @@ internal static class DropSync
         nextId = 1; allowLocal = granted = false; lastPlace = "";
     }
 
+    /// <summary>A place gone (a dungeon floor left): every item lying within it goes back to the pool, and is forgotten
+    /// (the floors are all built in the same spot: the next one would have them).</summary>
+    public static void ClearIn(Bounds b)
+    {
+        if (b.size == Vector3.zero) return;
+        b.Expand(new Vector3(4f, 4f, 0f));
+        bool Inside(Vector2 p) => p.x >= b.min.x && p.x <= b.max.x && p.y >= b.min.y && p.y <= b.max.y;
+        int n = 0;
+        foreach (var d in Object.FindObjectsOfType<ItemDropObject>())
+            if (d && Inside(d.transform.position)) { if (idOf.TryGetValue(d, out int id)) Forget(id); d.gameObject.SetActive(false); n++; }
+        var gone = new List<int>();
+        foreach (var x in instanced) if (Inside(x.Value.At)) gone.Add(x.Key);
+        foreach (var id in gone) instanced.Remove(id);
+        if (n > 0) NetLog.Info($"Dungeon: {n} items left lying on the floor cleared away", toast: false);
+    }
+
     static Instanced Remember(int id, string key, string name, int amount, string values, Vector2 at, string place)
     {
         if (!instanced.TryGetValue(id, out var rec))

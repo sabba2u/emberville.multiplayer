@@ -35,7 +35,7 @@ namespace EmbervilleGhost;
 [BepInDependency("spike.emberville.bettertranslations", BepInDependency.DependencyFlags.SoftDependency)]   // (Better Translations: /lang)
 public class Plugin : BaseUnityPlugin, ITransportListener
 {
-    internal const string Version = "0.7.1";
+    internal const string Version = "0.8.0";
     internal const string ModName = "Sabba's Emberville Multiplayer Mod";
     internal static string Title => $"{ModName} v{Version}";
 
@@ -169,6 +169,8 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         DesyncCheck.Bind(Config);
         Delve.Bind(Config);
         FastLoad.Bind(Config);
+        Monsters.Bind(Config);
+        SpeedUps.Bind(Config);
         Integrations.Init();   // Better Combat / Looting / Pets and Summons, if installed
         TeamHud.Plugin = this;
         MapMates.Plugin = this;
@@ -221,6 +223,11 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         DemoEnd.Tick();
         UnlockClasses.Tick();
         Monsters.Tick();
+        MadKing.Tick();
+        DungeonEnd.Tick();   // a dungeon's end: its boss down, the way home opens   // the Mad King down: the way home before his throne
+        ThroneRoom.Tick();   // /throne: KL built, on into the throne room
+        Statuses.Tick();   // disarmed / silenced (the Gnome, the Hex Shaman)
+        DeathSafety.Keep();   // creatures kept through your death (saved alive; ours that you killed, saved dead)
         Stockpile.Tick();
         Arsenal.Tick();
         MenuLightWatch.Tick();
@@ -238,6 +245,7 @@ public class Plugin : BaseUnityPlugin, ITransportListener
         GearDye.Tick();
         SkillStackFix.Tick();
         FastLoad.Tick();   // the loading screen over: the game's loading priority back
+        SpeedUps.Tick();   // the loading work's budget behind the loading screen
         TownPortal.Tick();
         AdeosGate.Tick();   // the Adeos room: a teammate at the shut gate is let in
         Homes.Tick();   // your /sethome places' portals

@@ -12,7 +12,7 @@ namespace BetterFishing;
 public class Plugin : BaseUnityPlugin
 {
     public const string Guid = "spike.emberville.betterfishing";
-    public const string Version = "0.1.0";
+    public const string Version = "0.1.1";
     internal static ManualLogSource Logger_;
     static ConfigEntry<float> rare;
 

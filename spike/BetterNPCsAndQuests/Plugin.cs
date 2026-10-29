@@ -17,7 +17,7 @@ namespace BetterNPCsAndQuests;
 public class Plugin : BaseUnityPlugin
 {
     public const string Guid = "spike.emberville.betternpcsandquests";
-    public const string Version = "0.1.0";
+    public const string Version = "0.1.1";
     internal static ManualLogSource Logger_;
     internal static string Folder;
 

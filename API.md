@@ -34,7 +34,10 @@ Press **Enter**, type the command with a `/` in front, press Enter. `/help` list
 | `/dungeons` | Lists every dungeon type in the game. |
 | `/dungeon <name>` | Builds that dungeon type (any part of its name: `negedra`, `library`, `lab`...) with a new seed and takes you in. |
 | `/arena` | To this scene's test arena. |
-| `/walls` | Show what's solid (debug). |
+| `/walls` | Show what's solid (debug); Shift+P logs what's under the mouse. |
+| `/arena rush`, `/arena tiny`, `/arena chickens` | Into the boss arena and straight into the boss rush, the Tiny Swords waves, or the chicken level. |
+| `/dungeon survey` | Generates each of Nagedra's dungeons and logs what's in them (regions, exits, chests). |
+| `/perf` | Times every mod's per-frame code for 10 s and logs the costliest, the frame rate and the hitches. |
 | `/exitarrow`, `/exitpath` | An arrow / a line to the stairs down (testing). |
 
 ### Weapons and pets

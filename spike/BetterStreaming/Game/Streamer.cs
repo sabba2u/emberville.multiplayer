@@ -33,6 +33,10 @@ internal static class Streamer
     public static Timers Timers;
     public static TextFilter Filter;
     static ConfigEntry<int> dial;
+    static ConfigEntry<bool> paused;
+
+    /// <summary>"Twitch off: I'm not streaming": chat, cheers, polls and rewards all ignored (just logged).</summary>
+    public static bool Paused { get => paused?.Value ?? false; set { if (paused != null) paused.Value = value; } }
     static ConfigEntry<string> extraWords;
     static readonly Dictionary<string, (ConfigEntry<bool> on, ConfigEntry<int> bits, ConfigEntry<int> cap, ConfigEntry<float> secs)> settings = new();
     static string QueueFile => Path.Combine(BepInEx.Paths.ConfigPath, "spike.emberville.betterstreaming.queue.json");
@@ -42,6 +46,7 @@ internal static class Streamer
 
     public static void Init(ConfigFile config)
     {
+        paused = config.Bind("Twitch", "Paused", false, "Twitch off (not streaming): chat commands, votes, cheers, polls and rewards are ignored");
         dial = config.Bind("Chaos", "Dial", 2, "How often a mean effect may land: 0 Chill (one per 2 min), 1, 2 (middle), 3, 4 Mayhem (one per 15 s)");
         extraWords = config.Bind("Text", "ExtraWords", "", "Your own words to hide in viewers' messages (comma separated)");
         Filter = new TextFilter(extraWords.Value.Split(','));
@@ -170,6 +175,12 @@ internal static class Streamer
 
     static void OnTwitch(TwitchEvent e)
     {
+        // not streaming: nothing chat does reaches the game (still logged, to see what came)
+        if (Paused && (e.Kind == TwitchKind.Cheer || e.Kind == TwitchKind.Chat || e.Kind == TwitchKind.PollEnd || e.Kind == TwitchKind.Redemption))
+        {
+            Log.Info($"Twitch (off: not streaming) ignored {e.Kind}{(e.User != null ? " from " + e.User : "")}{(e.Kind == TwitchKind.Cheer ? $" ({e.Bits} bits)" : "")}{(e.Kind == TwitchKind.Chat ? ": " + e.Message : "")}");
+            return;
+        }
         switch (e.Kind)
         {
             case TwitchKind.Cheer:

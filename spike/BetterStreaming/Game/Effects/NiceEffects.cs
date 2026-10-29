@@ -318,8 +318,10 @@ internal static class FireSound
 }
 
 /// <summary>
-/// The shield bubble, seen and heard for as long as the game's shield lasts (its hits): a see-through blue sphere round
-/// you with a pulsing rim and a pip for each hit it has left (ImGui, with the overlay); the Acolyte Sage's shield
+/// The shield bubble, seen and heard for as long as the game's shield lasts (its hits): the game's own bubble round you
+/// (the Acolyte Protector's red aura, as round the creatures it guards; else the Acolyte Sage's shield; else a drawn
+/// see-through blue sphere) and a pip for each
+/// hit it has left (ImGui, with the overlay); the Acolyte Sage's shield
 /// sound as it goes up, the knight's shield bash for every hit it takes, and the sound again as it pops.
 /// </summary>
 internal static class Bubble
@@ -331,6 +333,7 @@ internal static class Bubble
     public static void Up(PlayerMaster me)
     {
         if (on != me) Post("Play_Acolyte_Sage_ShieldActivate", me.gameObject);
+        if (on != me || !looks) Look(me);
         on = me;
         since = Time.time;
         hits = Hits(me);
@@ -355,6 +358,79 @@ internal static class Bubble
         if (on) Post("Play_Acolyte_Sage_ShieldActivate", on.gameObject);
         on = null;
         hits = 0;
+        Unlook();
+    }
+
+    // ---- its looks: the game's own bubble (the Acolyte Sage's shield, as on the creatures it shields) ----
+
+    static GameObject looks, template;
+    static bool lookedFor, protectorSaid;
+    static Vector3 looksScale;
+
+    /// <summary>The game's shield bubble round you (a copy of the Acolyte Sage's, drawn just over you); none loaded:
+    /// the drawn sphere instead (Draw).</summary>
+    static void Look(PlayerMaster me)
+    {
+        Unlook();
+        if (!template)   // (looked for again each time till found: it's only in memory once the Acolytes are loaded)
+        {
+            // the Acolyte Protector's aura (the red ring it holds round itself and its friends), else the Sage's shield
+            var protector = Resources.FindObjectsOfTypeAll<AcolyteProtector>().OrderBy(p => p.gameObject.scene.IsValid() ? 1 : 0).FirstOrDefault();
+            if (protector)
+            {
+                if (!protectorSaid)
+                {
+                    protectorSaid = true;
+                    Log.Info($"Streaming: the Acolyte Protector's parts: {string.Join(", ", protector.GetComponentsInChildren<Transform>(true).Select(t => t.name + (t.GetComponent<SpriteRenderer>() ? "[sprite]" : "") + (t.GetComponent<Animator>() ? "[animator]" : "")))}");
+                }
+                template = protector.GetComponentsInChildren<Transform>(true).Select(t => t.gameObject).FirstOrDefault(g => g.name.IndexOf("aura", System.StringComparison.OrdinalIgnoreCase) >= 0);
+            }
+            if (!template)
+                template = Resources.FindObjectsOfTypeAll<GameObject>().Where(g => g && g.name == "Acolyte_Sage_Shield")
+                    .OrderBy(g => g.scene.IsValid() ? 1 : 0).FirstOrDefault();   // (the asset itself first, else one in the scene)
+            if (template)
+            {
+                var a = template.GetComponentInChildren<Animator>(true);
+                Log.Info($"Streaming: shield bubble from the game's {template.name} ({string.Join(", ", template.GetComponents<Component>().Select(c => c.GetType().Name))}; animator parameters: {(a && a.runtimeAnimatorController ? string.Join(", ", a.parameters.Select(p => p.name)) : "none")})");
+            }
+            else if (!lookedFor) Log.Warn("Streaming: the game's shield bubble (Acolyte_Sage_Shield) isn't loaded yet: the drawn one for now");
+            lookedFor = true;
+        }
+        if (!template) return;
+        try
+        {
+            var mid = me.CenterOfMass ? me.CenterOfMass : me.transform;
+            looks = Object.Instantiate(template, mid.position, Quaternion.identity, mid);
+            looks.name = "BS_ShieldBubble";
+            looks.transform.localPosition = Vector3.zero;
+            looks.SetActive(true);
+            foreach (var t in looks.GetComponentsInChildren<Transform>(true)) t.gameObject.SetActive(true);   // (the aura's parts start switched off: the Protector's animator turns them on)
+            looksScale = looks.transform.localScale;
+            // just its looks: none of the Protector's scripts, hit areas or sounds on the copy
+            foreach (var c in looks.GetComponentsInChildren<Component>(true))
+                if (c && !(c is Transform) && !(c is SpriteRenderer) && !(c is Animator) && !(c is ParticleSystem) && !(c is ParticleSystemRenderer))
+                    Object.Destroy(c);
+            var mine = me.GetComponentsInChildren<SpriteRenderer>().Where(r => r.enabled).OrderByDescending(r => r.sortingOrder).FirstOrDefault();
+            foreach (var r in looks.GetComponentsInChildren<SpriteRenderer>(true))
+                if (mine) { r.sortingLayerID = mine.sortingLayerID; r.sortingOrder = mine.sortingOrder + 2; }   // (over you)
+            Trigger("Start");
+        }
+        catch (System.Exception e) { Log.Warn($"Streaming: shield bubble: {e.Message}"); Unlook(); }
+    }
+
+    /// <summary>Its animation's trigger by that name, if it has one (Start, Hit, End).</summary>
+    static void Trigger(string name)
+    {
+        var a = looks ? looks.GetComponentInChildren<Animator>() : null;
+        if (a && a.runtimeAnimatorController && a.parameters.Any(p => p.name == name && p.type == AnimatorControllerParameterType.Trigger)) a.SetTrigger(name);
+    }
+
+    static void Unlook()
+    {
+        if (!looks) return;
+        Trigger("End");
+        Object.Destroy(looks, 0.5f);   // (its ending a moment to play)
+        looks = null;
     }
 
     /// <summary>Every frame (Plugin.Update): a hit taken (the bash), the bubble gone (the pop).</summary>
@@ -362,11 +438,12 @@ internal static class Bubble
     {
         if (!on) return;
         int now = Hits(on);
-        if (now < hits) Post(now > 0 ? "Play_sfx_plyr_knight_ShieldBash" : "Play_Acolyte_Sage_ShieldActivate", on.gameObject);
+        if (now < hits) { Post(now > 0 ? "Play_sfx_plyr_knight_ShieldBash" : "Play_Acolyte_Sage_ShieldActivate", on.gameObject); Trigger("Hit"); }
         hits = now;
         if (now <= 0 || on.IsDead)
         {
             on = null;
+            Unlook();
             if (Controls.On("shield")) { Streamer.EndEarly("shield"); Controls.Running.Remove("shield"); }   // (all its hits taken: over before its time; a new one can come)
         }
     }
@@ -374,6 +451,11 @@ internal static class Bubble
     public static void Draw()
     {
         if (!on) return;
+        if (looks)   // (the copied aura: no animator of its own to move it: a gentle pulse)
+        {
+            var a = looks.GetComponentInChildren<Animator>();
+            if (!a || !a.runtimeAnimatorController) looks.transform.localScale = looksScale * (1f + Mathf.Sin(Time.time * 4f) * 0.05f);
+        }
         var cam = Camera.main;
         if (!cam) return;
         var mid = on.CenterOfMass ? on.CenterOfMass.position : on.transform.position + Vector3.up * 0.6f;
@@ -385,6 +467,13 @@ internal static class Bubble
         float t = Time.time - since, pulse = 0.5f + 0.5f * Mathf.Sin(t * 3f);
         float grow = Mathf.Clamp01(t / 0.25f);   // (it swells up as it lands)
         var dl = ImGuiNET.ImGui.GetBackgroundDrawList();
+        if (looks)   // (the game's own bubble is there: just the pips for the hits it has left)
+        {
+            uint pip = ImGuiNET.ImGui.ColorConvertFloat4ToU32(new ImGuiNET.Vector4(0.7f, 0.92f, 1f, 0.9f));
+            for (int i = 0; i < hits; i++)
+                dl.AddCircleFilled(new ImGuiNET.Vector2(c.x + (i - (hits - 1) / 2f) * 10f, c.y + r + 8f), 3.5f, pip, 12);
+            return;
+        }
         uint fill = ImGuiNET.ImGui.ColorConvertFloat4ToU32(new ImGuiNET.Vector4(0.45f, 0.8f, 1f, 0.16f + 0.06f * pulse));
         uint rim = ImGuiNET.ImGui.ColorConvertFloat4ToU32(new ImGuiNET.Vector4(0.7f, 0.92f, 1f, 0.55f + 0.35f * pulse));
         uint shine = ImGuiNET.ImGui.ColorConvertFloat4ToU32(new ImGuiNET.Vector4(1f, 1f, 1f, 0.35f));

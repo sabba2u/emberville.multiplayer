@@ -114,8 +114,10 @@ internal static class ImGuiUnity
         if (OnRender != null)
             foreach (Action handler in OnRender.GetInvocationList())
             {
+                long at = FrameProfile.Measuring ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
                 try { handler(); }
                 catch (Exception e) { Plugin.Log.LogError($"imgui: {e}"); }
+                if (at != 0) FrameProfile.Add(handler.Method, System.Diagnostics.Stopwatch.GetTimestamp() - at);   // (/perf: each mod's drawing on its own)
             }
         ImGui.Render();
 

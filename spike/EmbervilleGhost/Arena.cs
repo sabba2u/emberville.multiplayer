@@ -57,6 +57,31 @@ internal static partial class Arena
         }
     }
 
+    static string queued;   // (a mode to start once there: Nagedra's "arena rush / tiny / chickens")
+    static float queuedAt;
+
+    /// <summary>Into the arena and straight into a mode: "rush" (the boss rush), "tiny" (the Tiny Swords waves),
+    /// "chickens" (there is no chicken level).</summary>
+    public static void EnterFor(string mode)
+    {
+        queued = mode;
+        queuedAt = Time.unscaledTime;
+        if (!Active) Enter();
+    }
+
+    /// <summary>Every frame: a queued mode starts once we're in and the fade is over.</summary>
+    static void StartQueued()
+    {
+        if (queued == null) return;
+        if (Time.unscaledTime - queuedAt > 30f) { queued = null; return; }   // (never got there)
+        if (!Active || busy || Time.unscaledTime - queuedAt < 2f) return;
+        var mode = queued;
+        queued = null;
+        if (mode == "rush") StartRush();
+        else if (mode == "tiny") StartTiny();
+        else if (mode == "chickens") StartChickens();
+    }
+
     public static void Leave()
     {
         if (!Active || busy) return;
@@ -231,6 +256,7 @@ internal static partial class Arena
             hovered = panelRect.Contains(new UnityEngine.Vector2(p.x, Screen.height - p.y));
         }
         if (hovered || ImGuiUnity.Typing && Active) GameInput.Block("arena"); else GameInput.Unblock("arena");
+        StartQueued();
         Rush();
         Chickens();
         Tiny();
@@ -268,15 +294,45 @@ internal static partial class Arena
     static float RushHealth(int wave) => 2f + 0.3f * (wave - 1);
     static float RushDamage(int wave) => 1f + 0.05f * (wave - 1);
 
+    /// <summary>One of the rush's bosses: one of the game's roster (its first 21: every kind once), or one of ours.</summary>
+    struct RushFoe { public int Preset; public string Ours; }
+    static readonly List<RushFoe> rushList = new List<RushFoe>();
+    static int RushCount => rushList.Count > 0 ? rushList.Count : MiniBoss.Presets.Length;
+
+    /// <summary>
+    /// The rush's line-up, a new order every time: every creature kind of the game's (the roster's first 21) and every one
+    /// of ours (MonsterArt: the pack's creatures and bosses, and each kind of troop once, in a colour picked at random).
+    /// </summary>
+    static void MakeRushList()
+    {
+        rushList.Clear();
+        var rng = new System.Random(System.Environment.TickCount);
+        for (int i = 0; i < Mathf.Min(21, MiniBoss.Presets.Length); i++) rushList.Add(new RushFoe { Preset = i });
+        string[] colours = { "Black", "Blue", "Purple", "Red", "Yellow" };
+        var troops = new Dictionary<string, List<string>>();
+        foreach (var n in Monsters.Names())
+        {
+            var colour = colours.FirstOrDefault(c => n.StartsWith(c + " "));
+            if (colour == null) { rushList.Add(new RushFoe { Preset = -1, Ours = n }); continue; }
+            var type = n.Substring(colour.Length + 1);
+            if (!troops.TryGetValue(type, out var all)) troops[type] = all = new List<string>();
+            all.Add(n);
+        }
+        foreach (var t in troops.OrderBy(x => x.Key)) rushList.Add(new RushFoe { Preset = -1, Ours = t.Value[rng.Next(t.Value.Count)] });
+        for (int i = rushList.Count - 1; i > 0; i--) { int j = rng.Next(i + 1); (rushList[i], rushList[j]) = (rushList[j], rushList[i]); }
+        NetLog.Info($"Boss rush line-up ({rushList.Count}): {string.Join(", ", rushList.Select(f => f.Preset >= 0 ? MiniBoss.Presets[f.Preset].baseHint : f.Ours))}", toast: false);
+    }
+
     static void StartRush()
     {
+        MakeRushList();
         EndChickens("stopped");
         EndTiny("stopped");
         ClearSpawned();
         rushWave = 0;
         rushBoss = null;
         rushNextAt = Time.unscaledTime + 2f;
-        NetLog.Warn($"BOSS RUSH: {MiniBoss.Presets.Length} bosses. First one in 2...", toast: true);
+        NetLog.Warn($"BOSS RUSH: {RushCount} bosses, the game's and ours, in a random order. First one in 2...", toast: true);
         folded = true;   // out of the way while fighting
         rushWave = 1;
         rushPending = true;
@@ -289,9 +345,9 @@ internal static partial class Arena
     {
         if (rushWave == 0) return;
         int reached = rushBoss && !rushBoss.IsDead ? rushWave - 1 : rushWave;
-        if (why == "won") reached = MiniBoss.Presets.Length;
+        if (why == "won") reached = RushCount;
         bestRush = Mathf.Max(bestRush, reached);
-        NetLog.Info($"Boss rush {why}: {reached} of {MiniBoss.Presets.Length} beaten (best {bestRush})", toast: true);
+        NetLog.Info($"Boss rush {why}: {reached} of {RushCount} beaten (best {bestRush})", toast: true);
         rushWave = 0;
         rushBoss = null;
         rushPending = false;
@@ -313,7 +369,7 @@ internal static partial class Arena
         }
         if (rushBoss && !rushBoss.IsDead) return;
         // down: the next one, or the end
-        if (rushWave >= MiniBoss.Presets.Length) { EndRush("won"); NetLog.Success("You beat every boss in the rush!", toast: true); return; }
+        if (rushWave >= RushCount) { EndRush("won"); NetLog.Success("You beat every boss in the rush!", toast: true); return; }
         bestRush = Mathf.Max(bestRush, rushWave);
         rushWave++;
         rushPending = true;
@@ -325,8 +381,21 @@ internal static partial class Arena
     static void SpawnWave(int wave)
     {
         ArenaTraps.ForWave(wave);
-        var p = MiniBoss.Presets[wave - 1];
-        var baseE = MiniBoss.ForPreset(wave - 1);
+        var me = LocalPlayer.Get();
+        var center = Origin + new Vector3(W / 2f, H / 2f, 0f);
+        var at = me ? center + (center - me.transform.position).normalized * 7f : center + Vector3.up * 6f;
+        at.x = Mathf.Clamp(at.x, Origin.x + 3f, Origin.x + W - 3f);
+        at.y = Mathf.Clamp(at.y, Origin.y + 3f, Origin.y + H - 3f);
+        var foe = wave - 1 < rushList.Count ? rushList[wave - 1] : new RushFoe { Preset = (wave - 1) % MiniBoss.Presets.Length };
+        if (foe.Preset < 0)   // (one of ours, made a boss: the rush's own health and damage for this wave)
+        {
+            rushBoss = Monsters.SpawnBoss(foe.Ours, at, $"{foe.Ours}  (wave {wave})", "Boss rush", RushHealth(wave), RushDamage(wave), root.transform);
+            if (rushBoss) { spawned.Add(rushBoss.gameObject); NetLog.Warn($"Wave {wave}: {foe.Ours}!", toast: true); return; }
+            NetLog.Info($"Boss rush: {foe.Ours} couldn't be made; one of the game's instead", toast: false);
+            foe.Preset = (wave - 1) % Mathf.Min(21, MiniBoss.Presets.Length);
+        }
+        var p = MiniBoss.Presets[foe.Preset];
+        var baseE = MiniBoss.ForPreset(foe.Preset);
         if (!baseE) { EndRush("stopped (no creatures)"); return; }
         var look = new MiniBoss.Look
         {
@@ -338,12 +407,7 @@ internal static partial class Arena
             Damage = RushDamage(wave),
             LootFloor = 1 + wave / 2,
         };
-        // the far side of the arena from you
-        var me = LocalPlayer.Get();
-        var center = Origin + new Vector3(W / 2f, H / 2f, 0f);
-        var at = me ? center + (center - me.transform.position).normalized * 7f : center + Vector3.up * 6f;
-        at.x = Mathf.Clamp(at.x, Origin.x + 3f, Origin.x + W - 3f);
-        at.y = Mathf.Clamp(at.y, Origin.y + 3f, Origin.y + H - 3f);
+        // (the far side of the arena from you)
         rushBoss = MiniBoss.Spawn(look, at, root.transform);
         if (rushBoss) spawned.Add(rushBoss.gameObject);
         NetLog.Warn($"Wave {wave}: {p.label}!", toast: true);
@@ -373,13 +437,13 @@ internal static partial class Arena
             }
             else if (TinyOn)
             {
-                ImGui.TextColored(new Vector4(0.55f, 0.9f, 0.45f, 1f), $"Tiny Swords: wave {tinyWave}/{waveList.Count}");
+                ImGui.TextColored(new Vector4(0.55f, 0.9f, 0.45f, 1f), (kingBattle ? $"King battle: {waveList[0]}" : $"Tiny Swords: wave {tinyWave}/{waveList.Count}"));
                 ImGui.SameLine();
                 if (ImGui.SmallButton("Stop##tiny")) EndTiny("stopped");
             }
             else if (rushWave > 0)
             {
-                ImGui.TextColored(new Vector4(1f, 0.55f, 0.3f, 1f), $"Rush: wave {rushWave}/{MiniBoss.Presets.Length}");
+                ImGui.TextColored(new Vector4(1f, 0.55f, 0.3f, 1f), $"Rush: wave {rushWave}/{RushCount}");
                 ImGui.SameLine();
                 if (ImGui.SmallButton("Stop")) EndRush("stopped");
             }
@@ -397,6 +461,8 @@ internal static partial class Arena
                 if (ImGui.SmallButton("There is no chicken level")) StartChickens();
                 ImGui.SameLine();
                 if (ImGui.SmallButton("Tiny Swords waves")) StartTiny();
+                ImGui.SameLine();
+                if (ImGui.SmallButton("King battle")) StartKing();
             }
             FoldEnd();
             return;
@@ -447,11 +513,11 @@ internal static partial class Arena
         {
             if (ImGui.Button("  BOSS RUSH  ")) StartRush();
             ImGui.SameLine();
-            ImGui.TextDisabled(bestRush > 0 ? $"all {MiniBoss.Presets.Length}, one after another (best: wave {bestRush})" : $"all {MiniBoss.Presets.Length}, one after another, harder each time");
+            ImGui.TextDisabled(bestRush > 0 ? $"the game's and ours, random order (best: wave {bestRush})" : "every boss, the game's and ours, in a random order, harder each time");
         }
         else
         {
-            ImGui.TextColored(new Vector4(1f, 0.55f, 0.3f, 1f), $"Boss rush: wave {rushWave} of {MiniBoss.Presets.Length}");
+            ImGui.TextColored(new Vector4(1f, 0.55f, 0.3f, 1f), $"Boss rush: wave {rushWave} of {RushCount}");
             ImGui.SameLine();
             if (ImGui.SmallButton("Stop")) EndRush("stopped");
         }

@@ -41,6 +41,7 @@ internal static partial class CompanionPanel
     /// <summary>Opened from its card (Trade): shown however far away it is, until your bag closes.</summary>
     public static bool Asked;
     static bool nearOnOpen, wasLogged;
+    static PanelsManager panelsManager;
     static string lastWhy;
     public static bool Ours(UISlot s) => s && (bagSlots.Contains(s) || gearSlots.ContainsKey(s) || swapSlots.Contains(s));
 
@@ -48,7 +49,9 @@ internal static partial class CompanionPanel
     public static void Tick(PlayerMaster me)
     {
         var p = RealPlayer.Current;
-        var panels = Object.FindAnyObjectByType<PanelsManager>();
+        // (kept, not looked for every frame: a search of the whole scene, 5-6 ms a frame and growing with the scene)
+        if (!panelsManager) panelsManager = Object.FindAnyObjectByType<PanelsManager>();
+        var panels = panelsManager;
         Hear();
         bool invOpen = panels && panels.panelInventory && panels.panelInventory.activeInHierarchy;
         if (!invOpen) { wasOpen = false; Asked = false; wasLogged = false; lastWhy = null; Hide(); return; }

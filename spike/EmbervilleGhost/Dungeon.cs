@@ -40,6 +40,7 @@ internal static class Dungeon
     static readonly Stack<Where> parents = new Stack<Where>();   // main regions under the sub-dungeon we're in
     static GameObject root;
     static GameArea area;
+    static Teleporter entryDoor;   // (the door you arrived by in this region)
     static readonly List<GameObject> spawned = new List<GameObject>();
     static Vector3 returnPos;
     static GameArea returnArea;
@@ -167,16 +168,21 @@ internal static class Dungeon
         else Chat.System("Dungeons: " + string.Join(", ", names) + "  (in the ~ console you can click them)");
     }
 
-    /// <summary>/dungeon negedra: into the dungeon type whose name has that in it (a new seed each time).</summary>
+    /// <summary>/dungeon negedra: into the dungeon type whose name has that in it (a new seed each time); /dungeon kl 1: its
+    /// region 1.</summary>
     public static void EnterNamed(string part)
     {
         part = (part ?? "").Trim();
+        // a region number after it: /dungeon kl 1 (KL's second part: Kaldhor's throne room)
+        int region = 0;
+        var words = part.Split(' ');
+        if (words.Length > 1 && int.TryParse(words[words.Length - 1], out int r) && r >= 0) { region = r; part = string.Join(" ", words.Take(words.Length - 1)); }
         var list = AllSettings().ToList();
         if (MainSettings()) list.Insert(0, MainSettings());   // (the world map's own too: "fullmap")
         var s = list.FirstOrDefault(x => x.name.Equals(part, System.StringComparison.OrdinalIgnoreCase))
              ?? list.FirstOrDefault(x => x.name.IndexOf(part, System.StringComparison.OrdinalIgnoreCase) >= 0);
         if (!s) { NetLog.Warn($"No dungeon called \"{part}\" (/dungeons lists them)", toast: true); return; }
-        Enter(s.name, UnityEngine.Random.Range(1, int.MaxValue), 0);
+        Enter(s.name, UnityEngine.Random.Range(1, int.MaxValue), region);
     }
 
     /// <summary>Arrive at this spot next time a floor is built (the town portal's far end), not its usual arrival.</summary>
@@ -191,6 +197,64 @@ internal static class Dungeon
         Leave();
     }
 
+    /// <summary>Out, to Nagedra (the Mad King's portal): beside her in the tutorial area, if that's where you came in
+    /// from; else back where you came in.</summary>
+    public static void LeaveToNagedra()
+    {
+        if (!Active || busy) return;
+        if (returnScene == "TutorialArea" && returnArea)
+        {
+            // her spot, in the area she's in (you may have come in from another: the starting house; its area at her
+            // spot left you unseen and walking through walls)
+            var spot = new Vector2(NagedraAt.x, NagedraAt.y);
+            var hers = UnityEngine.Object.FindObjectsByType<GameArea>(FindObjectsInactive.Include, FindObjectsSortMode.None)
+                .Where(a => a && a.CameraConfiner && a.gameObject.scene.name == returnScene && Inside(a.CameraConfiner, spot))
+                .OrderBy(a => Size(a.CameraConfiner)).FirstOrDefault();
+            if (hers)
+            {
+                returnArea = hers;
+                returnPos = new Vector3(NagedraAt.x, NagedraAt.y, returnPos.z);
+            }
+            else NetLog.Warn("Dungeon: no area found around Nagedra: back where you came in", toast: false);
+        }
+        Leave();
+    }
+
+    static readonly Vector2 NagedraAt = new Vector2(-38.6f, 65.6f);
+
+    /// <summary>Is the point inside the area's camera bounds? Worked out from its shape (an area not current is switched
+    /// off: then the physics check says no for everything).</summary>
+    static bool Inside(Collider2D c, Vector2 p)
+    {
+        var local = (Vector2)c.transform.InverseTransformPoint(p) - c.offset;
+        if (c is BoxCollider2D box) return Mathf.Abs(local.x) <= box.size.x / 2f && Mathf.Abs(local.y) <= box.size.y / 2f;
+        if (c is PolygonCollider2D poly)
+            for (int i = 0; i < poly.pathCount; i++)
+            {
+                var pts = poly.GetPath(i);
+                bool inside = false;
+                for (int j = 0, k = pts.Length - 1; j < pts.Length; k = j++)
+                    if ((pts[j].y > local.y) != (pts[k].y > local.y) && local.x < (pts[k].x - pts[j].x) * (local.y - pts[j].y) / (pts[k].y - pts[j].y) + pts[j].x)
+                        inside = !inside;
+                if (inside) return true;
+            }
+        return false;
+    }
+
+    /// <summary>Roughly how big an area's bounds are (smallest first: the room you're in, not the whole map).</summary>
+    static float Size(Collider2D c)
+    {
+        var scale = c.transform.lossyScale;
+        if (c is BoxCollider2D box) return box.size.x * box.size.y * Mathf.Abs(scale.x * scale.y);
+        if (c is PolygonCollider2D poly && poly.pathCount > 0)
+        {
+            var pts = poly.GetPath(0);
+            float w = pts.Max(q => q.x) - pts.Min(q => q.x), h = pts.Max(q => q.y) - pts.Min(q => q.y);
+            return w * h * Mathf.Abs(scale.x * scale.y);
+        }
+        return float.MaxValue;
+    }   // (just below her: Better NPCs and Quests' Nagedra stands at -38.6, 67.2)
+
     public static void Leave()
     {
         if (!Active || busy) return;
@@ -200,17 +264,23 @@ internal static class Dungeon
         current = null;
         parents.Clear();
         Delve.Left();
+        var oldBounds = bounds;
         if (returnScene != LocalPlayer.Scene || !back)
         {
-            Cleanup(oldRoot);
+            Cleanup(oldRoot, oldBounds);
+            ThroneRoom.Close();
             return;
         }
-        gm.TeleportPlayerFade(returnPos, Direction.Down, back, back.CameraConfiner).ContinueWith(() => Cleanup(oldRoot)).Forget();
+        // (the places go once you've arrived: the one you stand in taken away mid-fade left the screen black)
+        gm.TeleportPlayerFade(returnPos, Direction.Down, back, back.CameraConfiner).ContinueWith(() => { Cleanup(oldRoot, oldBounds); ThroneRoom.Close(); }).Forget();
         NetLog.Info("Leaving the dungeon", toast: true);
     }
 
-    static void Cleanup(GameObject oldRoot)
+    static void Cleanup(GameObject oldRoot, Bounds oldBounds)
     {
+        // what lay on its floor (creatures' drops, things you threw down): loose in the world, not under the floor, and
+        // every floor is built in the same spot: the next floor had the last one's leftovers lying about
+        DropSync.ClearIn(oldBounds);
         foreach (var go in spawned) if (go) go.SetActive(false);   // pooled creatures: back to their pool
         spawned.Clear();
         DeathSafety.Forget(oldRoot);   // its bosses (the pooled creatures were only switched off)
@@ -224,6 +294,7 @@ internal static class Dungeon
         busy = true;
         status = "Generating...";
         var oldRoot = root;
+        var oldBounds = bounds;
         DungeonLoot.Preload();
         Loading.Begin(where.Floor > 0 ? $"Descending to floor {where.Floor}" : "Entering the dungeon");
         try
@@ -231,14 +302,15 @@ internal static class Dungeon
             var settings = Find(where.Settings);
             NetLog.Info($"Generating the dungeon {settings.name}, seed {where.Seed}, region {where.Region}...", toast: true);
             int genSeed = Delve.SeedOf(where);
-            int sprawlNow = where.Floor > 0 ? Delve.SprawlLevel(where.Floor) : 0;
+            int footprint = where.Floor > 0 && settings != MainSettings() ? Delve.Footprint : 0;   // (the descent's floors: kept within that many rooms across)
+            int sprawlNow = (where.Floor > 0 ? Delve.SprawlLevel(where.Floor) : 0) * 100 + footprint;
             if (render == null || renderKey != (settings.name, genSeed) || renderSprawl != sprawlNow)
             {
                 var rng = new SeededSystemRandomProvider(genSeed);
                 var ctx = new GenerationContext(rng);
                 if (settings != MainSettings()) ctx.NeighborSelection = new UniformNeighborSelection();
                 // a descent floor: more side rooms / features than the game's own numbers (put back right after)
-                var undo = Sprawl.Apply(settings, where.Floor > 0 ? Delve.SprawlLevel(where.Floor) : 0);
+                var undo = Sprawl.Apply(settings, where.Floor > 0 ? Delve.SprawlLevel(where.Floor) : 0, footprint);
                 DungeonModel model;
                 Loading.Stage("Shaping the floor", 0.05f, 0.4f, creep: true);   // (one long step: the bar creeps meanwhile)
                 GenRandom.Begin(genSeed);   // (its steps that roll Unity's own random number: from the seed too)
@@ -265,6 +337,7 @@ internal static class Dungeon
             else if (built.entry) { at = built.entry.DestPosition; dir = built.entry.SpawnDirection; }
             Teleporter came = arriveAt != null && Teleporter.GlobalTeleporters.TryGetValue(arriveAt, out var c0) && c0 && c0.transform.IsChildOf(root.transform) ? c0 : built.entry;
             if (where.Floor == 0 && came) at = Inside(at, came);
+            entryDoor = built.entry;   // (the region's own entrance, whichever door you came by: in a dungeon's first region, the way home)
             if (where.Floor > 0) at = Delve.SetUpFloor(where, at);   // the descent: arrival, stairs down, the way home
             if (placeAt is Vector3 there) { at = there; dir = Direction.Down; placeAt = null; }   // (through a town portal)
             DungeonLoot.Place(root, where, genSeed, at);   // chests
@@ -275,8 +348,13 @@ internal static class Dungeon
             // the loading screen goes once the teleport's fade has covered it (no glimpse of where you were)
             await Singleton<GameManager>.main.TeleportPlayerFade(at, dir, area, area.CameraConfiner, null, null, false, Loading.End);
             Loading.End();
-            if (oldRoot && oldRoot != root) Cleanup(oldRoot);
-            SpawnCreatures(biome, where);
+            if (oldRoot && oldRoot != root) Cleanup(oldRoot, oldBounds);
+            Monsters.Favour = where.Floor == 0 && settings.name.Equals(DungeonEnd.Forest, StringComparison.OrdinalIgnoreCase)
+                ? (new[] { "Bumblebee", "Gnome", "Slingshot Gnome" }, 0.75) : null;   // (Nagedra's forest: mostly bees and gnomes, soldiers still about)
+            try { SpawnCreatures(biome, where, at); }
+            finally { Monsters.Favour = null; }
+            if (where.Floor == 0) MadKing.Built(settings.name, root, at);
+            DungeonEnd.Built(where, render.Regions.Count, root, at, biome);   // (Nagedra's dungeons: a boss, its chest, the way home)   // (KL: the King's soldiers; his throne room: the King)
             DebugWalls.Refresh();
             Pings.PingHere();   // where you are, on arrival
             DungeonMap.Built();   // the minimap: this floor, explored as you go
@@ -571,6 +649,9 @@ internal static class Dungeon
         var noWater = new HashSet<Vector3Int>();
         var ground = new HashSet<Vector3Int>();
         var covers = new HashSet<Vector3Int>();
+        var pitFloor = new HashSet<Vector3Int>();   // (bottom-layer tiles drawn as a pit: solid unless a floor layer is over them)
+        var overFloor = new HashSet<Vector3Int>();
+        var bottomTiles = new Dictionary<string, int>();
         Vector3 cell = Vector3.one;
         var originCell = new Vector3Int(Mathf.RoundToInt(Origin.x), Mathf.RoundToInt(Origin.y), 0);
 
@@ -626,7 +707,14 @@ internal static class Dungeon
                     var tile = tm.GetTile(c);
                     if (!tile) continue;
                     var to = baseCell + new Vector3Int(c.x, c.y, 0);
-                    into?.Add(to);
+                    // (a cut-down bush's stump on the wall-top layer, "Bush_Top_Destroyed": drawn, but you walk over it)
+                    bool stump = t.Layer == TilemapMergeLayer.WallCover && tile.name.IndexOf("Destroyed", StringComparison.OrdinalIgnoreCase) >= 0;
+                    if (!stump) into?.Add(to);
+                    if (t.Layer is TilemapMergeLayer.Ground0 or TilemapMergeLayer.Ground1 or TilemapMergeLayer.Ground2)
+                    {
+                        string key = $"{t.Layer}:{tile.name}";
+                        bottomTiles[key] = bottomTiles.TryGetValue(key, out int k) ? k + 1 : 1;
+                    }
                     if (!draw) continue;
                     var list = tiles[t.Layer];
                     list.at.Add(to); list.tile.Add(tile); list.m.Add(tm.GetTransformMatrix(c)); list.col.Add(tm.GetColor(c));
@@ -678,6 +766,24 @@ internal static class Dungeon
                 }
         }
         if (bridges > 0) NetLog.Info($"Dungeon: {bridges} bridges over water made walkable", toast: false);
+        // the pits: a pit's bottom tile with no floor drawn over it (Nature's entrance rooms: the moss is the floor, the
+        // bare "MainFloor_SubDungeonC" under it is the drop; the game itself left them walkable)
+        // the pits: the rooms' own "Floor_hollow" tilemaps (Nature's entrance rooms: dark holes with rocky rims), not one
+        // of the layers the game merges, so nothing made them solid (the game leaves them walkable too)
+        foreach (var tm in root.GetComponentsInChildren<Tilemap>(true))
+        {
+            if (!tm || tm.transform.IsChildOf(mergedGrid.transform) || tm.name.IndexOf("hollow", StringComparison.OrdinalIgnoreCase) < 0) continue;
+            tm.CompressBounds();
+            foreach (var c in tm.cellBounds.allPositionsWithin)
+            {
+                if (!tm.HasTile(c)) continue;
+                var w = CellCenter(tm, c);
+                pitFloor.Add(new Vector3Int(Mathf.FloorToInt(w.x / cell.x), Mathf.FloorToInt(w.y / cell.y), 0));
+            }
+        }
+        walls.UnionWith(pitFloor);
+        DebugLayers["pit"] = new HashSet<Vector3Int>(pitFloor);
+        NetLog.Info($"Dungeon: {pitFloor.Count} hollow (pit) cells made solid; floor tiles: " + string.Join(", ", bottomTiles.OrderByDescending(x => x.Value).Select(x => $"{x.Key} x{x.Value}")), toast: false);
         walls.UnionWith(covers);
         walls.ExceptWith(noWall);
         water.ExceptWith(noWater);
@@ -685,6 +791,51 @@ internal static class Dungeon
         // water is solid (the lakes; it has a lake-bed floor tile under it, so that doesn't make it walkable), except
         // where a bridge's "remove water" layer takes it away (subtracted above): with the tiles placed like the game
         // places them, those land on the bridge decks
+        // the rooms' own floors: a set piece (Nagedra's forest's "Nagedra" room) draws its floor on tilemaps of its own,
+        // not on the layers the game merges, so it counted as nothing and the hole's edge walled it off. Their floor
+        // tiles (named so: "..._Floor_...", "...Ground...") are floor too; pits ("hollow") and the void aren't
+        var ownFloor = new HashSet<Vector3Int>();
+        var ownWater = new HashSet<Vector3Int>();   // (and their own water: the same set piece's lakes, walked on before)
+        var ownWall = new HashSet<Vector3Int>();    // (and their own walls: the lab's hallways draw a wall top of their own, "Walls_Top")
+        foreach (var tm in root.GetComponentsInChildren<Tilemap>(true))
+        {
+            if (!tm || tm.transform.IsChildOf(mergedGrid.transform) || tm.GetComponent<TilemapCollider2D>()) continue;
+            string tn = tm.name.ToLowerInvariant();
+            if (tn.Contains("hollow") || tn.Contains("void")) continue;
+            var tr = tm.GetComponent<TilemapRenderer>();
+            if (!tr || !tr.enabled || !tm.gameObject.activeSelf) continue;
+            tm.CompressBounds();
+            foreach (var c in tm.cellBounds.allPositionsWithin)
+            {
+                var tile = tm.GetTile(c);
+                if (!tile) continue;
+                string n = tile.name.ToLowerInvariant();
+                bool wet = n.Contains("water") || n.Contains("lake") || n.Contains("river") || tn.Contains("water");
+                bool wall = !wet && !n.Contains("floor") && !n.Contains("ground") && (n.Contains("wall") || n.Contains("ceiling") || tn.Contains("wall"));
+                if (wall)
+                {
+                    var ww = CellCenter(tm, c);
+                    ownWall.Add(new Vector3Int(Mathf.FloorToInt(ww.x / cell.x), Mathf.FloorToInt(ww.y / cell.y), 0));
+                    continue;
+                }
+                if (!wet && (!(n.Contains("floor") || n.Contains("ground")) || n.Contains("hollow") || n.Contains("void"))) continue;
+                var w = CellCenter(tm, c);
+                var at = new Vector3Int(Mathf.FloorToInt(w.x / cell.x), Mathf.FloorToInt(w.y / cell.y), 0);
+                if (wet) ownWater.Add(at);
+                else if (!ground.Contains(at) && !walls.Contains(at)) ownFloor.Add(at);
+            }
+        }
+        ownWater.ExceptWith(noWater);   // (a bridge over it: walkable)
+        ownWall.ExceptWith(noWall);     // (a doorway's "remove collision": open)
+        walls.UnionWith(ownWall);
+        DebugLayers["room's own wall"] = ownWall;
+        ownFloor.ExceptWith(ownWater);
+        ground.UnionWith(ownFloor);
+        ground.UnionWith(ownWater);   // (water has ground under it: solid by the water rule below, not a hole's edge)
+        water.UnionWith(ownWater);
+        DebugLayers["room's own floor"] = ownFloor;
+        DebugLayers["room's own water"] = ownWater;
+        if (ownFloor.Count + ownWater.Count + ownWall.Count > 0) NetLog.Info($"Dungeon: the rooms' own tilemaps: {ownFloor.Count} floor cells, {ownWater.Count} water cells, {ownWall.Count} wall cells (solid)", toast: false);
         int groundUnderWater = ground.Count(c => water.Contains(c));
         bool waterSolid = true;
         walls.UnionWith(water);
@@ -697,8 +848,20 @@ internal static class Dungeon
             walls.ExceptWith(ground);
             floorCells = new HashSet<Vector3Int>(ground);
         }
+        // the holes: a cell with no tile at all (the pits in the rooms, the gaps between them) had no collider either, so
+        // you walked into the dark: every empty cell touching the floor (corners too) is solid
+        var rim = new HashSet<Vector3Int>();
+        foreach (var c in ground)
+            for (int dx = -1; dx <= 1; dx++)
+                for (int dy = -1; dy <= 1; dy++)
+                {
+                    var n = new Vector3Int(c.x + dx, c.y + dy, 0);
+                    if (!ground.Contains(n) && !walls.Contains(n)) rim.Add(n);
+                }
+        walls.UnionWith(rim);
+        DebugLayers["edge of a hole"] = rim;
         cellSize = cell;
-        NetLog.Info($"Dungeon tiles: ground {ground.Count}, walls {wallOnly} (minus {noWall.Count} openings), water {water.Count} (minus {noWater.Count}, {groundUnderWater} under the floor, solid: {waterSolid}), walkable {floorCells.Count}, cell {cell}, from {sources.Count} tilemaps: " +
+        NetLog.Info($"Dungeon tiles: {rim.Count} empty cells at the floor's edge made solid; ground {ground.Count}, walls {wallOnly} (minus {noWall.Count} openings), water {water.Count} (minus {noWater.Count}, {groundUnderWater} under the floor, solid: {waterSolid}), walkable {floorCells.Count}, cell {cell}, from {sources.Count} tilemaps: " +
                     string.Join(", ", sources.GroupBy(s => s.t.Layer).Select(g => $"{g.Key} x{g.Count()}")), toast: false);
 
         wallCells = new HashSet<Vector3Int>(walls);   // (the minimap draws them)
@@ -717,6 +880,45 @@ internal static class Dungeon
     /// The two tilemaps a built place needs, in world cells: "Walkable" (the floor, for the navigation mesh) and
     /// "Blocked" (walls and water: solid, and not walkable). Also used by the boss arena.
     /// </summary>
+    /// <summary>A bottom-layer tile that's drawn as a drop (the dark chasm floor of the Nature sub-dungeon rooms).</summary>
+    const float HoleShade = 0.1f;
+    static readonly Dictionary<Sprite, float> shadeOf = new Dictionary<Sprite, float>();
+    static readonly Dictionary<Texture2D, Texture2D> readable = new Dictionary<Texture2D, Texture2D>();
+
+    /// <summary>How bright a sprite's drawn pixels are on average (0 black, 1 white; -1: couldn't read it). The atlases
+    /// aren't readable: each is copied once through a render texture.</summary>
+    static float Shade(Sprite s)
+    {
+        if (shadeOf.TryGetValue(s, out float v)) return v;
+        v = -1f;
+        try
+        {
+            var tex = s.texture;
+            if (!readable.TryGetValue(tex, out var copy) || !copy)
+            {
+                var rt = RenderTexture.GetTemporary(tex.width, tex.height, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB);
+                Graphics.Blit(tex, rt);
+                var was = RenderTexture.active;
+                RenderTexture.active = rt;
+                copy = new Texture2D(tex.width, tex.height, TextureFormat.RGBA32, false);
+                copy.ReadPixels(new Rect(0, 0, tex.width, tex.height), 0, 0);
+                copy.Apply();
+                RenderTexture.active = was;
+                RenderTexture.ReleaseTemporary(rt);
+                readable[tex] = copy;
+            }
+            var r = s.textureRect;
+            var px = copy.GetPixels(Mathf.FloorToInt(r.x), Mathf.FloorToInt(r.y), Mathf.Max(1, Mathf.FloorToInt(r.width)), Mathf.Max(1, Mathf.FloorToInt(r.height)));
+            double sum = 0, alpha = 0;
+            foreach (var p in px) { sum += (0.299 * p.r + 0.587 * p.g + 0.114 * p.b) * p.a; alpha += p.a; }
+            v = alpha > 0 ? (float)(sum / alpha) : -1f;
+        }
+        catch (Exception e) { NetLog.Warn($"Dungeon: couldn't read {s.name}: {e.Message}", toast: false); }
+        return shadeOf[s] = v;
+    }
+
+    static bool PitTile(string name) => name.IndexOf("Floor_Moss2_SubDungeon", StringComparison.OrdinalIgnoreCase) >= 0;
+
     internal static void NavLayers(Transform parent, Vector3 cell, HashSet<Vector3Int> ground, HashSet<Vector3Int> walls, out Tilemap walkable, out Tilemap blocked)
     {
         if (!blockTile)
@@ -846,7 +1048,7 @@ internal static class Dungeon
     /// is full without hundreds of creatures running at the same time.
     /// Connected: only whoever runs the area spawns; the others get them through the creature sync.
     /// </summary>
-    static void SpawnCreatures(BiomeSettings biome, Where where)
+    static void SpawnCreatures(BiomeSettings biome, Where where, Vector3 arrival)
     {
         sleeping.Clear();
         if (!biome || !root) return;
@@ -874,24 +1076,100 @@ internal static class Dungeon
                 _ => null
             };
             if (!shape || !collection || collection.Groups == null || collection.Groups.Count == 0) continue;
-            var list = new List<Enemy>();
+            var list = new List<Foe>();
             int n = Delve.GroupsFor(where.Floor, rng);
             for (int g = 0; g < n; g++)
             {
+                if (Monsters.DungeonGroup(rng) is List<string> ours) { foreach (var m in ours) list.Add(new Foe(null, m)); continue; }   // (ours: a squad of troops, or a pack of creatures)
                 var group = collection.Groups[rng.Next(collection.Groups.Count)];
-                if (group && group.Enemies != null) foreach (var e in group.Enemies) if (e) list.Add(e);
+                if (group && group.Enemies != null) foreach (var e in group.Enemies) if (e) list.Add(new Foe(e, null));
             }
             if (list.Count == 0) continue;
-            sleeping.Add((shape, list, rng.Next()));
+            sleeping.Add((shape, Vector3.zero, list, rng.Next()));
             groups++;
         }
+        int extra = MoreGroups(biome, rng, arrival);
+        // Nagedra's dungeons (not the descent): half as many (you couldn't take a step without running into ten): every
+        // group halved (an odd one rounds up or down by chance), the empty ones gone; spread as before
+        if (where.Floor == 0)
+        {
+            int before = sleeping.Sum(x => x.creatures.Count);
+            for (int g = sleeping.Count - 1; g >= 0; g--)
+            {
+                var foes = sleeping[g].creatures;
+                int keep = (foes.Count + rng.Next(2)) / 2;
+                foes.RemoveRange(keep, foes.Count - keep);
+                if (foes.Count == 0) sleeping.RemoveAt(g);
+            }
+            NetLog.Info($"Dungeon: creatures halved for a dungeon (not a descent floor): {before} -> {sleeping.Sum(x => x.creatures.Count)}", toast: false);
+        }
         sleepingCreatures = sleeping.Sum(x => x.creatures.Count);
+        if (extra > 0) NetLog.Info($"Dungeon: {extra} more groups spread over the floor (too few in its spawn areas)", toast: false);
         NetLog.Info($"Dungeon: {groups} of {areas.Count} spawn areas{(added > 0 ? $" ({added} added: too few rolled)" : "")}, {sleepingCreatures} creatures waiting (they appear as you come near; at most {Delve.MaxEnemies} at once)", toast: false);
         if (sleepingCreatures == 0) NetLog.Warn($"Dungeon: floor {where.Floor} has no creatures ({areas.Count} spawn areas, biome {biome.name})", toast: false);
         nextWake = 0f;
     }
 
-    static readonly List<(PolygonCollider2D shape, List<Enemy> creatures, int seed)> sleeping = new List<(PolygonCollider2D, List<Enemy>, int)>();
+    /// <summary>One creature waiting in a spawn area: the game's (its prefab) or ours (MonsterArt's name).</summary>
+    readonly struct Foe
+    {
+        public readonly Enemy Prefab;
+        public readonly string Monster;
+        public Foe(Enemy prefab, string monster) { Prefab = prefab; Monster = monster; }
+    }
+
+    /// <summary>
+    /// A floor with too few creatures in its spawn areas (few areas, or none: once just one creature on a whole floor):
+    /// more groups out on the floor itself, away from where you came in and from each other, until it has the floor's
+    /// number (MaxEnemiesAlive; 60 if that's off). Ours or the biome's, as the spawn areas mix them. The groups added.
+    /// </summary>
+    static int MoreGroups(BiomeSettings biome, System.Random rng, Vector3 arrival)
+    {
+        int want = Delve.MaxEnemies > 0 ? Delve.MaxEnemies : 60;
+        // no more than the place has room for: one per 30 walkable cells (a one-room dungeon, the library, had all 100
+        // crammed into its single room)
+        want = Mathf.Min(want, Mathf.Max(6, floorCells.Count / 30));
+        int have = sleeping.Sum(x => x.creatures.Count);
+        if (have >= want || floorCells.Count == 0) return 0;
+        var cells = floorCells.OrderBy(c => c.x).ThenBy(c => c.y).ToList();
+        var game = new[] { biome.MediumSpawnCollection, biome.SmallSpawnCollection, biome.BigSpawnCollection }
+            .Where(c => c && c.Groups != null && c.Groups.Count > 0).ToList();
+        var spots = new List<Vector3>();
+        int added = 0;
+        for (int tries = 0; tries < 2000 && have < want; tries++)
+        {
+            var c = cells[rng.Next(cells.Count)];
+            var at = new Vector3((c.x + 0.5f) * cellSize.x, (c.y + 0.5f) * cellSize.y, 0f);
+            float gap = tries < 1000 ? 8f : 3f;   // (spread out; closer together if the floor is small)
+            if (((Vector2)(at - arrival)).sqrMagnitude < 12f * 12f || spots.Any(s => ((Vector2)(s - at)).sqrMagnitude < gap * gap)) continue;
+            if (!UnityEngine.AI.NavMesh.SamplePosition(at, out var h, 0.6f, UnityEngine.AI.NavMesh.AllAreas)) continue;
+            var list = new List<Foe>();
+            if (Monsters.DungeonGroup(rng) is List<string> ours) list.AddRange(ours.Select(m => new Foe(null, m)));
+            else if (game.Count > 0)
+            {
+                var g = game[rng.Next(game.Count)];
+                var group = g.Groups[rng.Next(g.Groups.Count)];
+                if (group && group.Enemies != null) foreach (var e in group.Enemies) if (e) list.Add(new Foe(e, null));
+            }
+            if (list.Count == 0 && Monsters.DungeonGroup(rng, always: true) is List<string> any) list.AddRange(any.Select(m => new Foe(null, m)));
+            if (list.Count == 0) { if (game.Count == 0) break; continue; }   // (nothing at all to put there)
+            spots.Add(h.position);
+            sleeping.Add((null, h.position, list, rng.Next()));
+            have += list.Count;
+            added++;
+        }
+        return added;
+    }
+
+    /// <summary>Spawn areas still waiting: the room's area (its shape), or a spot out on the floor (MoreGroups: no shape).</summary>
+    static readonly List<(PolygonCollider2D shape, Vector3 spot, List<Foe> creatures, int seed)> sleeping = new List<(PolygonCollider2D, Vector3, List<Foe>, int)>();
+
+    static Vector3 PlaceIn(PolygonCollider2D shape, Vector3 spot)
+    {
+        if (shape) return Utils.RandomInsidePolygon(shape);
+        var p = spot + (Vector3)(UnityEngine.Random.insideUnitCircle * 1.6f);
+        return UnityEngine.AI.NavMesh.SamplePosition(p, out var h, 0.6f, UnityEngine.AI.NavMesh.AllAreas) ? h.position : spot;
+    }
     static int leftCount;
     static float leftAt = -10f;
 
@@ -941,9 +1219,9 @@ internal static class Dungeon
         int max = Delve.MaxEnemies > 0 ? Delve.MaxEnemies : int.MaxValue;
         for (int i = sleeping.Count - 1; i >= 0 && alive < max; i--)
         {
-            var (shape, creatures, seed) = sleeping[i];
-            if (!shape) { sleeping.RemoveAt(i); continue; }
-            var c = shape.bounds.center;
+            var (shape, spot, creatures, seed) = sleeping[i];
+            if ((object)shape != null && !shape) { sleeping.RemoveAt(i); continue; }   // (its room's gone)
+            var c = shape ? shape.bounds.center : spot;
             bool close = false;
             foreach (var p in near) if (((Vector2)(p - c)).sqrMagnitude < WakeRange * WakeRange) { close = true; break; }
             if (!close) continue;
@@ -953,13 +1231,23 @@ internal static class Dungeon
             int woke = 0;
             try
             {
-                foreach (var enemy in creatures)
+                foreach (var foe in creatures)
                 {
                     if (alive >= max) break;
                     woke++;
+                    if (foe.Monster != null)   // (ours: made fresh, and gone with the floor)
+                    {
+                        var m = Monsters.Spawn(foe.Monster, PlaceIn(shape, spot));
+                        if (!m) continue;
+                        if (root) m.transform.SetParent(root.transform, true);
+                        spawned.Add(m.gameObject);
+                        alive++;
+                        continue;
+                    }
+                    var enemy = foe.Prefab;
                     PoolManager.CreatePool(enemy.gameObject, enemy.ID, 5, disableFirst: true);
                     var go = PoolManager.Get(enemy.gameObject);
-                    go.transform.position = Utils.RandomInsidePolygon(shape);
+                    go.transform.position = PlaceIn(shape, spot);
                     go.GetComponent<Enemy>().ForceAlive();
                     go.SetActive(true);
                     if (!spawned.Contains(go)) spawned.Add(go);
@@ -970,7 +1258,7 @@ internal static class Dungeon
             finally { UnityEngine.Random.state = oldState; }
             // the limit was reached halfway through this area's group: the rest stay asleep there, and come once
             // there's room again (they were simply lost before, so busy floors ran dry)
-            if (woke < creatures.Count) sleeping.Add((shape, creatures.GetRange(woke, creatures.Count - woke), seed + woke));
+            if (woke < creatures.Count) sleeping.Add((shape, spot, creatures.GetRange(woke, creatures.Count - woke), seed + woke));
         }
     }
 
@@ -1013,7 +1301,18 @@ internal static class Dungeon
 
         static bool Prefix(Teleporter __instance, ref UniTask __result)
         {
+            if (Active && ThroneRoom.Owns(__instance)) { __result = UniTask.CompletedTask; ThroneRoom.Back(); return false; }   // (the throne room's doors: back to KL)
             if (!Active || !root || !__instance.transform.IsChildOf(root.transform)) return true;
+            // the door you came in by, in a dungeon's first region (not a descent floor, not a cave inside): home
+            if (!busy && current.Value.Floor <= 0 && current.Value.Region == 0 && parents.Count == 0 && __instance == entryDoor)
+            {
+                __result = UniTask.CompletedTask;
+                var gm = Singleton<GameManager>.main;
+                if (gm) gm.gameState = GameState.Playing;
+                NetLog.Info("Dungeon: out the way you came in: home", toast: false);
+                Leave();
+                return false;
+            }
             if (current.Value.Floor <= 0 && !busy) return true;
             __result = UniTask.CompletedTask;
             if (Time.unscaledTime - toldAt > 4f)
@@ -1029,7 +1328,7 @@ internal static class Dungeon
     /// doorway, on dark ground that still counts as walkable, so the first step goes back through the door): instead,
     /// 3 squares from the door the way it faces (the way you face arriving through it, its glow spreading into the
     /// room), on the walkable ground there.</summary>
-    static Vector3 Inside(Vector3 at, Teleporter door)
+    internal static Vector3 Inside(Vector3 at, Teleporter door)
     {
         var d = door.SpawnDirection;
         var into = d == Direction.Up ? Vector2.up : d == Direction.Down ? Vector2.down : d == Direction.Left ? Vector2.left : Vector2.right;
@@ -1069,18 +1368,41 @@ internal static class Dungeon
         }
     }
 
-    /// <summary>An exit whose other end isn't in our region (it's in the scene the demo doesn't have): take us home.</summary>
+    /// <summary>An exit whose other end isn't in our region: in a dungeon of several regions, on to the next one (KL's way
+    /// down); else it's in the scene the demo doesn't have: take us home.</summary>
     [HarmonyPatch(typeof(TeleporterChunkResolver), nameof(TeleporterChunkResolver.Teleport))]
     static class ExitPatch
     {
         static bool Prefix(TeleporterChunkResolver __instance, ref UniTask __result)
         {
             if (!Active) return true;
+            // KL's doorways to Kaldhor's throne room (a place of its own: ThroneRoom); its own doors lead back
+            if (ThroneRoom.Owns(__instance)) { __result = UniTask.CompletedTask; ThroneRoom.Back(); return false; }
+            if (ThroneRoom.Leads(__instance.otherTeleporterID)) { __result = UniTask.CompletedTask; ThroneRoom.Enter(__instance.otherTeleporterID, __instance.teleporter); return false; }
             if (!string.IsNullOrEmpty(__instance.otherTeleporterID) && Teleporter.GlobalTeleporters.TryGetValue(__instance.otherTeleporterID, out var t) && t) return true;
             __result = UniTask.CompletedTask;
             var gm = Singleton<GameManager>.main;
             if (gm) gm.gameState = GameState.Playing;
             if (parents.Count > 0) { Go(parents.Pop(), null, true).Forget(); return false; }
+            // a dungeon of more than one region (KL: its way down to the throne): its far end is in the next region,
+            // not built yet; there, arriving at that end (the door it names) if it's in it
+            var c = current.Value;
+            // the last region's way out (the lab's basement; a one-region dungeon's exit): home, beside Nagedra if you
+            // came from her (not KL: its regions lead on to the throne)
+            bool last = render == null || c.Region >= render.Regions.Count - 1;
+            if (c.Floor <= 0 && last && c.Settings.IndexOf("_KL", StringComparison.OrdinalIgnoreCase) < 0)
+            {
+                NetLog.Success("You found the way out!", toast: true);
+                LeaveToNagedra();
+                return false;
+            }
+            if (c.Floor <= 0 && render != null && render.Regions.Count > 1)
+            {
+                int next = (c.Region + 1) % render.Regions.Count;
+                NetLog.Info($"Dungeon: the way on, to region {next} of {render.Regions.Count} (its door {__instance.otherTeleporterID})", toast: false);
+                Go(c with { Region = next }, __instance.otherTeleporterID, true).Forget();
+                return false;
+            }
             NetLog.Info("That way out leads to the full game's world. Use the blue pad (or the Leave button) to go back", toast: true);
             return false;
         }
@@ -1287,9 +1609,16 @@ internal static class BrokenGathering
 {
     static int told;
 
+    /// <summary>Part of a dungeon we built (it can wake as the floor is switched on, before we count as in it).</summary>
+    static bool InOurs(Transform t)
+    {
+        for (; t; t = t.parent) if (t.name.StartsWith("EG_Dungeon_")) return true;
+        return false;
+    }
+
     static System.Exception Finalizer(GatheringObject __instance, System.Exception __exception)
     {
-        if (__exception == null || !Dungeon.Active || !__instance) return __exception;
+        if (__exception == null || !__instance || !(Dungeon.Active || InOurs(__instance.transform))) return __exception;
         if (told++ < 3) NetLog.Info($"Dungeon: a gathering spot with parts missing taken away ({__instance.name})", toast: false);
         __instance.gameObject.SetActive(false);
         return null;

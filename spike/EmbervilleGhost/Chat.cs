@@ -17,6 +17,8 @@ namespace EmbervilleGhost;
 [HarmonyLib.HarmonyPatch]   // its death patches (PlayerMaster.Die / ApplyDamage) only run with this on the class
 internal static class Chat
 {
+    const int PitTestSeed = 1009253288;   // (/dungeon pittest: Nature's entrance room with the hollow pits, floor 1)
+
     public static Plugin Plugin;
 
     const float ShowSeconds = 12f, FadeSeconds = 2f;
@@ -121,6 +123,10 @@ internal static class Chat
             return true;
         }
         if (cmd == "summon all") { Travel.SummonAll(); return true; }
+        if (cmd == "perf") { FrameProfile.Start(); return true; }   // 10 seconds of timing every mod's per-frame code, the costliest logged
+        if (cmd == "arena rush" || cmd == "arena tiny" || cmd == "arena chickens") { Arena.EnterFor(cmd.Substring(6)); return true; }   // into the arena and straight into that mode (Nagedra offers them)
+        if (cmd == "dungeon survey") { DungeonSurvey.Run(); return true; }   // Nagedra's dungeons generated and described in the log (regions, exits, chests)
+        if (cmd == "dungeon pittest") { Delve.Test(PitTestSeed); return true; }   // testing: the descent floor with the hollow pits (Nature, seed 1009253288)
         if (cmd.StartsWith("dungeon ")) { Dungeon.EnterNamed(cmd.Substring(8)); return true; }   // one dungeon type by name (/dungeons lists them)
         if (cmd == "dungeons") { Dungeon.ListNames(); return true; }
         if (cmd == "room" || cmd.StartsWith("room ")) { CustomRoom.Command(cmd.Length > 4 ? cmd.Substring(5) : ""); return true; }
@@ -130,7 +136,12 @@ internal static class Chat
         if (cmd == "classscreen" || cmd.StartsWith("classscreen ")) { UnlockClasses.Screen(cmd.Length > 11 ? cmd.Substring(12) : ""); return true; }   // the class screen unlocked and opened (off: locked)
         if (cmd == "unlockclasses" || cmd.StartsWith("unlockclasses ")) { UnlockClasses.Run(cmd.Length > 13 ? cmd.Substring(14) : ""); return true; }   // testing: every class (or one) learned
         if (cmd == "lockclasses" || cmd.StartsWith("lockclasses ")) { UnlockClasses.Lock(cmd.Length > 11 ? cmd.Substring(12) : ""); return true; }   // testing: classes forgotten
-        if (cmd == "monsters") { Monsters.List(); return true; }   // every creature of ours, clickable in the console
+        if (cmd == "monsters") { Monsters.List(); return true; }
+        if (cmd == "sizes") { Monsters.Sizes(); return true; }
+        if (cmd == "door") { DoorJump.Command(); return true; }   // to the nearest doorway, 5 tiles in front of it
+        if (cmd == "throne") { ThroneRoom.Command(); return true; }   // straight to the Mad King (KL first)
+        if (cmd == "mapshot" || cmd.StartsWith("mapshot ")) { MapShot.Command(cmd.Length > 7 ? cmd.Substring(8) : ""); return true; }   // the whole area you're in as a PNG (BepInEx/mapshots)   // how tall you, the game's creatures and ours are drawn
+        if (cmd == "monsterscale" || cmd.StartsWith("monsterscale ")) { Monsters.ScaleCommand(cmd.Length > 12 ? cmd.Substring(13) : ""); return true; }   // every creature of ours, clickable in the console
         if (cmd == "monster" || cmd.StartsWith("monster ")) { Monsters.Command(cmd.Length > 7 ? cmd.Substring(8) : ""); return true; }   // a new creature beside you (Bumblebee)
         if (cmd == "classes") { UnlockClasses.List(); return true; }   // every class: learned, equipped
         if (cmd.StartsWith("classes ")) { UnlockClasses.Detail(cmd.Substring(8)); return true; }   // one class: what it is
@@ -180,7 +191,7 @@ internal static class Chat
             case "help":
             case "?":
                 System("/sleep: ready to skip to morning (everyone must)   /estate: unlock building on your estate (host)");
-                System("/devmode: the game's developer tools on/off   /devpanel: open the developer panel   /arena: to this scene's test arena   /dungeon: into a generated dungeon (or out)   /dungeons: every dungeon type   /dungeon negedra: into that one (any part of its name)   /walls: show what blocks you (debug)   /noclip: walk through walls   /clucking: a Staff of Clucking   /risen: a Staff of the Risen   /hook: a Hunter's Hook   /ninja: become a Ninja (Better Classes)   /respec: your stat points back to spend again   /classes: every class, learned or not (/classes mage: what it does)   /charscreen: unlock the character screen and open it (off: lock it)   /unlockscreens: every screen (inventory, quests, masteries, classes, character, minimap; off: lock them)   /classscreen: unlock the class screen and open it (off: lock it)   /unlockclasses (mage): learn every class (or one), class tree open to 40   /lockclasses (mage): forget them (not the one you have on; all: tree back to 15)   /unlockmasteries: every weapon mastery (all: the unfinished types too)   /lockmasteries (all): the unused ones (or all) back off   /weapons: every weapon in the game   /give name [count]: any item into your bag   /stash: your shared stash (U)   /sethome (name): here is home (or that name)   /tp name: go to your home of that name, or to a player   /home: go home   /homes: your homes   /delhome name: forget it   /summon name (or all): bring them to you   /rain: a rain storm on/off   /snow: snow on/off (Better Weather)   /exitarrow: arrow to the stairs down   /exitpath: a line to them   /nodeath: take no damage   /onehitkill: 500 damage a hit (testing)   /bowlock: arrows home in (off to start; /bowlock 15 = 15° cone)   /moveattack: move while attacking (off to start)");
+                System("/devmode: the game's developer tools on/off   /devpanel: open the developer panel   /arena: to this scene's test arena   /dungeon: into a generated dungeon (or out)   /dungeons: every dungeon type   /door: to the nearest doorway, 5 tiles in front of it   /throne: straight to the Mad King's fight   /mapshot: the whole area you're in as a PNG (BepInEx/mapshots; /mapshot 16 for half size)   /dungeon negedra: into that one (any part of its name)   /walls: show what blocks you (debug)   /noclip: walk through walls   /clucking: a Staff of Clucking   /risen: a Staff of the Risen   /hook: a Hunter's Hook   /ninja: become a Ninja (Better Classes)   /respec: your stat points back to spend again   /classes: every class, learned or not (/classes mage: what it does)   /charscreen: unlock the character screen and open it (off: lock it)   /unlockscreens: every screen (inventory, quests, masteries, classes, character, minimap; off: lock them)   /classscreen: unlock the class screen and open it (off: lock it)   /unlockclasses (mage): learn every class (or one), class tree open to 40   /lockclasses (mage): forget them (not the one you have on; all: tree back to 15)   /unlockmasteries: every weapon mastery (all: the unfinished types too)   /lockmasteries (all): the unused ones (or all) back off   /weapons: every weapon in the game   /give name [count]: any item into your bag   /stash: your shared stash (U)   /sethome (name): here is home (or that name)   /tp name: go to your home of that name, or to a player   /home: go home   /homes: your homes   /delhome name: forget it   /summon name (or all): bring them to you   /rain: a rain storm on/off   /snow: snow on/off (Better Weather)   /exitarrow: arrow to the stairs down   /exitpath: a line to them   /nodeath: take no damage   /onehitkill: 500 damage a hit (testing)   /bowlock: arrows home in (off to start; /bowlock 15 = 15° cone)   /moveattack: move while attacking (off to start)");
                 System("/resources (or /resources 250): 100 of every material, and enough for the town's repairs   /repair: fix the nearest broken building");
                 System("/trade P2 (or a name): trade items with someone   /pet on (pets start off), /pet: befriend / call / send home, /pet list, /pet glowbat, /pet name ..., /pet color red");
                 System($"/online (or {OnlinePlayers.KeyName}): who's connected, mute; the host also kicks and bans   X at a chest (Better Chests mod): put in what it already has");

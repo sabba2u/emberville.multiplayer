@@ -39,6 +39,8 @@ Everything in one download: the co-op multiplayer mod, Favourite Weapons (F5-F8,
 Better Pets and Summons (/pet, the Staff of Clucking, the Staff of the Risen), Better Fishing (a catch from every
 cast, spots at the fish shadows) and Better NPCs and Quests (Ellie and her quest; add your own NPCs and quests with
 text files) and Better Weather (a rain storm: /rain) and Better Companions (an adventurer from your other save slot: /companion 2) and Better Streaming (your Twitch chat sets off effects: MODS > Streaming) and Better Classes (the Ninja: /ninja or the class screen). Not made or supported by Cygnus Cross.
+The Tiny Swords monsters' art is a paid pack and isn't included: without it you get the game's own creatures in their
+place (the GitHub README says how to add it).
 
 INSTALL
 1. Find the game folder: Steam > right-click Emberville Demo > Manage > Browse local files.

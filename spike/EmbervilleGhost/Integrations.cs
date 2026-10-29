@@ -249,7 +249,7 @@ internal static class Integrations
     [MethodImpl(MethodImplOptions.NoInlining)] static bool StreamingGettingUp() => BetterStreaming.Plugin.GettingUp;
 
     /// <summary>The level of what you have: the average level requirement of your worn and held gear (none: your level).</summary>
-    static int YourGearLevel()
+    internal static int YourGearLevel()
     {
         var me = LocalPlayer.Get();
         if (!me || me.characterStats == null) return 1;

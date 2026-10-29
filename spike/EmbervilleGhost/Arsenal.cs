@@ -73,6 +73,16 @@ internal static class Arsenal
         Chat.System($"Gave {given} {NameOf(data)}" + (dropped > 0 ? $" ({dropped} at your feet: your bag is full)." : "."));
     });
 
+    /// <summary>One of the item called exactly that (its shown name), dropped on the ground there (a boss's prize: the Mad
+    /// King's Cohhilition Sword). Logged if the game has none by that name.</summary>
+    public static void DropNamed(string shown, Vector3 at) => WithItems(() =>
+    {
+        var data = items.FirstOrDefault(i => string.Equals(NameOf(i), shown, StringComparison.OrdinalIgnoreCase));
+        if (!data) { NetLog.Warn($"No item called \"{shown}\" to drop", toast: false); return; }
+        new ItemObject(data, 1).DropToWorld(at, 1, 1f);
+        NetLog.Info($"Dropped {NameOf(data)} ({data.addressKey ?? data.name}) at {at.x:0.0}, {at.y:0.0}", toast: false);
+    });
+
     /// <summary>Only the weapon types the game has finished: a weapon in the catalogue with its attacks. (The mastery screen
     /// breaks on one without: Throwing Weapons in the demo.) A broken one discovered earlier is taken back off.</summary>
     /// <summary>/unlockmasteries all: every weapon type's card, the unfinished ones too (no finished weapon in the game:

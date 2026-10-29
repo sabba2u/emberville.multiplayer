@@ -16,6 +16,48 @@ is only what we learned in Duckov: the techniques, the notes in this file, and t
   floor you can't walk on. Debug with `/walls` (red = tiles we made solid from the rooms' Wall / WallCover / Water
   layers, orange = other colliders near you); fix in `Dungeon.BuildCollision`.
 
+### Ideas (not started): puzzle bosses for the arena (2026-10-28)
+- **Don't build until asked.** Principle: a boss teaches the player something, then rewards them for understanding it
+  ("this isn't working" -> "oh!" -> the win). Built so far in this style: the **Invincible King** (Warfare King:
+  armour lets 10% through; his weapon sticks 3 s after a swing, back open x1.5; his straight dash into a wall dazes
+  him 3 s; plus summons, catapult barrage, teleport + dash, backwards controls after his stun). "King battle" button.
+- **The Fire Elemental:** every hit makes it bigger and stronger; you have to stop attacking and lure it into pools
+  of water. Twist: it evaporates the water, so you manage the arena. (Art: the Imp scaled up, or new.)
+- **The Mirror Knight:** copies your equipped weapon and fighting style (strong sword: a deadly swordsman). Twist:
+  unequip your weapon and it gets much weaker: a fistfight. (Art: a Free Pack Knight / Warfare Swordsman.)
+- **The Necromancer:** every skeleton you kill comes back stronger; plain fighting makes it worse. Twist: destroy
+  the magical gravestones instead to cut off his power. (Art: Hex Shaman + Skulls; gravestones: Enemy Pack Extra's
+  Skull decorations.)
+- **The Time Wizard:** every 15 s he rewinds to where he was and restores his health. Twist: the arena's objects
+  don't rewind: set traps (bombs, spikes) where he'll reappear. (Ties in with kickable bombs and the arena traps.)
+
+### Planned (not started): scripted cutscenes in .twee (2026-10-28)
+- **Don't build until asked.** A cutscene is a `.twee` passage in Better NPCs and Quests, e.g.
+  `:: RoryAmbush [CUTSCENE] (zone: TutorialArea -30,60 radius 3) (once)` followed by one step per line:
+  `letterbox on`, `freeze`, `spawn Rory at x,y`, `spawn Warrior x4 behind Rory`, `camera Rory`, `walk Rory to x,y`,
+  `say Rory "$player, what are you doing in my lands?"`, `choice "..." -> Passage`, `wait 2`, `shake`.
+- Each word is our code calling the game's own functions (the same its behaviour-graph cutscene nodes use):
+  `CameraManager.SetLetterBox`, SetInputsEnabled / player static, `CamEvent` SetTarget, the dialogue box, camera
+  shake, `GameData.gameBools`-style done flag. Not re-creating behaviour graphs: they're editor-built assets,
+  building them in code is unsupported and fragile.
+- How the game does it (for reference): an invisible trigger collider (`TriggerForward`, `PlayerCenter` tag), a
+  "done" GameBool checked first (skip to the end state), then a `BehaviorGraphAgent` graph of nodes under
+  Action/CutsceneEvents (see `AdeosCutscene.cs`, `CutsceneGumu.cs`).
+- **Multiplayer: plays for everyone in that area at once** (the user's call); the area's authority starts it and the
+  others follow its steps.
+- First cutscene: Rory walks in with soldiers behind him ("$player, what are you doing in my lands?"). Soldiers:
+  Tiny Swords free pack Warrior / Archer / Lancer, with the monsters' frame player (paid art: local MonsterArt.dll
+  only, never in git or the release).
+- First words to build: zone, letterbox, freeze, camera, spawn, walk, say, choice, wait, shake.
+
+### Optional: map pictures kept in memory (from snowshackle's loading patch, 2026-10-28)
+- **Optional, not planned.** When a world's map is first drawn, `WorldMapTileGenerator.SaveImages` writes 6000x6000
+  PNGs (`ImageHelper.SaveRenderTextureAsync`) and `WorldMapContainer.LoadMapImages` reads them straight back. Snow's
+  patch keeps each GPU readback as a Texture2D and reuses it instead of decoding the PNG again.
+- Left out of `SpeedUps.cs` because each kept picture is about 144 MB (several per map), it only helps the first
+  load of a new world (later loads have to read the PNGs anyway), and the gain is unmeasured.
+- If tried: its own config switch, off by default; time a brand-new world with LoadTimer with and without it.
+
 ### Open: camera views (v0.3.2, 2026-10-23)
 - **Tilted view** (`TiltView.cs`): stands every sprite except ground art named in `TiltFlatNames`; art laid over a
   bigger thing (vines on a house) rides on it for the frame; multi-piece things get a temporary Player-layer
